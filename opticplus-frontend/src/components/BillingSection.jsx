@@ -1,0 +1,1152 @@
+import { useEffect, useMemo, useState } from 'react'
+import StatWidget from './StatWidget.jsx'
+
+const currency = new Intl.NumberFormat('en-GH', {
+  style: 'currency',
+  currency: 'GHS',
+  maximumFractionDigits: 2,
+})
+
+function hasBalanceDue(amount) {
+  return Number(amount ?? 0) > 0.0005
+}
+
+export default function BillingSection({
+  session,
+  billingMeta,
+  billingData,
+  dailyPayments,
+  billingPatientSearch,
+  setBillingPatientSearch,
+  billingPatientResults,
+  isSearchingBillingPatients,
+  billingFilters,
+  setBillingFilters,
+  setBillingQuery,
+  billingForm,
+  setBillingForm,
+  saveBillingRecord,
+  isSavingBill,
+  isLoadingBilling,
+  isLoadingBillingMeta,
+  isLoadingPayments,
+  selectedPaymentRecordId,
+  setSelectedPaymentRecordId,
+  paymentDetail,
+  isLoadingPaymentDetail,
+  openBillingPayment,
+  billingError,
+  billingSuccess,
+  dailyPaymentSearch,
+  setDailyPaymentSearch,
+  saveBillingPricing,
+  exportBillingData,
+}) {
+  const [isBillingModalOpen, setIsBillingModalOpen] = useState(false)
+  const [isBillingSummaryOpen, setIsBillingSummaryOpen] = useState(false)
+  const [framePriceWarning, setFramePriceWarning] = useState('')
+  const [pricingForm, setPricingForm] = useState({
+    consultation_price: '100.00',
+    existing_consultation_price: '80.00',
+    frame_price: '0.00',
+    lens_price: '0.00',
+    case_price: '0.00',
+  })
+  const [isSavingPricing, setIsSavingPricing] = useState(false)
+  const isManagementView = Boolean(session?.is_admin || ['manager', 'ceo', 'accountant'].includes(session?.role))
+  const calculation = calculateBillingTotals(billingForm)
+  const isSummaryReady = paymentDetail?.billing?.id === selectedPaymentRecordId
+  const selectedFrameProduct = useMemo(
+    () => findFrameProduct(billingForm.frame_code_id, billingMeta),
+    [billingForm.frame_code_id, billingMeta],
+  )
+
+  const filteredCandidates = useMemo(() => {
+    const query = billingPatientSearch.trim().toLowerCase()
+    if (query.length >= 1) return billingPatientResults ?? []
+    if (!query) return billingMeta?.patient_candidates ?? []
+
+    return (billingMeta?.patient_candidates ?? []).filter((candidate) =>
+      [candidate.name, candidate.folder_id, candidate.phone]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    )
+  }, [billingMeta, billingPatientResults, billingPatientSearch])
+
+  useEffect(() => {
+    if (billingSuccess) {
+      setIsBillingModalOpen(false)
+      setBillingPatientSearch('')
+      setFramePriceWarning('')
+    }
+  }, [billingSuccess])
+
+  useEffect(() => {
+    if (!billingForm.frame_code_id) {
+      setFramePriceWarning('')
+    }
+  }, [billingForm.frame_code_id])
+
+  useEffect(() => {
+    if (!billingMeta?.standard_prices) return
+    setPricingForm({
+      consultation_price: String(Number(billingMeta.standard_prices.consultation_price ?? 100).toFixed(2)),
+      existing_consultation_price: String(Number(billingMeta.standard_prices.existing_consultation_price ?? 80).toFixed(2)),
+      frame_price: String(Number(billingMeta.standard_prices.frame_price ?? 0).toFixed(2)),
+      lens_price: String(Number(billingMeta.standard_prices.lens_price ?? 0).toFixed(2)),
+      case_price: String(Number(billingMeta.standard_prices.case_price ?? 0).toFixed(2)),
+    })
+  }, [billingMeta])
+
+  async function submitPricing(event) {
+    event.preventDefault()
+    setIsSavingPricing(true)
+    try {
+      await saveBillingPricing(pricingForm)
+    } finally {
+      setIsSavingPricing(false)
+    }
+  }
+
+  return (
+    <section className="billing-section">
+      <div className="patients-header">
+        <div>
+          <p className="eyebrow">Billing</p>
+          <h3>{isManagementView ? 'Lead billing performance across both branches' : 'Process bills, track balances, and watch daily payments'}</h3>
+          <p className="header-copy">
+            {isManagementView
+              ? 'A general-manager billing workspace with branch-wide oversight, export-ready ledgers, and configurable front-desk pricing.'
+              : 'Built from the legacy receptionist billing pages with tax calculation, frame validation, and payment visibility.'}
+          </p>
+        </div>
+      </div>
+
+      {billingError ? <div className="message-banner error">{billingError}</div> : null}
+      {billingSuccess ? <div className="message-banner success">{billingSuccess}</div> : null}
+
+      <section className="stats-grid patient-stats-grid">
+        {isManagementView ? (
+          <>
+            <StatWidget label="Total Bills" value={billingData?.stats.total_bills ?? '...'} note="All billing records in the selected branch view" icon="receipt" className="total" />
+            <StatWidget label="Filtered Value" value={currency.format(Number(billingData?.stats.filtered_total_amount ?? 0))} note="Billed amount inside the active manager filters" icon="money" className="seen" />
+            <StatWidget label="Collected Value" value={currency.format(Number(billingData?.stats.filtered_collected_amount ?? 0))} note="Already realized from the filtered billing ledger" icon="check-badge" className="seen" />
+            <StatWidget
+              label="Outstanding"
+              value={currency.format(Number(billingData?.stats.filtered_outstanding_amount ?? billingData?.stats.balance_amount ?? 0))}
+              note="Still open for recovery"
+              icon="finance"
+              className="pending"
+              valueClassName={hasBalanceDue(billingData?.stats.filtered_outstanding_amount ?? billingData?.stats.balance_amount) ? 'billing-balance-due' : ''}
+            />
+          </>
+        ) : (
+          <>
+            <StatWidget label="Total Bills" value={billingData?.stats.total_bills ?? '...'} note="Billing records for the active branch" icon="receipt" className="total" />
+            <StatWidget label="Total Amount" value={currency.format(Number(billingData?.stats.total_amount ?? 0))} note="Gross billed value" icon="money" className="seen" />
+            <StatWidget label="Pending Bills" value={billingData?.stats.pending_bills ?? '...'} note="Pending or balance remaining" icon="clock" className="pending" />
+            <StatWidget
+              label="Calculated Balance"
+              value={currency.format(Number(billingData?.stats.balance_amount ?? 0))}
+              note="Based on sales and insurance claims"
+              icon="finance"
+              className="today"
+              valueClassName={hasBalanceDue(billingData?.stats.balance_amount) ? 'billing-balance-due' : ''}
+            />
+          </>
+        )}
+      </section>
+
+      {isManagementView ? (
+        <ManagerBillingWorkspace
+          billingMeta={billingMeta}
+          billingData={billingData}
+          billingFilters={billingFilters}
+          setBillingFilters={setBillingFilters}
+          setBillingQuery={setBillingQuery}
+          isLoadingBilling={isLoadingBilling}
+          setSelectedPaymentRecordId={setSelectedPaymentRecordId}
+          setIsBillingSummaryOpen={setIsBillingSummaryOpen}
+          openBillingPayment={openBillingPayment}
+          setIsBillingModalOpen={setIsBillingModalOpen}
+          pricingForm={pricingForm}
+          setPricingForm={setPricingForm}
+          submitPricing={submitPricing}
+          isSavingPricing={isSavingPricing}
+          exportBillingData={exportBillingData}
+        />
+      ) : (
+      <>
+      <article className="panel billing-workflow-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Reception Workflow</p>
+            <h3>Billing comes first, payment comes after</h3>
+          </div>
+        </div>
+        <div className="billing-workflow-grid">
+          <div className="billing-workflow-step">
+            <strong>1. Create bill</strong>
+            <p>Prepare consultation, lenses, frames, tax, and discounts to generate the patient bill.</p>
+          </div>
+          <div className="billing-workflow-step">
+            <strong>2. Review summary</strong>
+            <p>Open the billing summary from the ledger to confirm total billed, amount paid, and outstanding balance.</p>
+          </div>
+          <div className="billing-workflow-step">
+            <strong>3. Record payment</strong>
+            <p>Once the patient is ready to pay, move to payment capture for cash, MoMo, Paystack, or insurance.</p>
+          </div>
+        </div>
+      </article>
+
+      <section className="billing-ledger-stack">
+        <article className="panel patient-list-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Manage Billing</p>
+              <h3>Billing ledger</h3>
+            </div>
+            <button type="button" className="primary-button" onClick={() => setIsBillingModalOpen(true)}>
+              New billing record
+            </button>
+          </div>
+
+          <form
+            className="patient-filter-grid"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setBillingQuery((current) => ({
+                ...current,
+                ...billingFilters,
+                page: 1,
+              }))
+            }}
+          >
+            <label>
+              Search
+              <input
+                value={billingFilters.search}
+                onChange={(event) => setBillingFilters((current) => ({ ...current, search: event.target.value }))}
+                placeholder="Folder ID, name, receipt, phone"
+              />
+            </label>
+            <label>
+              Status
+              <select
+                value={billingFilters.status}
+                onChange={(event) => setBillingFilters((current) => ({ ...current, status: event.target.value }))}
+              >
+                <option value="all">All</option>
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="balance_remaining">Balance remaining</option>
+              </select>
+            </label>
+            <label>
+              Date from
+              <input
+                type="date"
+                value={billingFilters.date_from}
+                onChange={(event) => setBillingFilters((current) => ({ ...current, date_from: event.target.value }))}
+              />
+            </label>
+            <label>
+              Date to
+              <input
+                type="date"
+                value={billingFilters.date_to}
+                onChange={(event) => setBillingFilters((current) => ({ ...current, date_to: event.target.value }))}
+              />
+            </label>
+
+            <div className="filter-actions-row full-span">
+              <button type="submit" className="primary-button">Apply date and status filters</button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  const defaults = { status: 'all', search: '', date_from: '', date_to: '', page: 1, per_page: 15 }
+                  setBillingFilters(defaults)
+                  setBillingQuery(defaults)
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          </form>
+
+          {isLoadingBilling && !billingData ? <p className="muted-copy">Loading billing records...</p> : null}
+
+          {billingData ? (
+            <>
+              <div className="table-shell">
+                <table className="portal-table">
+                  <thead>
+                    <tr>
+                      <th>Patient</th>
+                      <th>Folder ID</th>
+                      <th>Receipt</th>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Total</th>
+                      <th>Paid</th>
+                      <th>Insurance Claimed</th>
+                      <th>Balance</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {billingData.records.map((record) => (
+                      <tr key={record.id} className={record.id === selectedPaymentRecordId && isBillingSummaryOpen ? 'table-row-active' : ''}>
+                        <td>{record.name}</td>
+                        <td>{record.folder_id}</td>
+                        <td>{record.receipt_number || 'No receipt yet'}</td>
+                        <td>{record.date}</td>
+                        <td>
+                          <span className={`status-pill status-${String(record.status).toLowerCase().replaceAll(' ', '-')}`}>
+                            {record.status}
+                          </span>
+                        </td>
+                        <td>{currency.format(Number(record.total_amount ?? 0))}</td>
+                        <td>{currency.format(Number(record.total_paid ?? 0))}</td>
+                        <td>{currency.format(Number(record.insurance_claimed ?? 0))}</td>
+                        <td className={hasBalanceDue(record.calculated_balance) ? 'billing-balance-due' : undefined}>
+                          {currency.format(Number(record.calculated_balance ?? 0))}
+                        </td>
+                        <td>
+                          <div className="billing-row-actions">
+                            <button
+                              type="button"
+                              className="mini-action"
+                              onClick={() => {
+                                setSelectedPaymentRecordId(record.id)
+                                setIsBillingSummaryOpen(true)
+                              }}
+                            >
+                              View summary
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="pagination-bar">
+                <span>Page {billingData.pagination.page} of {Math.max(billingData.pagination.total_pages, 1)}</span>
+                <div className="pagination-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={billingData.pagination.page <= 1}
+                    onClick={() => setBillingQuery((current) => ({ ...current, page: current.page - 1 }))}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={billingData.pagination.page >= billingData.pagination.total_pages}
+                    onClick={() => setBillingQuery((current) => ({ ...current, page: current.page + 1 }))}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </article>
+      </section>
+
+      <article className="panel patient-list-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Daily Payments</p>
+            <h3>Transactions collected today</h3>
+          </div>
+        </div>
+
+        <div className="filter-actions-row">
+          <input
+            className="billing-search-inline"
+            value={dailyPaymentSearch}
+            onChange={(event) => setDailyPaymentSearch(event.target.value)}
+            placeholder="Search patient, folder, or sale ID"
+          />
+        </div>
+
+        {isLoadingPayments && !dailyPayments ? <p className="muted-copy">Loading daily payments...</p> : null}
+
+        {dailyPayments ? (
+          <>
+            <div className="payment-summary-row">
+              <span>Total collected: {currency.format(Number(dailyPayments.stats.total_collected ?? 0))}</span>
+              <span>Transactions: {dailyPayments.stats.transaction_count}</span>
+              <span>Average: {currency.format(Number(dailyPayments.stats.average_transaction ?? 0))}</span>
+            </div>
+            <div className="patient-records">
+              {dailyPayments.payments.map((payment) => (
+                <article key={payment.id} className="patient-record">
+                  <div className="patient-record-top">
+                    <div>
+                      <strong>{payment.name || 'No patient name'}</strong>
+                      <span>Sale #{payment.id} - {payment.folder_id}</span>
+                    </div>
+                    <span className="status-pill status-paid">{payment.payment_method}</span>
+                  </div>
+                  <div className="patient-record-meta">
+                    <span>Amount: {currency.format(Number(payment.amount_paid ?? 0))}</span>
+                    <span>Created: {payment.created_at}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </article>
+      </>
+      )}
+
+      {isBillingModalOpen ? (
+        <div className="modal-overlay" onClick={() => setIsBillingModalOpen(false)}>
+          <article className="modal-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Create Bill</p>
+                <h3>New billing record</h3>
+              </div>
+              <div className="modal-actions">
+                <span className="panel-tag">{billingForm.folder_id || 'Billing form'}</span>
+                <button type="button" className="ghost-button" onClick={() => setIsBillingModalOpen(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <form className="billing-form-grid" onSubmit={saveBillingRecord}>
+              <label className="full-span">
+                Search patient
+                <input
+                  value={billingPatientSearch}
+                  onChange={(event) => setBillingPatientSearch(event.target.value)}
+                  placeholder="Search any patient by name, folder ID, phone, or email"
+                />
+              </label>
+              {billingPatientSearch.trim().length >= 1 ? (
+                <p className="muted-copy full-span">Search results update as you type from the patient database.</p>
+              ) : (
+                <p className="muted-copy full-span">Start typing to search the patient database, or pick from recent patient candidates below.</p>
+              )}
+              {billingPatientSearch.trim().length >= 1 && isSearchingBillingPatients ? (
+                <p className="muted-copy full-span">Searching patient records...</p>
+              ) : null}
+              <label className="full-span">
+                Patient / folder
+                <select
+                  value={billingForm.patient_id ? String(billingForm.patient_id) : ''}
+                  onChange={(event) => {
+                    const selected = filteredCandidates.find(
+                      (candidate) => String(candidate.id) === event.target.value,
+                    )
+                    setBillingForm((current) => ({
+                      ...current,
+                      patient_id: selected?.id ?? '',
+                      folder_id: selected?.folder_id ?? '',
+                      name: selected?.name ?? '',
+                      prescription_id: selected?.prescription_id ?? '',
+                      consultation_customer_type: selected?.is_existing_customer ? 'existing' : 'new',
+                      lens_price: Number(selected?.lens_price ?? billingMeta?.standard_prices?.lens_price ?? 0).toFixed(2),
+                      consultation_price: String(resolveConsultationPrice(selected, billingMeta)),
+                    }))
+                  }}
+                  required
+                >
+                  <option value="">Select patient</option>
+                  {filteredCandidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} - {candidate.folder_id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {billingPatientSearch && filteredCandidates.length === 0 ? (
+                <p className="muted-copy full-span">No patients match that search in the patient database yet.</p>
+              ) : null}
+
+              <label>
+                Billing date
+                <input
+                  type="date"
+                  value={billingForm.date}
+                  onChange={(event) => setBillingForm((current) => ({ ...current, date: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Patient name
+                <input
+                  value={billingForm.name}
+                  onChange={(event) => setBillingForm((current) => ({ ...current, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Consultation type
+                <select
+                  value={billingForm.consultation_customer_type}
+                  onChange={(event) =>
+                    setBillingForm((current) => ({
+                      ...current,
+                      consultation_customer_type: event.target.value,
+                      consultation_price:
+                        event.target.value === 'existing'
+                          ? Number(billingMeta?.standard_prices?.existing_consultation_price ?? 80).toFixed(2)
+                          : Number(billingMeta?.standard_prices?.consultation_price ?? 100).toFixed(2),
+                    }))
+                  }
+                >
+                  <option value="new">New customer</option>
+                  <option value="existing">Existing customer</option>
+                </select>
+              </label>
+              <label>
+                Consultation
+                <input
+                  type="number"
+                  step="0.01"
+                  value={billingForm.consultation_price}
+                  onChange={(event) =>
+                    setBillingForm((current) => ({ ...current, consultation_price: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Lens
+                <input
+                  type="number"
+                  step="0.01"
+                  value={billingForm.lens_price}
+                  onChange={(event) =>
+                    setBillingForm((current) => ({ ...current, lens_price: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Case
+                <input
+                  type="number"
+                  step="0.01"
+                  value={billingForm.case_price}
+                  onChange={(event) =>
+                    setBillingForm((current) => ({ ...current, case_price: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Discount
+                <input
+                  type="number"
+                  step="0.01"
+                  value={billingForm.discount}
+                  onChange={(event) =>
+                    setBillingForm((current) => ({ ...current, discount: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Insurance
+                <select
+                  value={billingForm.health_insurance}
+                  onChange={(event) =>
+                    setBillingForm((current) => ({ ...current, health_insurance: event.target.value }))
+                  }
+                >
+                  {(billingMeta?.insurance_options ?? ['NONE']).map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Frame code
+                <select
+                  value={billingForm.frame_code_id}
+                  onChange={(event) => {
+                    const nextCode = event.target.value
+                    const nextFramePrice = resolveFramePrice(nextCode, billingMeta)
+                    const nextForm = {
+                      ...billingForm,
+                      frame_code_id: nextCode,
+                      frame_price: nextFramePrice,
+                    }
+                    setBillingForm(nextForm)
+                    setFramePriceWarning(validateFramePrice(nextForm, billingMeta))
+                  }}
+                >
+                  <option value="">No frame</option>
+                  {(billingMeta?.frame_products ?? []).map((product) => (
+                    <option key={product.code} value={product.code}>
+                      {formatFrameOptionLabel(product)}
+                    </option>
+                  ))}
+                </select>
+                {selectedFrameProduct ? (
+                  <small className="billing-field-note">
+                    {selectedFrameProduct.name} • {selectedFrameProduct.stock} in stock • Allowed range: {formatFrameRange(selectedFrameProduct)}
+                  </small>
+                ) : null}
+              </label>
+              <label>
+                Frame price
+                <input
+                  type="number"
+                  step="0.01"
+                  className={framePriceWarning ? 'billing-field-error' : ''}
+                  aria-invalid={framePriceWarning ? 'true' : 'false'}
+                  value={billingForm.frame_price}
+                  onChange={(event) => {
+                    const nextForm = { ...billingForm, frame_price: event.target.value }
+                    setBillingForm(nextForm)
+                    setFramePriceWarning(validateFramePrice(nextForm, billingMeta))
+                  }}
+                  onBlur={() => {
+                    setFramePriceWarning(validateFramePrice(billingForm, billingMeta))
+                  }}
+                />
+                {framePriceWarning ? <small className="billing-field-warning">Frame price error: {framePriceWarning}</small> : null}
+              </label>
+
+              <div className="billing-breakdown full-span">
+                <div><span>Base amount</span><strong>{currency.format(calculation.baseAmount)}</strong></div>
+                <div><span>NHIL</span><strong>{currency.format(calculation.nhil)}</strong></div>
+                <div><span>GETFund</span><strong>{currency.format(calculation.getfund)}</strong></div>
+                <div><span>VAT</span><strong>{currency.format(calculation.vat)}</strong></div>
+                <div><span>Tax total</span><strong>{currency.format(calculation.tax)}</strong></div>
+                <div><span>Grand total</span><strong>{currency.format(calculation.totalAmount)}</strong></div>
+              </div>
+
+              <button type="submit" className="primary-button full-span" disabled={isSavingBill || isLoadingBillingMeta}>
+                {isSavingBill ? 'Submitting bill...' : 'Submit bill'}
+              </button>
+            </form>
+          </article>
+        </div>
+      ) : null}
+
+      {isBillingSummaryOpen ? (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setIsBillingSummaryOpen(false)
+          }}
+        >
+          <article className="modal-panel billing-summary-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Billing Summary</p>
+                <h3>{paymentDetail?.billing?.name || 'Loading selected bill...'}</h3>
+              </div>
+              <div className="modal-actions">
+                <span className="panel-tag">{paymentDetail?.billing?.folder_id || 'Summary'}</span>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => {
+                    setIsBillingSummaryOpen(false)
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {isLoadingPaymentDetail ? <p className="muted-copy">Loading billing summary...</p> : null}
+
+            {isSummaryReady ? (
+              <div className="billing-summary-stack">
+                <div className="billing-summary-note">
+                  <strong>Billing breakdown</strong>
+                  <p>See how this bill was composed before reviewing payments and outstanding balance.</p>
+                </div>
+
+                <div className="billing-summary-grid">
+                  <SummaryMetric label="Consultation" value={paymentDetail.billing.consultation_price} />
+                  <SummaryMetric label="Frame" value={paymentDetail.billing.frame_price} />
+                  <SummaryMetric label="Lens" value={paymentDetail.billing.lens_price} />
+                  <SummaryMetric label="Case" value={paymentDetail.billing.case_price} />
+                  <SummaryMetric label="Total bill" value={paymentDetail.billing.total_amount} />
+                </div>
+
+                <div className="billing-summary-grid">
+                  <SummaryMetric label="Paid so far" value={paymentDetail.billing.total_paid} />
+                  <SummaryMetric label="Cash paid" value={paymentDetail.billing.cash_paid} />
+                  <SummaryMetric label="MoMo paid" value={paymentDetail.billing.mobile_paid} />
+                  <SummaryMetric label="Paystack paid" value={paymentDetail.billing.paystack_paid} />
+                  <SummaryMetric label="Insurance claimed" value={paymentDetail.billing.insurance_claimed} />
+                  <SummaryMetric label="Outstanding" value={paymentDetail.billing.calculated_balance} balanceHighlight />
+                </div>
+
+                <div className="billing-summary-note">
+                  <strong>Billing summary</strong>
+                  <p>This bill has already been created. Use payment capture next to collect or log the patient payment.</p>
+                </div>
+
+                <div className="table-shell">
+                  <table className="portal-table">
+                    <thead>
+                      <tr>
+                        <th>Entry</th>
+                        <th>Method</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Reference</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(paymentDetail.recent_transactions ?? []).map((transaction) => (
+                        <tr key={`${transaction.entry_type}-${transaction.id}`}>
+                          <td>{transaction.entry_label || transaction.entry_type || 'Payment'}</td>
+                          <td>{transaction.payment_method}</td>
+                          <td>{transaction.date}</td>
+                          <td>{currency.format(Number(transaction.amount_paid ?? 0))}</td>
+                          <td>{transaction.reference || transaction.transaction_id || 'N/A'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => {
+                      setIsBillingSummaryOpen(false)
+                      openBillingPayment(paymentDetail.billing.id)
+                    }}
+                  >
+                    Continue to payment
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="muted-copy">{selectedPaymentRecordId ? 'Preparing billing summary...' : 'Select a billing record to view its summary.'}</p>
+            )}
+          </article>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function ManagerBillingWorkspace({
+  billingMeta,
+  billingData,
+  billingFilters,
+  setBillingFilters,
+  setBillingQuery,
+  isLoadingBilling,
+  setSelectedPaymentRecordId,
+  setIsBillingSummaryOpen,
+  openBillingPayment,
+  setIsBillingModalOpen,
+  pricingForm,
+  setPricingForm,
+  submitPricing,
+  isSavingPricing,
+  exportBillingData,
+}) {
+  const stats = billingData?.stats ?? {}
+
+  return (
+    <section className="manager-billing-shell">
+      <article className="panel manager-billing-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Manager Dashboard</p>
+            <h3>Billing performance, branch flow, and ledger control</h3>
+            <p className="muted-copy">
+              Monitor billing across the selected branch scope, export the ledger, and guide front-desk pricing from one place.
+            </p>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="ghost-button" onClick={() => exportBillingData('summary')}>Export summary</button>
+            <button type="button" className="ghost-button" onClick={() => exportBillingData('ledger')}>Export ledger CSV</button>
+            <button type="button" className="primary-button" onClick={() => setIsBillingModalOpen(true)}>New billing record</button>
+          </div>
+        </div>
+
+        <div className="patient-manager-hero">
+          <div>
+            <span className="patient-intake-kicker">Billing Oversight</span>
+            <strong>Use the billing desk as an operations view for revenue capture, branch mix, insurance load, and pricing control.</strong>
+          </div>
+          <div className="patient-intake-highlights">
+            <span>Branch-aware ledger</span>
+            <span>Export-ready records</span>
+            <span>Reception pricing control</span>
+          </div>
+        </div>
+
+        <form
+          className="patient-filter-grid"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setBillingQuery((current) => ({
+              ...current,
+              ...billingFilters,
+              page: 1,
+            }))
+          }}
+        >
+          <label>
+            Search
+            <input
+              value={billingFilters.search}
+              onChange={(event) => setBillingFilters((current) => ({ ...current, search: event.target.value }))}
+              placeholder="Patient, folder, receipt, phone"
+            />
+          </label>
+          <label>
+            Status
+            <select
+              value={billingFilters.status}
+              onChange={(event) => setBillingFilters((current) => ({ ...current, status: event.target.value }))}
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+              <option value="balance_remaining">Balance remaining</option>
+              <option value="insurance_pending">Insurance pending</option>
+            </select>
+          </label>
+          <label>
+            Date from
+            <input type="date" value={billingFilters.date_from} onChange={(event) => setBillingFilters((current) => ({ ...current, date_from: event.target.value }))} />
+          </label>
+          <label>
+            Date to
+            <input type="date" value={billingFilters.date_to} onChange={(event) => setBillingFilters((current) => ({ ...current, date_to: event.target.value }))} />
+          </label>
+          <label>
+            Rows per page
+            <select value={billingFilters.per_page} onChange={(event) => setBillingFilters((current) => ({ ...current, per_page: Number(event.target.value) }))}>
+              {[15, 25, 50].map((size) => <option key={size} value={size}>{size} rows</option>)}
+            </select>
+          </label>
+          <div className="filter-actions-row full-span">
+            <button type="submit" className="primary-button">Apply manager filters</button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                const defaults = { status: 'all', search: '', date_from: '', date_to: '', page: 1, per_page: 15 }
+                setBillingFilters(defaults)
+                setBillingQuery(defaults)
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </form>
+
+        <div className="finance-chip-row patient-manager-chip-row">
+          <div className="finance-chip">
+            <span>Average Bill</span>
+            <strong>{currency.format(Number(stats.average_bill_value ?? 0))}</strong>
+          </div>
+          <div className="finance-chip">
+            <span>Collection Rate</span>
+            <strong>{formatPercent(stats.collection_rate ?? 0)}</strong>
+          </div>
+          <div className="finance-chip">
+            <span>Insured Bills</span>
+            <strong>{stats.insured_bill_count ?? 0} bills</strong>
+          </div>
+          <div className="finance-chip">
+            <span>Insurance Value</span>
+            <strong>{currency.format(Number(stats.insured_bill_value ?? 0))}</strong>
+          </div>
+        </div>
+      </article>
+
+      <div className="patient-manager-insights-grid">
+        <article className="patient-insight-card tone-blue">
+          <div className="patient-insight-card-header"><strong>Collection Health</strong></div>
+          <div className="patient-insight-card-body">
+            <InsightMetric label="Filtered Bills" value={billingData?.pagination?.total ?? 0} />
+            <InsightMetric label="Pending Bills" value={stats.pending_bills ?? 0} />
+            <InsightMetric label="Paid Bills" value={stats.paid_bills ?? 0} />
+            <InsightMetric label="Today Bills" value={stats.today_bills ?? 0} />
+          </div>
+        </article>
+
+        <article className="patient-insight-card tone-amber">
+          <div className="patient-insight-card-header"><strong>Status Mix</strong></div>
+          <div className="patient-insight-card-body">
+            <BillingBreakdownList items={stats.status_breakdown} amountFormatter={currency.format} emptyLabel="No billing statuses yet" />
+          </div>
+        </article>
+
+        <article className="patient-insight-card tone-teal">
+          <div className="patient-insight-card-header"><strong>Branch Mix</strong></div>
+          <div className="patient-insight-card-body">
+            <BillingBreakdownList items={stats.branch_breakdown} amountFormatter={currency.format} emptyLabel="No branch mix yet" />
+          </div>
+        </article>
+      </div>
+
+      <article className="panel manager-billing-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Consultation Pricing</p>
+            <h3>Control the prices reception can select</h3>
+            <p className="muted-copy">
+              Set different consultation prices for new and existing customers, plus default billing values for frames, lenses, and case items.
+            </p>
+          </div>
+          <span className="panel-tag">{billingMeta?.branch_name ?? 'Billing settings'}</span>
+        </div>
+
+        <form className="patient-filter-grid" onSubmit={submitPricing}>
+          <label>
+            New customer consultation
+            <input type="number" step="0.01" value={pricingForm.consultation_price} onChange={(event) => setPricingForm((current) => ({ ...current, consultation_price: event.target.value }))} />
+          </label>
+          <label>
+            Existing customer consultation
+            <input type="number" step="0.01" value={pricingForm.existing_consultation_price} onChange={(event) => setPricingForm((current) => ({ ...current, existing_consultation_price: event.target.value }))} />
+          </label>
+          <label>
+            Default frame price
+            <input type="number" step="0.01" value={pricingForm.frame_price} onChange={(event) => setPricingForm((current) => ({ ...current, frame_price: event.target.value }))} />
+          </label>
+          <label>
+            Default lens price
+            <input type="number" step="0.01" value={pricingForm.lens_price} onChange={(event) => setPricingForm((current) => ({ ...current, lens_price: event.target.value }))} />
+          </label>
+          <label>
+            Default case price
+            <input type="number" step="0.01" value={pricingForm.case_price} onChange={(event) => setPricingForm((current) => ({ ...current, case_price: event.target.value }))} />
+          </label>
+          <div className="filter-actions-row full-span">
+            <button type="submit" className="primary-button" disabled={isSavingPricing}>
+              {isSavingPricing ? 'Saving pricing...' : 'Save pricing'}
+            </button>
+          </div>
+        </form>
+      </article>
+
+      <article className="panel manager-billing-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Billing Ledger</p>
+            <h3>Comprehensive billing table</h3>
+            <p className="muted-copy">Review branch, consultation split, insurance context, paid value, and outstanding balances in one export-ready ledger.</p>
+          </div>
+          <span className="panel-tag">{billingData?.pagination?.total ?? 0} rows in view</span>
+        </div>
+
+        {isLoadingBilling && !billingData ? <p className="muted-copy">Loading manager billing ledger...</p> : null}
+
+        {billingData ? (
+          <>
+            <div className="table-shell">
+              <table className="portal-table manager-billing-table">
+                <thead>
+                  <tr>
+                    <th>Patient</th>
+                    <th>Branch</th>
+                    <th>Folder ID</th>
+                    <th>Date</th>
+                    <th>Receipt</th>
+                    <th>Consultation</th>
+                    <th>Frame</th>
+                    <th>Lens</th>
+                    <th>Case</th>
+                    <th>Discount</th>
+                    <th>Insurance</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {billingData.records.map((record) => (
+                    <tr key={record.id}>
+                      <td>
+                        <div className="patient-table-primary">
+                          <strong>{record.name}</strong>
+                          <span>{record.patient_phone || record.customer_phone || 'No contact'}</span>
+                        </div>
+                      </td>
+                      <td>{record.branch_name}</td>
+                      <td>{record.folder_id}</td>
+                      <td>{record.date}</td>
+                      <td>{record.receipt_number || 'Pending'}</td>
+                      <td>{currency.format(Number(record.consultation_price ?? 0))}</td>
+                      <td>{currency.format(Number(record.frame_price ?? 0))}</td>
+                      <td>{currency.format(Number(record.lens_price ?? 0))}</td>
+                      <td>{currency.format(Number(record.case_price ?? 0))}</td>
+                      <td>{currency.format(Number(record.discount ?? 0))}</td>
+                      <td>{record.health_insurance || 'NONE'}</td>
+                      <td>{currency.format(Number(record.total_amount ?? 0))}</td>
+                      <td>{currency.format(Number(record.total_paid ?? 0))}</td>
+                      <td className={hasBalanceDue(record.calculated_balance) ? 'billing-balance-due' : undefined}>
+                        {currency.format(Number(record.calculated_balance ?? 0))}
+                      </td>
+                      <td><span className={`status-pill status-${String(record.status).toLowerCase().replaceAll(' ', '-')}`}>{record.status}</span></td>
+                      <td>
+                        <div className="billing-row-actions">
+                          <button
+                            type="button"
+                            className="mini-action"
+                            onClick={() => {
+                              setSelectedPaymentRecordId(record.id)
+                              setIsBillingSummaryOpen(true)
+                            }}
+                          >
+                            Summary
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pagination-bar">
+              <span>Page {billingData.pagination.page} of {Math.max(billingData.pagination.total_pages, 1)}</span>
+              <div className="pagination-actions">
+                <button type="button" className="ghost-button" disabled={billingData.pagination.page <= 1} onClick={() => setBillingQuery((current) => ({ ...current, page: current.page - 1 }))}>Previous</button>
+                <button type="button" className="ghost-button" disabled={billingData.pagination.page >= billingData.pagination.total_pages} onClick={() => setBillingQuery((current) => ({ ...current, page: current.page + 1 }))}>Next</button>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </article>
+    </section>
+  )
+}
+
+function InsightMetric({ label, value }) {
+  return (
+    <div className="patient-insight-metric inline-metric-card">
+      <span>{label}:</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function BillingBreakdownList({ items, amountFormatter, emptyLabel }) {
+  if (!items?.length) return <p className="muted-copy">{emptyLabel}</p>
+  const total = items.reduce((sum, item) => sum + Number(item.count ?? 0), 0)
+
+  return (
+    <div className="patient-breakdown-list">
+      {items.map((item) => (
+        <div key={item.label} className="patient-breakdown-row">
+          <div>
+            <strong>{item.label}</strong>
+            <span>{formatPercent(total > 0 ? (Number(item.count ?? 0) / total) * 100 : 0)} • {amountFormatter(Number(item.amount ?? 0))}</span>
+          </div>
+          <span>{item.count}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function calculateBillingTotals(form) {
+  const consultation = roundMoney(form.consultation_price || 0)
+  const frame = roundMoney(form.frame_price || 0)
+  const lens = roundMoney(form.lens_price || 0)
+  const billingCase = roundMoney(form.case_price || 0)
+  const discount = roundMoney(form.discount || 0)
+  const subtotal = roundMoney(consultation + frame + lens + billingCase)
+  const baseAmount = subtotal > 0 ? roundMoney(subtotal / 1.2) : 0
+  const nhil = roundMoney(baseAmount * 0.025)
+  const getfund = roundMoney(baseAmount * 0.025)
+  const vat = roundMoney(Math.max(subtotal - baseAmount - nhil - getfund, 0))
+  const tax = roundMoney(nhil + getfund + vat)
+  const totalAmount = roundMoney(Math.max(subtotal - discount, 0))
+
+  return { subtotal, baseAmount, nhil, getfund, vat, tax, totalAmount }
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
+}
+
+function resolveConsultationPrice(candidate, meta) {
+  const standard = Number(meta?.standard_prices?.consultation_price ?? 100)
+  const existing = Number(meta?.standard_prices?.existing_consultation_price ?? 80)
+  if (!candidate) return standard.toFixed(2)
+  return Number(candidate.is_existing_customer ? existing : standard).toFixed(2)
+}
+
+function resolveFramePrice(code, meta) {
+  if (!code) return '0.00'
+  const product = findFrameProduct(code, meta)
+  return Number(product?.min_price ?? 0).toFixed(2)
+}
+
+function findFrameProduct(code, meta) {
+  if (!code) return null
+  return (meta?.frame_products ?? []).find((item) => item.code === code) ?? null
+}
+
+function formatFrameRange(product) {
+  const min = Number(product?.min_price ?? 0)
+  const max = Number(product?.max_price ?? 0)
+  if (String(product?.grade || '').toUpperCase() === 'A') {
+    return `${currency.format(min)} and above`
+  }
+
+  return `${currency.format(min)} - ${currency.format(max)}`
+}
+
+function formatFrameOptionLabel(product) {
+  const shortName = String(product?.name ?? '').trim()
+  const compactName = shortName.length > 26 ? `${shortName.slice(0, 26).trimEnd()}...` : shortName
+  return `${product.code} - ${compactName} (${formatFrameRange(product)})`
+}
+
+function validateFramePrice(form, meta) {
+  const product = findFrameProduct(form.frame_code_id, meta)
+  if (!product) return ''
+
+  const value = Number(form.frame_price || 0)
+  const min = Number(product.min_price ?? 0)
+  const max = Number(product.max_price ?? 0)
+  const grade = String(product.grade || '').toUpperCase()
+
+  if (value < min) {
+    return `Frame price is below the allowed range for ${product.code}. Expected ${formatFrameRange(product)}.`
+  }
+
+  if (grade !== 'A' && value > max) {
+    return `Frame price is above the allowed range for ${product.code}. Expected ${formatFrameRange(product)}.`
+  }
+
+  return ''
+}
+
+function SummaryMetric({ label, value, balanceHighlight = false }) {
+  const amount = Number(value ?? 0)
+  const owing = balanceHighlight && hasBalanceDue(amount)
+  return (
+    <div className="billing-summary-metric inline-metric-card">
+      <span>{label}:</span>
+      <strong className={owing ? 'billing-balance-due' : undefined}>{currency.format(amount)}</strong>
+    </div>
+  )
+}
+
+function formatPercent(value) {
+  return `${Number(value ?? 0).toFixed(1)}%`
+}

@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Open Database Page",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:5173/#/database",
+      "webRoot": "${workspaceFolder}/opticplus-frontend/src"
+    }
+  ]
+}
