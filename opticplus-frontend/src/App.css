@@ -5108,6 +5108,13 @@
   color: var(--text-primary);
 }
 
+.table-actions-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .mini-action.success {
   color: #86efac;
 }
@@ -5115,6 +5122,13 @@
 .mini-action.danger {
   color: #fca5a5;
   border-color: rgba(248, 113, 113, 0.35);
+}
+
+.pickup-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
 }
 
 .assign-grid {

@@ -90,6 +90,7 @@ class CustomerServiceController extends Controller
 
         $recordColumns = [
             'b.id as billing_id',
+            'b.branch_id',
             'b.patient_id',
             'b.folder_id',
             'b.name as patient_name',
@@ -498,20 +499,87 @@ class CustomerServiceController extends Controller
             return response()->json(['message' => 'Billing record not found.'], 404);
         }
 
-        DB::table('glasses_prescriptions')->updateOrInsert(
-            [
-                'prescription_id' => $billing->id,
-                'branch_id' => $branchId,
-            ],
-            [
-                'patient_id' => $billing->patient_id ?: 0,
-                'folder_id' => $billing->folder_id ?: '',
-                'date' => $billing->date ?: now()->toDateString(),
-                'status' => 'ready',
-                'lens_price' => $billing->lens_price ?? 0,
-                'created_at' => now(),
-            ]
-        );
+        $prescriptionTable = DB::table('glasses_prescriptions');
+        $hasBranchColumn = Schema::hasColumn('glasses_prescriptions', 'branch_id');
+        $hasStatusColumn = Schema::hasColumn('glasses_prescriptions', 'status');
+        $hasLensPriceColumn = Schema::hasColumn('glasses_prescriptions', 'lens_price');
+        $hasCreatedAtColumn = Schema::hasColumn('glasses_prescriptions', 'created_at');
+        $hasUpdatedAtColumn = Schema::hasColumn('glasses_prescriptions', 'updated_at');
+
+        $matchColumns = ['prescription_id'];
+        if ($billing->patient_id) {
+            $matchColumns[] = 'patient_id';
+        }
+        if ($billing->folder_id) {
+            $matchColumns[] = 'folder_id';
+        }
+        if ($hasBranchColumn) {
+            $matchColumns[] = 'branch_id';
+        }
+
+        $existingQuery = $prescriptionTable->where('prescription_id', $billing->id);
+        if ($hasBranchColumn) {
+            $existingQuery->where('branch_id', $branchId);
+        }
+
+        if ($billing->patient_id) {
+            $existingQuery->orWhere(function ($query) use ($billing): void {
+                $query->where('patient_id', $billing->patient_id);
+            });
+        }
+
+        if ($billing->folder_id) {
+            $existingQuery->orWhere(function ($query) use ($billing): void {
+                $query->where('folder_id', $billing->folder_id);
+            });
+        }
+
+        $existing = $existingQuery
+            ->orderByDesc('prescription_id')
+            ->first($matchColumns);
+
+        $payload = [
+            'prescription_id' => $billing->id,
+            'patient_id' => $billing->patient_id ?: 0,
+            'folder_id' => $billing->folder_id ?: '',
+            'date' => $billing->date ?: now()->toDateString(),
+        ];
+
+        if ($hasBranchColumn) {
+            $payload['branch_id'] = $branchId;
+        }
+
+        if ($hasStatusColumn) {
+            $payload['status'] = 'ready';
+        }
+
+        if ($hasLensPriceColumn) {
+            $payload['lens_price'] = $billing->lens_price ?? 0;
+        }
+
+        if ($hasUpdatedAtColumn) {
+            $payload['updated_at'] = now();
+        }
+
+        if ($existing) {
+            $updateQuery = $prescriptionTable->where('prescription_id', $existing->prescription_id);
+
+            if (property_exists($existing, 'patient_id') && $existing->patient_id !== null) {
+                $updateQuery->where('patient_id', $existing->patient_id);
+            }
+
+            if ($hasBranchColumn && property_exists($existing, 'branch_id')) {
+                $updateQuery->where('branch_id', $existing->branch_id);
+            }
+
+            $updateQuery->update($payload);
+        } else {
+            if ($hasCreatedAtColumn) {
+                $payload['created_at'] = now();
+            }
+
+            $prescriptionTable->insert($payload);
+        }
 
         return response()->json([
             'message' => 'Marked as ready for pickup.',
@@ -525,10 +593,19 @@ class CustomerServiceController extends Controller
             return $response;
         }
 
-        DB::table('glasses_prescriptions')
-            ->where('branch_id', $branchId)
-            ->where('prescription_id', $billingId)
-            ->update(['status' => 'picked_up']);
+        $updateQuery = DB::table('glasses_prescriptions')
+            ->where('prescription_id', $billingId);
+
+        if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
+            $updateQuery->where('branch_id', $branchId);
+        }
+
+        $payload = ['status' => 'picked_up'];
+        if (Schema::hasColumn('glasses_prescriptions', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        $updateQuery->update($payload);
 
         return response()->json([
             'message' => 'Pickup confirmed successfully.',

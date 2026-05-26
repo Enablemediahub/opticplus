@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
 
 const customerTabs = ['Messages', 'Pickup Glasses']
@@ -553,6 +553,59 @@ function MessagesTab(props) {
 }
 
 function PickupTab(props) {
+  const [selectedPickupIds, setSelectedPickupIds] = useState([])
+
+  const pickupRecords = props.customerServiceData?.pickup_records ?? []
+  const displayedPickupRecords = useMemo(() => (
+    props.customerServiceFilters.status === 'picked_up'
+      ? pickupRecords
+      : pickupRecords.filter((record) => record.pickup_status !== 'picked_up')
+  ), [pickupRecords, props.customerServiceFilters.status])
+  const selectedVisibleCount = displayedPickupRecords.filter((record) => selectedPickupIds.includes(record.billing_id)).length
+  const allVisibleSelected = displayedPickupRecords.length > 0 && selectedVisibleCount === displayedPickupRecords.length
+
+  useEffect(() => {
+    const visibleIds = new Set(displayedPickupRecords.map((record) => record.billing_id))
+    setSelectedPickupIds((current) => current.filter((billingId) => visibleIds.has(billingId)))
+  }, [displayedPickupRecords])
+
+  function isPickupBusy(billingId) {
+    return props.pickupBusyIds?.includes(billingId)
+  }
+
+  function togglePickupSelection(billingId) {
+    setSelectedPickupIds((current) => (
+      current.includes(billingId)
+        ? current.filter((entry) => entry !== billingId)
+        : [...current, billingId]
+    ))
+  }
+
+  function toggleAllVisiblePickupSelections(checked) {
+    if (!checked) {
+      setSelectedPickupIds([])
+      return
+    }
+
+    setSelectedPickupIds(displayedPickupRecords.map((record) => record.billing_id))
+  }
+
+  async function runBulkPickupAction(action) {
+    const eligibleBillingIds = displayedPickupRecords
+      .filter((record) => (
+        selectedPickupIds.includes(record.billing_id) && (
+          action === 'ready'
+            ? !['ready', 'notified', 'picked_up'].includes(record.pickup_status)
+            : ['ready', 'notified'].includes(record.pickup_status)
+        )
+      ))
+      .map((record) => record.billing_id)
+
+    if (!eligibleBillingIds.length) return
+    await props.updatePickupStatus(eligibleBillingIds, action)
+    setSelectedPickupIds([])
+  }
+
   function queuePickupMessage(record) {
     props.openSmsPreview({
       title: 'Pickup notification',
@@ -709,10 +762,41 @@ function PickupTab(props) {
 
         {props.isLoadingCustomerService && !props.customerServiceData ? <p className="muted-copy">Loading customer service records...</p> : null}
 
+        <div className="extract-table-toolbar">
+          <label className="extract-select-all">
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={(event) => toggleAllVisiblePickupSelections(event.target.checked)}
+              disabled={!displayedPickupRecords.length}
+            />
+            <span>Select all visible rows</span>
+          </label>
+          <div className="table-actions-inline">
+            <button
+              type="button"
+              className="mini-action"
+              disabled={props.isMergedView || !selectedPickupIds.length}
+              onClick={() => runBulkPickupAction('ready')}
+            >
+              Ready selected
+            </button>
+            <button
+              type="button"
+              className="mini-action danger"
+              disabled={props.isMergedView || !selectedPickupIds.length}
+              onClick={() => runBulkPickupAction('picked-up')}
+            >
+              Picked up selected
+            </button>
+          </div>
+        </div>
+
         <div className="table-shell">
           <table className="portal-table inventory-table-wide">
             <thead>
               <tr>
+                <th>Select</th>
                 <th>Patient</th>
                 <th>Folder ID</th>
                 <th>Phone</th>
@@ -725,8 +809,15 @@ function PickupTab(props) {
               </tr>
             </thead>
             <tbody>
-              {(props.customerServiceData?.pickup_records ?? []).map((record) => (
+              {displayedPickupRecords.map((record) => (
                 <tr key={record.billing_id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedPickupIds.includes(record.billing_id)}
+                      onChange={() => togglePickupSelection(record.billing_id)}
+                    />
+                  </td>
                   <td>{record.patient_name}</td>
                   <td>{record.folder_id}</td>
                   <td>{record.phone || 'N/A'}</td>
@@ -737,33 +828,58 @@ function PickupTab(props) {
                   <td>{record.balance}</td>
                   <td>
                     <div className="table-actions-inline">
-                      <button
-                        type="button"
-                        className="mini-action"
-                        disabled={props.isMergedView || props.pickupBusyId === record.billing_id || ['ready', 'notified', 'picked_up'].includes(record.pickup_status)}
-                        onClick={() => props.updatePickupStatus(record.billing_id, 'ready')}
-                      >
-                        Ready
-                      </button>
-                      <button
-                        type="button"
-                        className="mini-action"
-                        disabled={props.isMergedView || props.pickupBusyId === record.billing_id || record.pickup_status === 'picked_up'}
-                        onClick={() => props.updatePickupStatus(record.billing_id, 'picked-up')}
-                      >
-                        Picked Up
-                      </button>
+                      {!['ready', 'notified', 'picked_up'].includes(record.pickup_status) ? (
+                        <button
+                          type="button"
+                          className="mini-action"
+                          disabled={props.isMergedView || isPickupBusy(record.billing_id)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            props.updatePickupStatus(record.billing_id, 'ready')
+                          }}
+                        >
+                          Ready
+                        </button>
+                      ) : (
+                        <span className={record.pickup_status === 'picked_up' ? 'mini-action pickup-status-chip' : 'mini-action danger pickup-status-chip'}>
+                          {record.pickup_status === 'picked_up' ? 'Picked Up' : 'Ready'}
+                        </span>
+                      )}
                       <button
                         type="button"
                         className="mini-action success"
-                        onClick={() => queuePickupMessage(record)}
+                        disabled={!['ready', 'notified'].includes(record.pickup_status)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          queuePickupMessage(record)
+                        }}
                       >
                         Load SMS
+                      </button>
+                      <button
+                        type="button"
+                        className="mini-action"
+                        disabled={props.isMergedView || isPickupBusy(record.billing_id) || !['ready', 'notified'].includes(record.pickup_status)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          props.updatePickupStatus(record.billing_id, 'picked-up')
+                        }}
+                      >
+                        Picked Up
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {!displayedPickupRecords.length ? (
+                <tr>
+                  <td colSpan="10">
+                    {props.customerServiceFilters.status === 'picked_up'
+                      ? 'No picked-up records match the current filter.'
+                      : 'No active pickup rows are waiting here right now.'}
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

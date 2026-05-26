@@ -660,7 +660,7 @@ function App() {
   const [isLoadingCustomerService, setIsLoadingCustomerService] = useState(false)
   const [isSendingCustomerMessage, setIsSendingCustomerMessage] = useState(false)
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
-  const [pickupBusyId, setPickupBusyId] = useState(null)
+  const [pickupBusyIds, setPickupBusyIds] = useState([])
   const [insuranceMeta, setInsuranceMeta] = useState(null)
   const [insuranceData, setInsuranceData] = useState(null)
   const [insuranceFilters, setInsuranceFilters] = useState(defaultInsuranceFilters())
@@ -1874,6 +1874,36 @@ function App() {
       cancelled = true
     }
   }, [activeView, lensTrackerQuery, selectedBranchId, session, token])
+
+  useEffect(() => {
+    if (!inventoryViews.includes(activeView) && activeView !== 'Lens Tracker' && activeView !== 'BSMI Tracking') {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLensTrackerQuery((current) => {
+        const nextQuery = {
+          ...current,
+          ...lensTrackerFilters,
+        }
+
+        if (
+          current.date_from === nextQuery.date_from &&
+          current.date_to === nextQuery.date_to &&
+          current.search === nextQuery.search &&
+          current.tracking === nextQuery.tracking
+        ) {
+          return current
+        }
+
+        return nextQuery
+      })
+    }, lensTrackerFilters.search ? 250 : 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [activeView, lensTrackerFilters])
 
   useEffect(() => {
     let cancelled = false
@@ -3615,25 +3645,88 @@ function App() {
     }
   }
 
-  async function updatePickupStatus(billingId, action) {
-    setPickupBusyId(billingId)
+  function syncPickupStatusState(billingIds, nextStatus) {
+    setCustomerServiceData((current) => {
+      if (!current) return current
+
+      const statusDisplay = {
+        ready: 'Ready for Pickup',
+        notified: 'Notified',
+        picked_up: 'Picked Up',
+      }[nextStatus] ?? 'Not Ready'
+
+      const nextPickupRecords = (current.pickup_records ?? []).map((record) => (
+        billingIds.includes(record.billing_id)
+          ? { ...record, pickup_status: nextStatus, pickup_status_display: statusDisplay }
+          : record
+      ))
+
+      const updatedReadyEntries = nextPickupRecords
+        .filter((record) => billingIds.includes(record.billing_id) && ['ready', 'notified'].includes(record.pickup_status))
+        .map((record) => ({
+          billing_id: record.billing_id,
+          branch_id: record.branch_id,
+          patient_id: record.patient_id,
+          folder_id: record.folder_id,
+          patient_name: record.patient_name,
+          receipt_number: record.receipt_number,
+          balance: record.balance,
+          billing_date: record.billing_date,
+          phone: record.phone,
+          pickup_status: record.pickup_status,
+          pickup_status_display: record.pickup_status_display,
+          branch_name: record.branch_name,
+        }))
+
+      const readyLookup = new Map(
+        (current.ready_for_pickup ?? [])
+          .filter((record) => !billingIds.includes(record.billing_id))
+          .map((record) => [record.billing_id, record]),
+      )
+
+      for (const record of updatedReadyEntries) {
+        readyLookup.set(record.billing_id, record)
+      }
+
+      return {
+        ...current,
+        pickup_records: nextPickupRecords,
+        ready_for_pickup: Array.from(readyLookup.values()),
+      }
+    })
+  }
+
+  async function updatePickupStatus(billingIdOrIds, action) {
+    const billingIds = [...new Set((Array.isArray(billingIdOrIds) ? billingIdOrIds : [billingIdOrIds]).filter(Boolean))]
+    if (!billingIds.length) return
+
+    setPickupBusyIds(billingIds)
     setCustomerServiceError('')
     setCustomerServiceSuccess('')
 
     try {
       const branchId = session.is_admin ? selectedBranchId : session.branch_id
-      await apiFetch(`/customer-service/pickups/${billingId}/${action}`, {
-        method: 'POST',
-        token,
-        body: { branch_id: branchId },
-      })
+      await Promise.all(
+        billingIds.map((billingId) => apiFetch(`/customer-service/pickups/${billingId}/${action}`, {
+          method: 'POST',
+          token,
+          body: { branch_id: branchId },
+        })),
+      )
 
-      setCustomerServiceSuccess(action === 'ready' ? 'Marked as ready for pickup.' : 'Pickup confirmed successfully.')
+      syncPickupStatusState(billingIds, action === 'ready' ? 'ready' : 'picked_up')
+
+      const plural = billingIds.length > 1
+      setCustomerServiceSuccess(
+        action === 'ready'
+          ? (plural ? 'Selected records marked as ready for pickup.' : 'Marked as ready for pickup.')
+          : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
+      )
       setCustomerServiceQuery((current) => ({ ...current }))
     } catch (error) {
       setCustomerServiceError(error.message)
     } finally {
-      setPickupBusyId(null)
+      setPickupBusyIds([])
     }
   }
 
@@ -4703,7 +4796,7 @@ function App() {
                 saveCustomerTemplate={saveCustomerTemplate}
                 deleteCustomerTemplate={deleteCustomerTemplate}
                 updatePickupStatus={updatePickupStatus}
-                pickupBusyId={pickupBusyId}
+                pickupBusyIds={pickupBusyIds}
                 customerServiceError={customerServiceError}
                 customerServiceSuccess={customerServiceSuccess}
                 isLoadingCustomerService={isLoadingCustomerService}

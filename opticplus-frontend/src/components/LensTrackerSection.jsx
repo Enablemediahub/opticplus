@@ -84,7 +84,7 @@ export default function LensTrackerSection(props) {
               <input
                 value={props.lensTrackerFilters.search}
                 onChange={(event) => props.setLensTrackerFilters((current) => ({ ...current, search: event.target.value }))}
-                placeholder="Folder, patient, receipt, customer, phone"
+                placeholder="Live search by folder, patient, receipt, customer, or phone"
               />
             </label>
             <label>
@@ -100,6 +100,7 @@ export default function LensTrackerSection(props) {
             </label>
             <div className="filter-actions-row full-span">
               <button type="submit" className="primary-button">Refresh tracker</button>
+              <span className="patient-search-hint">live search</span>
             </div>
           </form>
 

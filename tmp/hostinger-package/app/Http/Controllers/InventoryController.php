@@ -389,6 +389,50 @@ class InventoryController extends Controller
         $search = trim($request->string('search')->toString());
         $tracking = $request->string('tracking')->toString() ?: 'all';
 
+        $frameSummary = DB::table('billing_frames as bf')
+            ->select(
+                'bf.billing_id',
+                DB::raw('MAX(bf.frame_code_id) as frame_code_id')
+            )
+            ->when($branchId > 0, fn ($query) => $query->where('bf.branch_id', $branchId))
+            ->groupBy('bf.billing_id');
+
+        $prescriptionSummary = DB::table('glasses_prescriptions as gp')
+            ->select(
+                'gp.folder_id',
+                DB::raw('MAX(gp.prescription_id) as prescription_id'),
+                DB::raw('MAX(gp.sph_od) as sph_od'),
+                DB::raw('MAX(gp.sph_os) as sph_os'),
+                DB::raw('MAX(gp.cyl_od) as cyl_od'),
+                DB::raw('MAX(gp.cyl_os) as cyl_os'),
+                DB::raw('MAX(gp.axis_od) as axis_od'),
+                DB::raw('MAX(gp.axis_os) as axis_os'),
+                DB::raw('MAX(gp.add_od) as add_od'),
+                DB::raw('MAX(gp.add_os) as add_os'),
+                DB::raw('MAX(gp.ipd) as ipd'),
+                DB::raw('MAX(gp.lens_type) as lens_type'),
+                DB::raw('MAX(gp.lens_material) as lens_material'),
+                DB::raw('MAX(gp.color) as color'),
+                DB::raw('MAX(gp.notes) as prescription_notes'),
+                DB::raw('MAX(gp.status) as prescription_status'),
+                DB::raw('MAX(gp.created_at) as prescription_date')
+            )
+            ->when($branchId > 0, fn ($query) => $query->where('gp.branch_id', $branchId))
+            ->groupBy('gp.folder_id');
+
+        $insuranceSummary = DB::table('insurance_claims as ic')
+            ->select(
+                'ic.billing_id',
+                DB::raw('MAX(ic.insurance_provider) as insurance_provider'),
+                DB::raw('MAX(ic.insurance_number) as insurance_number'),
+                DB::raw('MAX(ic.insurance_package) as insurance_package'),
+                DB::raw('MAX(ic.patient_organization) as patient_organization'),
+                DB::raw('MAX(ic.amount_paid) as insurance_amount'),
+                DB::raw('MAX(ic.status) as insurance_status')
+            )
+            ->when($branchId > 0, fn ($query) => $query->where('ic.branch_id', $branchId))
+            ->groupBy('ic.billing_id');
+
         $query = DB::table('billing as b')
             ->leftJoin('lens_costs as lc', function ($join) use ($branchId): void {
                 $join->on('b.id', '=', 'lc.billing_id');
@@ -396,25 +440,15 @@ class InventoryController extends Controller
                     $join->where('lc.branch_id', '=', $branchId);
                 }
             })
-            ->leftJoin('billing_frames as bf', function ($join) use ($branchId): void {
+            ->leftJoinSub($frameSummary, 'bf', function ($join): void {
                 $join->on('b.id', '=', 'bf.billing_id');
-                if ($branchId > 0) {
-                    $join->where('bf.branch_id', '=', $branchId);
-                }
             })
-            ->leftJoin('patient_records as pr', 'b.patient_id', '=', 'pr.id')
-            ->leftJoin('glasses_prescriptions as gp', function ($join) use ($branchId): void {
+            ->leftJoinSub($prescriptionSummary, 'gp', function ($join): void {
                 $join->on('b.folder_id', '=', 'gp.folder_id');
-                if ($branchId > 0) {
-                    $join->where('gp.branch_id', '=', $branchId);
-                }
             })
             ->leftJoin('customers as c', 'b.customer_id', '=', 'c.id')
-            ->leftJoin('insurance_claims as ic', function ($join) use ($branchId): void {
+            ->leftJoinSub($insuranceSummary, 'ic', function ($join): void {
                 $join->on('b.id', '=', 'ic.billing_id');
-                if ($branchId > 0) {
-                    $join->where('ic.branch_id', '=', $branchId);
-                }
             })
             ->leftJoin('products as p', function ($join) use ($branchId): void {
                 $join->on('bf.frame_code_id', '=', 'p.code');
@@ -440,10 +474,7 @@ class InventoryController extends Controller
             $query->where(function ($inner) use ($like): void {
                 $inner->where('b.folder_id', 'like', $like)
                     ->orWhere('b.name', 'like', $like)
-                    ->orWhere('b.receipt_number', 'like', $like)
-                    ->orWhere('c.name', 'like', $like)
-                    ->orWhere('c.phone', 'like', $like)
-                    ->orWhere('pr.phone', 'like', $like);
+                    ->orWhere('b.receipt_number', 'like', $like);
             });
         }
 
@@ -456,33 +487,6 @@ class InventoryController extends Controller
         }
 
         $records = $query
-            ->groupBy(
-                'b.id',
-                'b.folder_id',
-                'b.patient_id',
-                'b.customer_id',
-                'b.health_insurance',
-                'b.total_amount',
-                'b.lens_price',
-                'b.date',
-                'b.receipt_number',
-                'b.status',
-                'b.balance',
-                'b.name',
-                'c.name',
-                'b.branch_id',
-                'bf.frame_code_id',
-                'lc.id',
-                'lc.cost_price',
-                'lc.selling_price',
-                'lc.profit',
-                'lc.margin_percentage',
-                'lc.entered_at',
-                'u.name',
-                'p.name',
-                'p.category',
-                'p.grade'
-            )
             ->orderByDesc('b.date')
             ->orderByDesc('b.id')
             ->get([
@@ -511,29 +515,29 @@ class InventoryController extends Controller
                 'p.name as product_name',
                 'p.category as product_category',
                 'p.grade as product_grade',
-                DB::raw("COALESCE(MAX(NULLIF(pr.name, '')), MAX(TRIM(CONCAT_WS(' ', pr.surname, pr.firstname, pr.othernames))), MAX(c.name)) as patient_display_name"),
-                DB::raw('MAX(gp.prescription_id) as prescription_id'),
-                DB::raw('MAX(gp.sph_od) as sph_od'),
-                DB::raw('MAX(gp.sph_os) as sph_os'),
-                DB::raw('MAX(gp.cyl_od) as cyl_od'),
-                DB::raw('MAX(gp.cyl_os) as cyl_os'),
-                DB::raw('MAX(gp.axis_od) as axis_od'),
-                DB::raw('MAX(gp.axis_os) as axis_os'),
-                DB::raw('MAX(gp.add_od) as add_od'),
-                DB::raw('MAX(gp.add_os) as add_os'),
-                DB::raw('MAX(gp.ipd) as ipd'),
-                DB::raw('MAX(gp.lens_type) as lens_type'),
-                DB::raw('MAX(gp.lens_material) as lens_material'),
-                DB::raw('MAX(gp.color) as color'),
-                DB::raw('MAX(gp.notes) as prescription_notes'),
-                DB::raw('MAX(gp.status) as prescription_status'),
-                DB::raw('MAX(gp.created_at) as prescription_date'),
-                DB::raw('MAX(ic.insurance_provider) as insurance_provider'),
-                DB::raw('MAX(ic.insurance_number) as insurance_number'),
-                DB::raw('MAX(ic.insurance_package) as insurance_package'),
-                DB::raw('MAX(ic.patient_organization) as patient_organization'),
-                DB::raw('MAX(ic.amount_paid) as insurance_amount'),
-                DB::raw('MAX(ic.status) as insurance_status'),
+                DB::raw("COALESCE(NULLIF(b.name, ''), c.name) as patient_display_name"),
+                'gp.prescription_id',
+                'gp.sph_od',
+                'gp.sph_os',
+                'gp.cyl_od',
+                'gp.cyl_os',
+                'gp.axis_od',
+                'gp.axis_os',
+                'gp.add_od',
+                'gp.add_os',
+                'gp.ipd',
+                'gp.lens_type',
+                'gp.lens_material',
+                'gp.color',
+                'gp.prescription_notes',
+                'gp.prescription_status',
+                'gp.prescription_date',
+                'ic.insurance_provider',
+                'ic.insurance_number',
+                'ic.insurance_package',
+                'ic.patient_organization',
+                'ic.insurance_amount',
+                'ic.insurance_status',
             ])
             ->map(function ($record) {
                 $record->tracked = $record->cost_record_id !== null;

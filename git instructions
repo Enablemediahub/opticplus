@@ -1,0 +1,18 @@
+//The Manual Sync Process (Every time you make changes):
+# Step 1: See what changed
+git status
+
+# Step 2: Stage changes
+git add .  # Or specific files: git add filename.js
+
+# Step 3: Commit with message
+git commit -m "Description of what you changed"
+
+# Step 4: Push to GitHub
+git push origin main  # or master
+
+//Push frequently (every time you complete a feature)
+
+git add .
+git commit -m "Added patient registration form"
+git push

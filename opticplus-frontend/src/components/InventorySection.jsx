@@ -782,7 +782,7 @@ function LensTrackerTab(props) {
             <input
               value={props.lensTrackerFilters.search}
               onChange={(event) => props.setLensTrackerFilters((current) => ({ ...current, search: event.target.value }))}
-              placeholder="Folder ID, patient, receipt, phone"
+              placeholder="Live search by folder ID, patient, receipt, or phone"
             />
           </label>
           <label>
@@ -798,6 +798,7 @@ function LensTrackerTab(props) {
           </label>
           <div className="filter-actions-row full-span">
             <button type="submit" className="primary-button">Refresh tracker</button>
+            <span className="patient-search-hint">live search</span>
           </div>
         </form>
 
