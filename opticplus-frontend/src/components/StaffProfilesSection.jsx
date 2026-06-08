@@ -23,6 +23,7 @@ const emptyEditForm = {
   department: '',
   status: 'active',
   branch: '',
+  date_of_birth: '',
   date_employed: '',
   ssnit_number: '',
   tin_number: '',
@@ -145,6 +146,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
       department: nextEmployee.department ?? '',
       status: nextEmployee.status ?? 'active',
       branch: nextEmployee.branch ?? '',
+      date_of_birth: nextEmployee.date_of_birth ?? '',
       date_employed: nextEmployee.date_employed ?? '',
       ssnit_number: nextEmployee.ssnit_number ?? '',
       tin_number: nextEmployee.tin_number ?? '',
@@ -220,6 +222,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
       body.append('department', editForm.department)
       body.append('status', editForm.status)
       body.append('branch', editForm.branch)
+      body.append('date_of_birth', editForm.date_of_birth)
       body.append('date_employed', editForm.date_employed)
       body.append('ssnit_number', editForm.ssnit_number)
       body.append('tin_number', editForm.tin_number)
@@ -531,6 +534,10 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                       <input value={editForm.branch} onChange={(event) => setEditForm((current) => ({ ...current, branch: event.target.value }))} />
                     </label>
                     <label>
+                      Date of birth
+                      <input type="date" value={editForm.date_of_birth} onChange={(event) => setEditForm((current) => ({ ...current, date_of_birth: event.target.value }))} />
+                    </label>
+                    <label>
                       Date employed
                       <input type="date" value={editForm.date_employed} onChange={(event) => setEditForm((current) => ({ ...current, date_employed: event.target.value }))} />
                     </label>
@@ -565,6 +572,8 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                     <InfoCard label="Department" value={employee.department} />
                     <InfoCard label="Branch" value={employee.branch} />
                     <InfoCard label="Status" value={employee.status} />
+                    <InfoCard label="Date of Birth" value={employee.date_of_birth || 'N/A'} />
+                    <InfoCard label="Age" value={employee.age ?? 'N/A'} />
                     <InfoCard label="Date Employed" value={employee.date_employed || 'N/A'} />
                     <InfoCard label="SSNIT" value={employee.ssnit_number || 'N/A'} />
                     <InfoCard label="TIN" value={employee.tin_number || 'N/A'} />

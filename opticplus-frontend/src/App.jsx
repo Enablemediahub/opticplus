@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import AccountantDashboardSection from './components/AccountantDashboardSection.jsx'
+import AuditLogSection from './components/AuditLogSection.jsx'
 import DashboardSection from './components/DashboardSection.jsx'
 import BillingSection from './components/BillingSection.jsx'
 import BsmiTrackingSection from './components/BsmiTrackingSection.jsx'
@@ -31,7 +32,10 @@ import SettingsSection from './components/SettingsSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1').replace(/\/+$/, '')
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  `${window.location.origin}/api/v1`
+).replace(/\/+$/, '')
 
 const branchOptions = [
   { id: 0, name: 'Merged' },
@@ -89,6 +93,7 @@ const managerNavSections = [
       { label: 'Reports', navLabel: 'Reports', icon: 'reports' },
       { label: 'Extract', navLabel: 'Extract', icon: 'reports' },
       { label: 'Bank Deposits', navLabel: 'Bank Deposits', icon: 'finance' },
+      { label: 'Audit Log', navLabel: 'Audit Log', icon: 'reports' },
     ],
   },
   {
@@ -281,6 +286,7 @@ const viewHashMap = {
   Memos: '#/memos',
   Payroll: '#/payroll',
   'Bank Deposits': '#/bank-deposits',
+  'Audit Log': '#/audit-log',
   Extract: '#/extract',
   Inventory: '#/inventory',
   Attendance: '#/attendance',
@@ -592,7 +598,9 @@ function App() {
     consultation_price: '100.00',
     frame_code_id: '',
     frame_price: '0.00',
+    frame_items: [createDefaultBillingFrameItem()],
     lens_price: '0.00',
+    lens_items: [createDefaultBillingLensItem()],
     case_price: '0.00',
     discount: '0.00',
     health_insurance: 'NONE',
@@ -702,7 +710,7 @@ function App() {
   const canAccessSystemSettings = ['ceo', 'director', 'manager'].includes(session?.role)
   const isMergedView = session?.is_admin && selectedBranchId === 0
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
-  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits']
+  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
   const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
@@ -2197,7 +2205,7 @@ function App() {
     return params
   }
 
-  async function refreshInsuranceConnectedData({ paymentDetailBillingId = selectedPaymentRecordId } = {}) {
+  async function refreshInsuranceConnectedData({ paymentDetailBillingId = selectedPaymentRecordId, suppressErrors = false } = {}) {
     if (!token || !session) return null
 
     const branchId = session.is_admin ? selectedBranchId : session.branch_id
@@ -2214,28 +2222,31 @@ function App() {
       requests.push(apiFetch(`/finance/payments/${paymentDetailBillingId}?branch_id=${branchId}`, { token }))
     }
 
+    const results = await Promise.allSettled(requests)
     const [
-      dashboardResponse,
-      summaryResponse,
-      salesResponse,
-      paymentsResponse,
-      insuranceResponse,
-      billingResponse,
-      detailResponse = null,
-    ] = await Promise.all(requests)
+      dashboardResult,
+      summaryResult,
+      salesResult,
+      paymentsResult,
+      insuranceResult,
+      billingResult,
+      detailResult = null,
+    ] = results
 
-    setDashboard(dashboardResponse)
-    setFinanceSummary(summaryResponse)
-    setFinanceSales(salesResponse)
-    setFinancePayments(paymentsResponse)
-    setInsuranceData(insuranceResponse)
-    setBillingData(billingResponse)
+    if (dashboardResult?.status === 'fulfilled') setDashboard(dashboardResult.value)
+    if (summaryResult?.status === 'fulfilled') setFinanceSummary(summaryResult.value)
+    if (salesResult?.status === 'fulfilled') setFinanceSales(salesResult.value)
+    if (paymentsResult?.status === 'fulfilled') setFinancePayments(paymentsResult.value)
+    if (insuranceResult?.status === 'fulfilled') setInsuranceData(insuranceResult.value)
+    if (billingResult?.status === 'fulfilled') setBillingData(billingResult.value)
+    if (detailResult?.status === 'fulfilled') setPaymentDetail(detailResult.value)
 
-    if (detailResponse) {
-      setPaymentDetail(detailResponse)
+    const firstRejected = results.find((result) => result.status === 'rejected')
+    if (firstRejected && !suppressErrors) {
+      throw firstRejected.reason
     }
 
-    return detailResponse
+    return detailResult?.status === 'fulfilled' ? detailResult.value : null
   }
 
   async function refreshFinancePaymentState(billingId, paymentMethod = paymentForm.payment_method) {
@@ -2374,6 +2385,11 @@ function App() {
     if (session?.role !== 'receptionist' || activeView !== 'Reports') return
     setActiveView('Notes')
   }, [activeView, session])
+
+  useEffect(() => {
+    if (activeView !== 'Audit Log' || isGeneralManager) return
+    setActiveView('Dashboard')
+  }, [activeView, isGeneralManager])
 
   useEffect(() => {
     const successSources = [
@@ -3039,9 +3055,11 @@ function App() {
           ...billingForm,
           patient_id: billingForm.patient_id ? Number(billingForm.patient_id) : null,
           prescription_id: billingForm.prescription_id ? Number(billingForm.prescription_id) : null,
+          frame_items: normalizeBillingFrameItemsForApi(billingForm.frame_items, billingForm.frame_code_id, billingForm.frame_price),
+          lens_items: normalizeBillingLensItemsForApi(billingForm.lens_items, billingForm.lens_price),
           consultation_price: formatMoneyInput(billingForm.consultation_price),
-          frame_price: formatMoneyInput(billingForm.frame_price),
-          lens_price: formatMoneyInput(billingForm.lens_price),
+          frame_price: formatMoneyInput(sumBillingFrameItems(billingForm.frame_items, billingForm.frame_code_id, billingForm.frame_price)),
+          lens_price: formatMoneyInput(sumBillingLensItems(billingForm.lens_items, billingForm.lens_price)),
           case_price: formatMoneyInput(billingForm.case_price),
           discount: formatMoneyInput(billingForm.discount),
         },
@@ -3494,6 +3512,44 @@ function App() {
     }
   }
 
+  async function deleteLensCostEntry(billingId) {
+    if (!billingId) return
+
+    setSavingLensBillingId(billingId)
+    setInventoryError('')
+    setInventorySuccess('')
+
+    try {
+      await apiFetch(`/inventory/lens-tracker/${billingId}`, {
+        method: 'DELETE',
+        token,
+      })
+
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      const [inventoryResponse, lensResponse] = await Promise.all([
+        apiFetch(`/inventory?${buildInventoryParams(branchId).toString()}`, { token }),
+        apiFetch(
+          `/inventory/lens-tracker?${new URLSearchParams({
+            branch_id: String(branchId),
+            date_from: lensTrackerQuery.date_from,
+            date_to: lensTrackerQuery.date_to,
+            ...(lensTrackerQuery.search ? { search: lensTrackerQuery.search } : {}),
+            ...(lensTrackerQuery.tracking && lensTrackerQuery.tracking !== 'all' ? { tracking: lensTrackerQuery.tracking } : {}),
+          }).toString()}`,
+          { token },
+        ),
+      ])
+
+      setInventoryData(inventoryResponse)
+      setInventoryLensData(lensResponse)
+      setInventorySuccess('Lens cost deleted successfully.')
+    } catch (error) {
+      setInventoryError(error.message)
+    } finally {
+      setSavingLensBillingId(null)
+    }
+  }
+
   async function saveInventoryProduct(payload) {
     setIsSavingInventoryProduct(true)
     setInventoryError('')
@@ -3782,7 +3838,7 @@ function App() {
         },
       })
 
-      await refreshInsuranceConnectedData()
+      await refreshInsuranceConnectedData({ suppressErrors: true })
       setInsuranceSuccess('Insurance claim saved successfully.')
       setInsuranceForm(defaultInsuranceForm())
     } catch (error) {
@@ -3792,17 +3848,18 @@ function App() {
     }
   }
 
-  async function markClaimPaid(claimId) {
+  async function markClaimPaid(claimId, claimBranchId = null) {
     setClaimBusyId(claimId)
     setInsuranceError('')
     setInsuranceSuccess('')
 
     try {
-      await apiFetch(`/insurance/claims/${claimId}/mark-paid`, {
+      const branchId = claimBranchId ?? (session.is_admin ? selectedBranchId : session.branch_id)
+      await apiFetch(`/insurance/claims/${claimId}/mark-paid?branch_id=${branchId}`, {
         method: 'PATCH',
         token,
       })
-      await refreshInsuranceConnectedData()
+      await refreshInsuranceConnectedData({ suppressErrors: true })
       setInsuranceSuccess('Insurance claim marked as paid.')
     } catch (error) {
       setInsuranceError(error.message)
@@ -3811,17 +3868,18 @@ function App() {
     }
   }
 
-  async function markClaimPending(claimId) {
+  async function markClaimPending(claimId, claimBranchId = null) {
     setClaimBusyId(claimId)
     setInsuranceError('')
     setInsuranceSuccess('')
 
     try {
-      await apiFetch(`/insurance/claims/${claimId}/mark-pending`, {
+      const branchId = claimBranchId ?? (session.is_admin ? selectedBranchId : session.branch_id)
+      await apiFetch(`/insurance/claims/${claimId}/mark-pending?branch_id=${branchId}`, {
         method: 'PATCH',
         token,
       })
-      await refreshInsuranceConnectedData()
+      await refreshInsuranceConnectedData({ suppressErrors: true })
       setInsuranceSuccess('Insurance claim reverted to pending.')
     } catch (error) {
       setInsuranceError(error.message)
@@ -3830,19 +3888,36 @@ function App() {
     }
   }
 
-  async function updateInsuranceClaim(claimId, payload) {
+  async function updateInsuranceClaim(claimId, payload, claimBranchId = null) {
     setClaimBusyId(claimId)
     setInsuranceError('')
     setInsuranceSuccess('')
 
     try {
-      await apiFetch(`/insurance/claims/${claimId}`, {
+      const branchId = claimBranchId ?? (session.is_admin ? selectedBranchId : session.branch_id)
+      const response = await apiFetch(`/insurance/claims/${claimId}?branch_id=${branchId}`, {
         method: 'PUT',
         token,
         body: payload,
       })
-      await refreshInsuranceConnectedData()
-      setInsuranceSuccess('Insurance claim updated successfully.')
+      setInsuranceData((current) => {
+        if (!current) return current
+
+        return {
+          ...current,
+          claims: (current.claims ?? []).map((claim) =>
+            claim.id === claimId
+              ? {
+                  ...claim,
+                  ...payload,
+                  amount_paid: payload.amount_paid === '' ? claim.amount_paid : payload.amount_paid,
+                }
+              : claim,
+          ),
+        }
+      })
+      await refreshInsuranceConnectedData({ suppressErrors: true })
+      setInsuranceSuccess(response.message || 'Insurance claim updated successfully.')
       return true
     } catch (error) {
       setInsuranceError(error.message)
@@ -3852,17 +3927,18 @@ function App() {
     }
   }
 
-  async function deleteInsuranceClaim(claimId) {
+  async function deleteInsuranceClaim(claimId, claimBranchId = null) {
     setClaimBusyId(claimId)
     setInsuranceError('')
     setInsuranceSuccess('')
 
     try {
-      await apiFetch(`/insurance/claims/${claimId}`, {
+      const branchId = claimBranchId ?? (session.is_admin ? selectedBranchId : session.branch_id)
+      await apiFetch(`/insurance/claims/${claimId}?branch_id=${branchId}`, {
         method: 'DELETE',
         token,
       })
-      await refreshInsuranceConnectedData()
+      await refreshInsuranceConnectedData({ suppressErrors: true })
       setInsuranceSuccess('Insurance claim deleted successfully.')
       return true
     } catch (error) {
@@ -3903,7 +3979,7 @@ function App() {
         body: payload,
       })
 
-      await refreshInsuranceConnectedData()
+      await refreshInsuranceConnectedData({ suppressErrors: true })
       setInsuranceSuccess('Manual insurance receipt recorded successfully.')
       return true
     } catch (error) {
@@ -4603,6 +4679,15 @@ function App() {
               />
             ) : null}
 
+            {activeView === 'Audit Log' && isGeneralManager ? (
+              <AuditLogSection
+                apiFetch={apiFetch}
+                token={token}
+                selectedBranchId={selectedBranchId}
+                session={session}
+              />
+            ) : null}
+
             {activeView === 'Insurance' ? (
               <InsuranceSection
                 pageEyebrow="Insurance"
@@ -4689,6 +4774,7 @@ function App() {
                 deleteInventoryProduct={deleteInventoryProduct}
                 isSavingInventoryProduct={isSavingInventoryProduct}
                 saveLensCostEntry={saveLensCostEntry}
+                deleteLensCostEntry={deleteLensCostEntry}
                 savingLensBillingId={savingLensBillingId}
                 inventoryError={inventoryError}
                 inventorySuccess={inventorySuccess}
@@ -4720,6 +4806,7 @@ function App() {
                 isLoadingInventory={isLoadingInventory}
                 isLoadingLensTracker={isLoadingLensTracker}
                 saveLensCostEntry={saveLensCostEntry}
+                deleteLensCostEntry={deleteLensCostEntry}
                 savingLensBillingId={savingLensBillingId}
                 session={session}
               />
@@ -4858,7 +4945,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Payroll', 'Bank Deposits', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>
@@ -4949,6 +5036,68 @@ function App() {
 
 function formatMoneyInput(value) {
   return Number(Number(value || 0).toFixed(2)).toFixed(2)
+}
+
+function createDefaultBillingFrameItem() {
+  return {
+    frame_code_id: '',
+    frame_price: '0.00',
+  }
+}
+
+function createDefaultBillingLensItem() {
+  return {
+    amount: '0.00',
+  }
+}
+
+function normalizeBillingFrameItemsForApi(items, legacyCode = '', legacyPrice = '0.00') {
+  const normalized = Array.isArray(items)
+    ? items
+        .map((item) => ({
+          frame_code_id: String(item?.frame_code_id || '').trim(),
+          frame_price: formatMoneyInput(item?.frame_price),
+        }))
+        .filter((item) => item.frame_code_id)
+    : []
+
+  if (normalized.length > 0) {
+    return normalized
+  }
+
+  const legacyFrameCode = String(legacyCode || '').trim()
+  return legacyFrameCode
+    ? [{ frame_code_id: legacyFrameCode, frame_price: formatMoneyInput(legacyPrice) }]
+    : []
+}
+
+function normalizeBillingLensItemsForApi(items, legacyLensPrice = '0.00') {
+  const normalized = Array.isArray(items)
+    ? items
+        .map((item) => ({ amount: formatMoneyInput(item?.amount) }))
+        .filter((item) => Number(item.amount) > 0)
+    : []
+
+  if (normalized.length > 0) {
+    return normalized
+  }
+
+  const legacyAmount = Number(formatMoneyInput(legacyLensPrice))
+  return legacyAmount > 0 ? [{ amount: formatMoneyInput(legacyAmount) }] : []
+}
+
+function sumBillingFrameItems(items, legacyCode = '', legacyPrice = '0.00') {
+  return normalizeBillingFrameItemsForApi(items, legacyCode, legacyPrice).reduce(
+    (sum, item) => sum + Number(item.frame_price || 0),
+    0,
+  )
+}
+
+function sumBillingLensItems(items, legacyLensPrice = '0.00') {
+  return normalizeBillingLensItemsForApi(items, legacyLensPrice).reduce(
+    (sum, item) => sum + Number(item.amount || 0),
+    0,
+  )
 }
 
 function AppCreditFooter() {

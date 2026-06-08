@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -383,11 +384,21 @@ class InventoryController extends Controller
 
     public function lensTracker(Request $request): JsonResponse
     {
+        $this->ensureBillingLensItemCountSchema();
         $branchId = $this->resolveBranchId($request);
         $dateFrom = $request->string('date_from')->toString() ?: now()->toDateString();
         $dateTo = $request->string('date_to')->toString() ?: $dateFrom;
         $search = trim($request->string('search')->toString());
         $tracking = $request->string('tracking')->toString() ?: 'all';
+        $hasLensItemCount = Schema::hasColumn('billing', 'lens_item_count');
+
+        $lensCostSummary = DB::table('lens_costs as lc')
+            ->select(
+                'lc.billing_id',
+                'lc.branch_id',
+                DB::raw('MAX(lc.id) as latest_cost_id')
+            )
+            ->groupBy('lc.billing_id', 'lc.branch_id');
 
         $frameSummary = DB::table('billing_frames as bf')
             ->select(
@@ -434,11 +445,12 @@ class InventoryController extends Controller
             ->groupBy('ic.billing_id');
 
         $query = DB::table('billing as b')
-            ->leftJoin('lens_costs as lc', function ($join) use ($branchId): void {
-                $join->on('b.id', '=', 'lc.billing_id');
-                if ($branchId > 0) {
-                    $join->where('lc.branch_id', '=', $branchId);
-                }
+            ->leftJoinSub($lensCostSummary, 'lc_summary', function ($join): void {
+                $join->on('b.id', '=', 'lc_summary.billing_id')
+                    ->on('b.branch_id', '=', 'lc_summary.branch_id');
+            })
+            ->leftJoin('lens_costs as lc', function ($join): void {
+                $join->on('lc.id', '=', 'lc_summary.latest_cost_id');
             })
             ->leftJoinSub($frameSummary, 'bf', function ($join): void {
                 $join->on('b.id', '=', 'bf.billing_id');
@@ -497,6 +509,7 @@ class InventoryController extends Controller
                 'b.health_insurance',
                 'b.total_amount as total_bill_amount',
                 'b.lens_price as selling_price',
+                DB::raw($hasLensItemCount ? 'b.lens_item_count as lens_item_count' : 'CASE WHEN b.lens_price > 0 THEN 1 ELSE 0 END as lens_item_count'),
                 'b.date as billing_date',
                 'b.receipt_number',
                 'b.status as billing_status',
@@ -540,6 +553,7 @@ class InventoryController extends Controller
                 'ic.insurance_status',
             ])
             ->map(function ($record) {
+                $record->lens_item_count = max((int) ($record->lens_item_count ?? 0), (float) ($record->selling_price ?? 0) > 0 ? 1 : 0);
                 $record->tracked = $record->cost_record_id !== null;
                 $record->profit = $record->cost_price !== null
                     ? round((float) $record->selling_price - (float) $record->cost_price, 2)
@@ -965,6 +979,36 @@ class InventoryController extends Controller
         ], 201);
     }
 
+    public function deleteLensCost(Request $request, int $billingId): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $user = $request->user();
+        if (! $user->isAdmin()) {
+            return response()->json([
+                'message' => 'Only the General Manager, CEO, or Accountant can delete a saved lens cost entry.',
+            ], 403);
+        }
+
+        $deleted = DB::table('lens_costs')
+            ->where('branch_id', $branchId)
+            ->where('billing_id', $billingId)
+            ->delete();
+
+        if ($deleted === 0) {
+            return response()->json([
+                'message' => 'No saved lens cost entry was found for this billing record.',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Lens cost entry deleted successfully.',
+        ]);
+    }
+
     private function resolveBranchId(Request $request): int
     {
         $user = $request->user();
@@ -1061,5 +1105,20 @@ class InventoryController extends Controller
             'min_price' => round((float) $validated['min_price'], 2),
             'max_price' => round((float) $validated['max_price'], 2),
         ];
+    }
+
+    private function ensureBillingLensItemCountSchema(): void
+    {
+        if (! Schema::hasTable('billing') || Schema::hasColumn('billing', 'lens_item_count')) {
+            return;
+        }
+
+        Schema::table('billing', function (Blueprint $table): void {
+            $table->unsignedInteger('lens_item_count')->default(1)->after('lens_price');
+        });
+
+        DB::table('billing')
+            ->where('lens_price', '<=', 0)
+            ->update(['lens_item_count' => 0]);
     }
 }

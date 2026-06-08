@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\AuditLog;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,6 +65,7 @@ class InsuranceController extends Controller
             ->offset($offset)
             ->get([
                 'ic.id',
+                'ic.branch_id',
                 'ic.patient_id',
                 'ic.folder_id',
                 'ic.insurance_provider',
@@ -149,6 +151,7 @@ class InsuranceController extends Controller
             ->orderByDesc('ic.id')
             ->get([
                 'ic.id',
+                'ic.branch_id',
                 'ic.patient_id',
                 'ic.folder_id',
                 'ic.insurance_provider',
@@ -710,10 +713,26 @@ class InsuranceController extends Controller
     {
         $this->ensureInsuranceProvidersSchema();
 
-        return DB::table('insurance_providers')
+        $providers = DB::table('insurance_providers')
             ->where('is_active', true)
             ->orderBy('name')
             ->pluck('name')
+            ->all();
+
+        $legacyProviders = collect()
+            ->merge(DB::table('insurance_claims')->whereNotNull('insurance_provider')->pluck('insurance_provider'))
+            ->merge(
+                Schema::hasTable('insurance_remittances')
+                    ? DB::table('insurance_remittances')->whereNotNull('insurance_provider')->pluck('insurance_provider')
+                    : collect()
+            )
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->all();
+
+        return collect(array_merge($providers, $legacyProviders))
+            ->unique(fn ($name) => mb_strtolower((string) $name))
+            ->sort(fn ($left, $right) => strcasecmp((string) $left, (string) $right))
             ->values()
             ->all();
     }
@@ -1178,9 +1197,9 @@ class InsuranceController extends Controller
         $user = $request->user();
         $role = $this->normalizeRole($user?->normalized_role ?? $user?->role);
 
-        if ($role !== 'manager' && ! ($user?->is_admin ?? false)) {
+        if (! in_array($role, ['manager', 'accountant'], true) && ! ($user?->is_admin ?? false)) {
             return response()->json([
-                'message' => 'Only the General Manager can edit or delete insurance claims.',
+                'message' => 'Only the General Manager or Accountant can edit or delete insurance claims.',
             ], 403);
         }
 

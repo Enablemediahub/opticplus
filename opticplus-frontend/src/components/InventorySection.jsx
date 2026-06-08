@@ -862,7 +862,7 @@ function LensTrackerTab(props) {
                     </td>
                     <td>
                       <strong>{record.lens_type || 'Lens pending'}</strong>
-                      <div className="table-inline-meta">{formatPrescription(record)}</div>
+                      <div className="table-inline-meta">{formatLensTrackerSpec(record)}</div>
                     </td>
                     <td>
                       <input
@@ -971,6 +971,20 @@ function formatPrescription(record) {
   ].filter(Boolean)
 
   return parts.join(' • ') || 'Prescription details unavailable'
+}
+
+function formatLensTrackerSpec(record) {
+  const quantityLabel = formatLensQuantity(record.lens_item_count)
+  const prescription = formatPrescription(record)
+
+  return [quantityLabel, prescription].filter(Boolean).join(' • ')
+}
+
+function formatLensQuantity(value) {
+  const count = Number(value ?? 0)
+  if (!Number.isFinite(count) || count <= 0) return ''
+  if (count === 1) return '1 lens'
+  return `${count} lenses`
 }
 
 function formatSignedNumber(value) {

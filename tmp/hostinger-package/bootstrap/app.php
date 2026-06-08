@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auth.token' => \App\Http\Middleware\AuthenticateApiToken::class,
+            'audit.mutations' => \App\Http\Middleware\AuditMutationTrail::class,
             'idempotency' => \App\Http\Middleware\PreventDuplicateSubmission::class,
         ]);
     })

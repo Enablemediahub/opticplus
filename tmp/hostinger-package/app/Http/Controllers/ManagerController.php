@@ -521,6 +521,7 @@ class ManagerController extends Controller
             'department' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:active,inactive'],
             'branch' => ['nullable', 'string', 'max:100'],
+            'date_of_birth' => ['nullable', 'date'],
             'date_employed' => ['nullable', 'date'],
             'ssnit_number' => ['nullable', 'string', 'max:100'],
             'tin_number' => ['nullable', 'string', 'max:100'],
@@ -538,6 +539,7 @@ class ManagerController extends Controller
             'department' => $validated['department'] ?? null,
             'status' => $validated['status'] ?? 'active',
             'branch' => $validated['branch'] ?? $employee->branch ?? $this->branchName($branchId),
+            'date_of_birth' => $validated['date_of_birth'] ?? null,
             'date_employed' => $validated['date_employed'] ?? null,
             'ssnit_number' => $validated['ssnit_number'] ?? null,
             'tin_number' => $validated['tin_number'] ?? null,
@@ -611,6 +613,16 @@ class ManagerController extends Controller
 
     private function serializeEmployee(object $employee): array
     {
+        $dateOfBirth = $employee->date_of_birth ?? null;
+        $age = null;
+        if ($dateOfBirth) {
+            try {
+                $age = Carbon::parse((string) $dateOfBirth)->age;
+            } catch (\Throwable) {
+                $age = null;
+            }
+        }
+
         return [
             'id' => $employee->id,
             'staff_id' => $employee->staff_id,
@@ -622,6 +634,8 @@ class ManagerController extends Controller
             'branch' => $employee->branch,
             'branch_id' => $employee->branch_id,
             'status' => $employee->status,
+            'date_of_birth' => $dateOfBirth,
+            'age' => $age,
             'date_employed' => $employee->date_employed ?? null,
             'salary' => $employee->salary ?? null,
             'ssnit_number' => $employee->ssnit_number ?? null,

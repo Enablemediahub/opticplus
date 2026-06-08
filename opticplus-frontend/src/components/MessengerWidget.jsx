@@ -44,7 +44,7 @@ function resolveProfileImageUrl(url) {
   if (!url || typeof url !== 'string') return null
   const trimmed = url.trim()
   if (/^https?:\/\//i.test(trimmed)) return trimmed
-  const base = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1')
+  const base = (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api/v1`)
     .replace(/\/api\/v1\/?$/i, '')
     .replace(/\/$/, '')
   return `${base}/${trimmed.replace(/^\//, '')}`

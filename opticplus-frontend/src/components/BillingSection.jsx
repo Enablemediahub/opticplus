@@ -44,7 +44,6 @@ export default function BillingSection({
 }) {
   const [isBillingModalOpen, setIsBillingModalOpen] = useState(false)
   const [isBillingSummaryOpen, setIsBillingSummaryOpen] = useState(false)
-  const [framePriceWarning, setFramePriceWarning] = useState('')
   const [pricingForm, setPricingForm] = useState({
     consultation_price: '100.00',
     existing_consultation_price: '80.00',
@@ -54,12 +53,27 @@ export default function BillingSection({
   })
   const [isSavingPricing, setIsSavingPricing] = useState(false)
   const isManagementView = Boolean(session?.is_admin || ['manager', 'ceo', 'accountant'].includes(session?.role))
-  const calculation = calculateBillingTotals(billingForm)
-  const isSummaryReady = paymentDetail?.billing?.id === selectedPaymentRecordId
-  const selectedFrameProduct = useMemo(
-    () => findFrameProduct(billingForm.frame_code_id, billingMeta),
-    [billingForm.frame_code_id, billingMeta],
+  const normalizedFrameItems = useMemo(
+    () => normalizeBillingFrameItems(billingForm.frame_items, billingForm.frame_code_id, billingForm.frame_price),
+    [billingForm.frame_items, billingForm.frame_code_id, billingForm.frame_price],
   )
+  const normalizedLensItems = useMemo(
+    () => normalizeBillingLensItems(billingForm.lens_items, billingForm.lens_price),
+    [billingForm.lens_items, billingForm.lens_price],
+  )
+  const frameWarnings = useMemo(
+    () => normalizedFrameItems.map((item) => validateFrameItem(item, billingMeta)),
+    [normalizedFrameItems, billingMeta],
+  )
+  const calculation = calculateBillingTotals({
+    ...billingForm,
+    frame_items: normalizedFrameItems,
+    lens_items: normalizedLensItems,
+  })
+  const isSummaryReady = paymentDetail?.billing?.id === selectedPaymentRecordId
+  const selectedFrameProduct = null
+  const framePriceWarning = ''
+  const setFramePriceWarning = () => {}
 
   const filteredCandidates = useMemo(() => {
     const query = billingPatientSearch.trim().toLowerCase()
@@ -77,15 +91,8 @@ export default function BillingSection({
     if (billingSuccess) {
       setIsBillingModalOpen(false)
       setBillingPatientSearch('')
-      setFramePriceWarning('')
     }
   }, [billingSuccess])
-
-  useEffect(() => {
-    if (!billingForm.frame_code_id) {
-      setFramePriceWarning('')
-    }
-  }, [billingForm.frame_code_id])
 
   useEffect(() => {
     if (!billingMeta?.standard_prices) return
@@ -456,7 +463,11 @@ export default function BillingSection({
                       name: selected?.name ?? '',
                       prescription_id: selected?.prescription_id ?? '',
                       consultation_customer_type: selected?.is_existing_customer ? 'existing' : 'new',
+                      frame_code_id: '',
+                      frame_price: '0.00',
+                      frame_items: [createBlankFrameItem()],
                       lens_price: Number(selected?.lens_price ?? billingMeta?.standard_prices?.lens_price ?? 0).toFixed(2),
+                      lens_items: [{ amount: Number(selected?.lens_price ?? billingMeta?.standard_prices?.lens_price ?? 0).toFixed(2) }],
                       consultation_price: String(resolveConsultationPrice(selected, billingMeta)),
                     }))
                   }}
@@ -521,17 +532,65 @@ export default function BillingSection({
                   }
                 />
               </label>
-              <label>
-                Lens
-                <input
-                  type="number"
-                  step="0.01"
-                  value={billingForm.lens_price}
-                  onChange={(event) =>
-                    setBillingForm((current) => ({ ...current, lens_price: event.target.value }))
-                  }
-                />
-              </label>
+              <div className="full-span billing-line-items-block">
+                <div className="billing-line-items-header">
+                  <div>
+                    <strong>Lens entries</strong>
+                    <p className="muted-copy">Add one or more lens charges. The database will keep them as one combined lens total for this bill.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setBillingForm((current) => ({
+                        ...current,
+                        lens_items: [...normalizeBillingLensItems(current.lens_items, current.lens_price), createBlankLensItem()],
+                      }))
+                    }
+                  >
+                    Add lens
+                  </button>
+                </div>
+                <div className="billing-line-items-list">
+                  {normalizedLensItems.map((item, index) => (
+                    <div key={`lens-item-${index}`} className="billing-line-item-row">
+                      <label>
+                        Lens {index + 1}
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.amount}
+                          onChange={(event) =>
+                            setBillingForm((current) => ({
+                              ...current,
+                              lens_items: normalizeBillingLensItems(current.lens_items, current.lens_price).map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, amount: event.target.value } : entry,
+                              ),
+                            }))
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="mini-action"
+                        onClick={() =>
+                          setBillingForm((current) => ({
+                            ...current,
+                            lens_items: removeLensItem(current, index),
+                          }))
+                        }
+                        disabled={normalizedLensItems.length <= 1}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="billing-line-items-total">
+                  <span>Lens total</span>
+                  <strong>{currency.format(sumLensItems(normalizedLensItems))}</strong>
+                </div>
+              </div>
               <label>
                 Case
                 <input
@@ -569,8 +628,10 @@ export default function BillingSection({
                   ))}
                 </select>
               </label>
+              {false ? (
+              <>
               <label>
-                Frame code
+                Frame code legacy
                 <select
                   value={billingForm.frame_code_id}
                   onChange={(event) => {
@@ -617,6 +678,104 @@ export default function BillingSection({
                 />
                 {framePriceWarning ? <small className="billing-field-warning">Frame price error: {framePriceWarning}</small> : null}
               </label>
+              </>
+              ) : (
+              <div className="full-span billing-line-items-block">
+                <div className="billing-line-items-header">
+                  <div>
+                    <strong>Frame entries</strong>
+                    <p className="muted-copy">Select one or more frames. Each frame will still be stored in the existing frame-link table.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() =>
+                      setBillingForm((current) => ({
+                        ...current,
+                        frame_items: [...normalizeBillingFrameItems(current.frame_items, current.frame_code_id, current.frame_price), createBlankFrameItem()],
+                      }))
+                    }
+                  >
+                    Add frame
+                  </button>
+                </div>
+                <div className="billing-line-items-list">
+                  {normalizedFrameItems.map((item, index) => {
+                    const selectedFrameProductForRow = findFrameProduct(item.frame_code_id, billingMeta)
+                    const warning = frameWarnings[index]
+
+                    return (
+                      <div key={`frame-item-${index}`} className="billing-line-item-row billing-line-item-row-frame">
+                        <label>
+                          Frame code
+                          <select
+                            value={item.frame_code_id}
+                            onChange={(event) =>
+                              setBillingForm((current) => ({
+                                ...current,
+                                frame_items: normalizeBillingFrameItems(current.frame_items, current.frame_code_id, current.frame_price).map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, frame_code_id: event.target.value, frame_price: resolveFramePrice(event.target.value, billingMeta) }
+                                    : entry,
+                                ),
+                              }))
+                            }
+                          >
+                            <option value="">No frame</option>
+                            {(billingMeta?.frame_products ?? []).map((product) => (
+                              <option key={`${product.code}-${index}`} value={product.code}>
+                                {formatFrameOptionLabel(product)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Frame price
+                          <input
+                            type="number"
+                            step="0.01"
+                            className={warning ? 'billing-field-error' : ''}
+                            aria-invalid={warning ? 'true' : 'false'}
+                            value={item.frame_price}
+                            onChange={(event) =>
+                              setBillingForm((current) => ({
+                                ...current,
+                                frame_items: normalizeBillingFrameItems(current.frame_items, current.frame_code_id, current.frame_price).map((entry, entryIndex) =>
+                                  entryIndex === index ? { ...entry, frame_price: event.target.value } : entry,
+                                ),
+                              }))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="mini-action"
+                          onClick={() =>
+                            setBillingForm((current) => ({
+                              ...current,
+                              frame_items: removeFrameItem(current, index),
+                            }))
+                          }
+                          disabled={normalizedFrameItems.length <= 1}
+                        >
+                          Remove
+                        </button>
+                        {selectedFrameProductForRow ? (
+                          <small className="billing-field-note full-span">
+                            {selectedFrameProductForRow.name} • {selectedFrameProductForRow.stock} in stock • Allowed range: {formatFrameRange(selectedFrameProductForRow)}
+                          </small>
+                        ) : null}
+                        {warning ? <small className="billing-field-warning full-span">Frame price error: {warning}</small> : null}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="billing-line-items-total">
+                  <span>Frame total</span>
+                  <strong>{currency.format(sumFrameItems(normalizedFrameItems))}</strong>
+                </div>
+              </div>
+              )}
 
               <div className="billing-breakdown full-span">
                 <div><span>Base amount</span><strong>{currency.format(calculation.baseAmount)}</strong></div>
@@ -714,6 +873,50 @@ export default function BillingSection({
                           <td>{transaction.reference || transaction.transaction_id || 'N/A'}</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="billing-summary-note">
+                  <strong>Previous billing payments</strong>
+                  <p>
+                    Earlier payments recorded for this patient&apos;s older bills:{' '}
+                    {currency.format(Number(paymentDetail.previous_billing_summary?.total_paid ?? 0))} across{' '}
+                    {Number(paymentDetail.previous_billing_summary?.transaction_count ?? 0)} entries.
+                  </p>
+                </div>
+
+                <div className="table-shell">
+                  <table className="portal-table">
+                    <thead>
+                      <tr>
+                        <th>Previous bill</th>
+                        <th>Entry</th>
+                        <th>Method</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Reference</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(paymentDetail.previous_billing_transactions ?? []).length ? (
+                        (paymentDetail.previous_billing_transactions ?? []).map((transaction) => (
+                          <tr key={`previous-${transaction.entry_type}-${transaction.id}-${transaction.billing_id}`}>
+                            <td>{transaction.billing_receipt_number || transaction.billing_folder_id || `Billing #${transaction.billing_id}`}</td>
+                            <td>{transaction.entry_label || transaction.entry_type || 'Payment'}</td>
+                            <td>{transaction.payment_method}</td>
+                            <td>{transaction.date}</td>
+                            <td>{currency.format(Number(transaction.amount_paid ?? 0))}</td>
+                            <td>{transaction.reference || transaction.transaction_id || 'N/A'}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="6">
+                            <p className="muted-copy">No earlier payments were found for previous billing records linked to this patient.</p>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1061,10 +1264,75 @@ function BillingBreakdownList({ items, amountFormatter, emptyLabel }) {
   )
 }
 
+function createBlankFrameItem() {
+  return {
+    frame_code_id: '',
+    frame_price: '0.00',
+  }
+}
+
+function createBlankLensItem() {
+  return {
+    amount: '0.00',
+  }
+}
+
+function normalizeBillingFrameItems(items, legacyCode = '', legacyPrice = '0.00') {
+  const normalized = Array.isArray(items)
+    ? items.map((item) => ({
+        frame_code_id: String(item?.frame_code_id || '').trim(),
+        frame_price: item?.frame_price ?? '0.00',
+      }))
+    : []
+
+  if (normalized.length > 0) {
+    return normalized
+  }
+
+  const legacyFrameCode = String(legacyCode || '').trim()
+  return legacyFrameCode ? [{ frame_code_id: legacyFrameCode, frame_price: legacyPrice ?? '0.00' }] : [createBlankFrameItem()]
+}
+
+function normalizeBillingLensItems(items, legacyLensPrice = '0.00') {
+  const normalized = Array.isArray(items)
+    ? items.map((item) => ({
+        amount: item?.amount ?? '0.00',
+      }))
+    : []
+
+  if (normalized.length > 0) {
+    return normalized
+  }
+
+  return [{ amount: legacyLensPrice ?? '0.00' }]
+}
+
+function removeFrameItem(form, indexToRemove) {
+  const remaining = normalizeBillingFrameItems(form.frame_items, form.frame_code_id, form.frame_price).filter((_, index) => index !== indexToRemove)
+  return remaining.length > 0 ? remaining : [createBlankFrameItem()]
+}
+
+function removeLensItem(form, indexToRemove) {
+  const remaining = normalizeBillingLensItems(form.lens_items, form.lens_price).filter((_, index) => index !== indexToRemove)
+  return remaining.length > 0 ? remaining : [createBlankLensItem()]
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
+}
+
+function sumFrameItems(items) {
+  return roundMoney(items.reduce((sum, item) => sum + Number(item?.frame_price || 0), 0))
+}
+
+function sumLensItems(items) {
+  return roundMoney(items.reduce((sum, item) => sum + Number(item?.amount || 0), 0))
+}
+
 function calculateBillingTotals(form) {
   const consultation = roundMoney(form.consultation_price || 0)
-  const frame = roundMoney(form.frame_price || 0)
-  const lens = roundMoney(form.lens_price || 0)
+  const frame = sumFrameItems(normalizeBillingFrameItems(form.frame_items, form.frame_code_id, form.frame_price))
+  const lens = sumLensItems(normalizeBillingLensItems(form.lens_items, form.lens_price))
   const billingCase = roundMoney(form.case_price || 0)
   const discount = roundMoney(form.discount || 0)
   const subtotal = roundMoney(consultation + frame + lens + billingCase)
@@ -1076,10 +1344,6 @@ function calculateBillingTotals(form) {
   const totalAmount = roundMoney(Math.max(subtotal - discount, 0))
 
   return { subtotal, baseAmount, nhil, getfund, vat, tax, totalAmount }
-}
-
-function roundMoney(value) {
-  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
 }
 
 function resolveConsultationPrice(candidate, meta) {
@@ -1116,11 +1380,11 @@ function formatFrameOptionLabel(product) {
   return `${product.code} - ${compactName} (${formatFrameRange(product)})`
 }
 
-function validateFramePrice(form, meta) {
-  const product = findFrameProduct(form.frame_code_id, meta)
+function validateFrameItem(item, meta) {
+  const product = findFrameProduct(item.frame_code_id, meta)
   if (!product) return ''
 
-  const value = Number(form.frame_price || 0)
+  const value = Number(item.frame_price || 0)
   const min = Number(product.min_price ?? 0)
   const max = Number(product.max_price ?? 0)
   const grade = String(product.grade || '').toUpperCase()
@@ -1134,6 +1398,16 @@ function validateFramePrice(form, meta) {
   }
 
   return ''
+}
+
+function validateFramePrice(form, meta) {
+  return validateFrameItem(
+    {
+      frame_code_id: form?.frame_code_id,
+      frame_price: form?.frame_price,
+    },
+    meta,
+  )
 }
 
 function SummaryMetric({ label, value, balanceHighlight = false }) {

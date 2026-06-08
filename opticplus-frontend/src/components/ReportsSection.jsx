@@ -438,13 +438,21 @@ function createReportHtml({
     : 'Not selected'
   const title = reportTypeOptions.find((option) => option.value === reportType)?.title ?? 'Financial Report'
   const summaryItems = buildSnapshotItems(primary, comparison, reportType, taxReviewSummary)
-  const summaryHtml = summaryItems.map(([label, value, note]) => `
-    <div class="summary-card">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value)}</strong>
-      <p>${escapeHtml(note)}</p>
-    </div>
-  `).join('')
+  const summaryHtml = reportType === 'standalone'
+    ? `
+      <div class="summary-inline">
+        <span>Monthly Profit</span>
+        <strong>${escapeHtml(formatMoney(primary?.summary?.net_operating ?? 0))}</strong>
+        <p>Revenue less operating expenses</p>
+      </div>
+    `
+    : summaryItems.map(([label, value, note]) => `
+      <div class="summary-card">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <p>${escapeHtml(note)}</p>
+      </div>
+    `).join('')
 
   const monthlyRowsHtml = monthlyRows.map((row, index) => `
     <tr>
@@ -495,9 +503,17 @@ function createReportHtml({
         body { font-family: Calibri, Arial, sans-serif; margin: 24px; color: #122033; }
         h1, h2, h3, p { margin: 0; }
         .header { text-align: center; margin-bottom: 20px; }
-        .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 24px; }
+        .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 18px 0 24px; padding-bottom: 14px; border-bottom: 1px solid #d7e2ec; }
         .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-        .meta-card, .summary-card { border: 1px solid #c7d7e6; border-radius: 12px; padding: 12px 14px; }
+        .meta-card { padding: 0; border: none; border-radius: 0; background: transparent; }
+        .summary-card { border: 1px solid #c7d7e6; border-radius: 12px; padding: 12px 14px; }
+        .summary-inline { margin-bottom: 24px; }
+        .summary-inline span { color: #516072; font-size: 12px; }
+        .summary-inline strong { display: block; margin: 4px 0 2px; font-size: 18px; }
+        .summary-inline p { color: #516072; font-size: 12px; }
+        .meta-card strong { display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #516072; }
+        .meta-card p { font-size: 14px; line-height: 1.4; }
+        .meta-card p + p { color: #516072; font-size: 12px; }
         .summary-card strong { display: block; margin: 8px 0 4px; font-size: 18px; }
         .summary-card span, .summary-card p { color: #516072; font-size: 12px; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }

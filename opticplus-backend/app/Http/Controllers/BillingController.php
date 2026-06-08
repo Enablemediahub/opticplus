@@ -13,6 +13,7 @@ class BillingController extends Controller
     public function meta(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
+        $this->ensureBillingSchema();
         $this->ensureStandardPricesSchema();
 
         $standardPrices = tap(DB::table('standard_prices'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
@@ -205,19 +206,13 @@ class BillingController extends Controller
     public function index(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
+        $this->ensureBillingSchema();
         $perPage = min(max((int) $request->integer('per_page', 15), 5), 50);
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
 
-        $salesTotals = DB::table('sales')
-            ->select('billing_id', DB::raw("SUM(CASE WHEN payment_method != 'Insurance' THEN amount_paid ELSE 0 END) as sales_paid"))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
-
-        $claimTotals = DB::table('insurance_claims')
-            ->select('billing_id', DB::raw('SUM(amount_paid) as insurance_claimed'))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
+        $salesTotals = $this->alignedSalesTotalsQuery();
+        $claimTotals = $this->alignedClaimTotalsQuery();
 
         $baseQuery = DB::table('billing as b')
             ->leftJoin('patient_records as p', 'b.patient_id', '=', 'p.id')
@@ -347,16 +342,10 @@ class BillingController extends Controller
     public function export(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
+        $this->ensureBillingSchema();
 
-        $salesTotals = DB::table('sales')
-            ->select('billing_id', DB::raw("SUM(CASE WHEN payment_method != 'Insurance' THEN amount_paid ELSE 0 END) as sales_paid"))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
-
-        $claimTotals = DB::table('insurance_claims')
-            ->select('billing_id', DB::raw('SUM(amount_paid) as insurance_claimed'))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
+        $salesTotals = $this->alignedSalesTotalsQuery();
+        $claimTotals = $this->alignedClaimTotalsQuery();
 
         $query = DB::table('billing as b')
             ->leftJoin('patient_records as p', 'b.patient_id', '=', 'p.id')
@@ -459,6 +448,7 @@ class BillingController extends Controller
     public function store(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
+        $this->ensureBillingSchema();
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
         }
@@ -471,18 +461,44 @@ class BillingController extends Controller
             'consultation_price' => ['required', 'numeric', 'min:0'],
             'frame_code_id' => ['nullable', 'string', 'max:50'],
             'frame_price' => ['required', 'numeric', 'min:0'],
+            'frame_items' => ['nullable', 'array'],
+            'frame_items.*.frame_code_id' => ['nullable', 'string', 'max:50'],
+            'frame_items.*.frame_price' => ['nullable', 'numeric', 'min:0'],
             'lens_price' => ['required', 'numeric', 'min:0'],
+            'lens_items' => ['nullable', 'array'],
+            'lens_items.*.amount' => ['nullable', 'numeric', 'min:0'],
             'case_price' => ['required', 'numeric', 'min:0'],
             'discount' => ['nullable', 'numeric', 'min:0'],
             'health_insurance' => ['required', 'string', 'max:50'],
             'prescription_id' => ['nullable', 'integer'],
         ]);
 
-        $frameCodeId = $validated['frame_code_id'] ?? null;
-        $framePrice = $this->money($validated['frame_price']);
+        $frameItems = collect($validated['frame_items'] ?? [])
+            ->map(fn ($item) => [
+                'frame_code_id' => trim((string) ($item['frame_code_id'] ?? '')),
+                'frame_price' => $this->money($item['frame_price'] ?? 0),
+            ])
+            ->filter(fn ($item) => $item['frame_code_id'] !== '')
+            ->values();
+
+        if ($frameItems->isEmpty() && ! empty($validated['frame_code_id'])) {
+            $frameItems = collect([[
+                'frame_code_id' => trim((string) $validated['frame_code_id']),
+                'frame_price' => $this->money($validated['frame_price']),
+            ]]);
+        }
+
+        $framePrice = $this->money($frameItems->sum('frame_price'));
         $discount = $this->money($validated['discount'] ?? 0);
 
-        if ($frameCodeId) {
+        $requestedFrameCounts = $frameItems
+            ->groupBy('frame_code_id')
+            ->map(fn ($items) => $items->count());
+
+        foreach ($frameItems as $frameItem) {
+            $frameCodeId = $frameItem['frame_code_id'];
+            $currentFramePrice = $frameItem['frame_price'];
+
             $product = DB::table('products')
                 ->where('branch_id', $branchId)
                 ->where('code', $frameCodeId)
@@ -492,17 +508,30 @@ class BillingController extends Controller
                 return response()->json(['message' => 'Invalid frame code selected.'], 422);
             }
 
-            if ($framePrice < (float) $product->min_price) {
+            if ($currentFramePrice < (float) $product->min_price) {
                 return response()->json(['message' => 'Frame price is below the minimum allowed price.'], 422);
             }
 
-            if ($product->grade !== 'A' && $framePrice > (float) $product->max_price) {
+            if ($product->grade !== 'A' && $currentFramePrice > (float) $product->max_price) {
                 return response()->json(['message' => 'Frame price exceeds the allowed range for this frame.'], 422);
+            }
+
+            if ((int) ($requestedFrameCounts[$frameCodeId] ?? 0) > (int) ($product->stock ?? 0)) {
+                return response()->json(['message' => "Not enough stock for frame {$frameCodeId}."], 422);
             }
         }
 
         $consultationPrice = $this->money($validated['consultation_price']);
-        $lensPrice = $this->money($validated['lens_price']);
+        $lensItems = collect($validated['lens_items'] ?? [])
+            ->map(fn ($item) => $this->money($item['amount'] ?? 0))
+            ->filter(fn ($amount) => $amount > 0)
+            ->values();
+        $lensPrice = $lensItems->isNotEmpty()
+            ? $this->money($lensItems->sum())
+            : $this->money($validated['lens_price']);
+        $lensItemCount = $lensItems->isNotEmpty()
+            ? $lensItems->count()
+            : ($lensPrice > 0 ? 1 : 0);
         $casePrice = $this->money($validated['case_price']);
         $subtotal = $this->money($consultationPrice + $framePrice + $lensPrice + $casePrice);
         $taxBreakdown = $this->calculateTaxBreakdown($subtotal);
@@ -516,10 +545,11 @@ class BillingController extends Controller
         $billingId = DB::transaction(function () use (
             $validated,
             $branchId,
-            $frameCodeId,
+            $frameItems,
             $consultationPrice,
             $framePrice,
             $lensPrice,
+            $lensItemCount,
             $casePrice,
             $baseAmount,
             $subtotal,
@@ -538,6 +568,7 @@ class BillingController extends Controller
                 'consultation_price' => $consultationPrice,
                 'frame_price' => $framePrice,
                 'lens_price' => $lensPrice,
+                'lens_item_count' => $lensItemCount,
                 'case_price' => $casePrice,
                 'amount' => $baseAmount,
                 'discount' => $discount,
@@ -555,23 +586,23 @@ class BillingController extends Controller
                 'branch_id' => $branchId,
             ]);
 
-            if ($frameCodeId && $framePrice > 0) {
+            foreach ($frameItems as $frameItem) {
                 DB::table('billing_frames')->insert([
                     'billing_id' => $billingId,
-                    'frame_code_id' => $frameCodeId,
-                    'frame_price' => $framePrice,
+                    'frame_code_id' => $frameItem['frame_code_id'],
+                    'frame_price' => $frameItem['frame_price'],
                     'branch_id' => $branchId,
                     'created_at' => now(),
                 ]);
 
                 $productBeforeSale = DB::table('products')
                     ->where('branch_id', $branchId)
-                    ->where('code', $frameCodeId)
+                    ->where('code', $frameItem['frame_code_id'])
                     ->first(['id', 'stock']);
 
                 DB::table('products')
                     ->where('branch_id', $branchId)
-                    ->where('code', $frameCodeId)
+                    ->where('code', $frameItem['frame_code_id'])
                     ->where('stock', '>', 0)
                     ->decrement('stock');
 
@@ -642,6 +673,34 @@ class BillingController extends Controller
                     ->orWhere('c.phone', 'like', $like);
             });
         }
+    }
+
+    private function alignedSalesTotalsQuery()
+    {
+        return DB::table('sales as s')
+            ->join('billing as matched_billing', function ($join): void {
+                $join->on('s.billing_id', '=', 'matched_billing.id')
+                    ->on('s.branch_id', '=', 'matched_billing.branch_id')
+                    ->on('s.folder_id', '=', 'matched_billing.folder_id')
+                    ->whereRaw('(s.patient_id IS NULL OR matched_billing.patient_id IS NULL OR s.patient_id = matched_billing.patient_id)');
+            })
+            ->select('s.billing_id', DB::raw("SUM(CASE WHEN s.payment_method != 'Insurance' THEN s.amount_paid ELSE 0 END) as sales_paid"))
+            ->whereNotNull('s.billing_id')
+            ->groupBy('s.billing_id');
+    }
+
+    private function alignedClaimTotalsQuery()
+    {
+        return DB::table('insurance_claims as ic')
+            ->join('billing as matched_billing', function ($join): void {
+                $join->on('ic.billing_id', '=', 'matched_billing.id')
+                    ->on('ic.branch_id', '=', 'matched_billing.branch_id')
+                    ->on('ic.folder_id', '=', 'matched_billing.folder_id')
+                    ->whereRaw('(ic.patient_id IS NULL OR matched_billing.patient_id IS NULL OR ic.patient_id = matched_billing.patient_id)');
+            })
+            ->select('ic.billing_id', DB::raw('SUM(ic.amount_paid) as insurance_claimed'))
+            ->whereNotNull('ic.billing_id')
+            ->groupBy('ic.billing_id');
     }
 
     private function resolveBranchId(Request $request): int
@@ -724,6 +783,7 @@ class BillingController extends Controller
             'consultation_price' => (float) ($record->consultation_price ?? 0),
             'frame_price' => (float) ($record->frame_price ?? 0),
             'lens_price' => (float) ($record->lens_price ?? 0),
+            'lens_item_count' => (int) ($record->lens_item_count ?? ($record->lens_price > 0 ? 1 : 0)),
             'case_price' => (float) ($record->case_price ?? 0),
             'discount' => (float) ($record->discount ?? 0),
             'total_amount' => (float) ($record->total_amount ?? 0),
@@ -766,6 +826,23 @@ class BillingController extends Controller
             'vat' => $vat,
             'tax' => $tax,
         ];
+    }
+
+    private function ensureBillingSchema(): void
+    {
+        if (! Schema::hasTable('billing')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('billing', 'lens_item_count')) {
+            Schema::table('billing', function (Blueprint $table): void {
+                $table->unsignedInteger('lens_item_count')->default(1)->after('lens_price');
+            });
+
+            DB::table('billing')
+                ->where('lens_price', '<=', 0)
+                ->update(['lens_item_count' => 0]);
+        }
     }
 
     private function ensureStandardPricesSchema(): void

@@ -45,7 +45,8 @@ export default function InsuranceSection(props) {
     props.pageCopy ??
     'Built from the legacy insurance claims and balance workflow, with provider-specific claim capture and claim settlement.'
   const isReadOnly = Boolean(props.readOnly)
-  const canManageClaims = props.session?.role === 'manager' && !isReadOnly
+  const canManageProviders = Boolean((props.session?.is_admin || props.session?.role === 'manager') && !isReadOnly)
+  const canEditClaims = Boolean((props.session?.is_admin || ['manager', 'accountant'].includes(props.session?.role)) && !isReadOnly)
   const canRecordRemittances = ['manager', 'accountant'].includes(props.session?.role) && !isReadOnly
   const providerCatalog = props.insuranceProviderCatalog?.length
     ? props.insuranceProviderCatalog
@@ -97,17 +98,29 @@ export default function InsuranceSection(props) {
       patient_organization: editForm.patient_organization,
       amount_paid: editForm.amount_paid,
       date: editForm.date,
-    })
+    }, activeClaim.branch_id)
 
     if (didSave) {
-      closeClaimModal()
+      setActiveClaim((current) =>
+        current
+          ? {
+              ...current,
+              insurance_provider: editForm.insurance_provider,
+              insurance_number: editForm.insurance_number,
+              insurance_package: editForm.insurance_package,
+              patient_organization: editForm.patient_organization,
+              amount_paid: editForm.amount_paid,
+              date: editForm.date,
+            }
+          : current,
+      )
     }
   }
 
   async function handleDeleteClaim() {
     if (!activeClaim) return
 
-    const didDelete = await props.deleteInsuranceClaim(activeClaim.id)
+    const didDelete = await props.deleteInsuranceClaim(activeClaim.id, activeClaim.branch_id)
     if (didDelete) {
       closeClaimModal()
     }
@@ -228,7 +241,7 @@ export default function InsuranceSection(props) {
             </span>
           </div>
 
-          {canManageClaims ? (
+          {canManageProviders ? (
             <div className="insurance-provider-manager">
               <div className="panel-heading compact">
                 <div>
@@ -703,7 +716,7 @@ export default function InsuranceSection(props) {
                                   type="button"
                                   className="mini-action"
                                   disabled={props.claimBusyId === claim.id}
-                                  onClick={() => props.markClaimPending(claim.id)}
+                                  onClick={() => props.markClaimPending(claim.id, claim.branch_id)}
                                 >
                                   {props.claimBusyId === claim.id ? 'Updating...' : 'Revert to pending'}
                                 </button>
@@ -713,12 +726,12 @@ export default function InsuranceSection(props) {
                                   type="button"
                                   className="mini-action success"
                                   disabled={props.claimBusyId === claim.id}
-                                  onClick={() => props.markClaimPaid(claim.id)}
+                                  onClick={() => props.markClaimPaid(claim.id, claim.branch_id)}
                                 >
                                   {props.claimBusyId === claim.id ? 'Updating...' : 'Mark as paid'}
                                 </button>
                               ) : null}
-                              {canManageClaims ? (
+                              {canEditClaims ? (
                                 <button
                                   type="button"
                                   className="mini-action"
@@ -794,6 +807,9 @@ export default function InsuranceSection(props) {
               </button>
             </div>
 
+            {props.insuranceError ? <div className="message-banner error">{props.insuranceError}</div> : null}
+            {props.insuranceSuccess ? <div className="message-banner success">{props.insuranceSuccess}</div> : null}
+
             <div className="insurance-claim-modal__summary">
               <div className="finance-chip">
                 <span>Patient</span>
@@ -824,11 +840,14 @@ export default function InsuranceSection(props) {
                   required
                 >
                   <option value="">Select provider</option>
-                  {(props.insuranceMeta?.providers ?? []).map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
+                  {providerCatalog.map((provider) => (
+                    <option key={provider.id ?? provider.name} value={provider.name}>
+                      {provider.name}
                     </option>
                   ))}
+                  {activeClaim?.insurance_provider && !providerCatalog.some((provider) => provider.name === activeClaim.insurance_provider) ? (
+                    <option value={activeClaim.insurance_provider}>{activeClaim.insurance_provider}</option>
+                  ) : null}
                 </select>
               </label>
               <label>

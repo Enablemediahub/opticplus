@@ -69,6 +69,31 @@ export default function FinanceSection(props) {
   }
 
   const pageHeader = headerByMode[pageMode] ?? headerByMode.default
+  const expenseStats = props.financeExpenses?.stats ?? {}
+  const expenseRecordCount = Number(props.financeExpenses?.pagination?.total ?? 0)
+  const expenseCategoryCount = Number(props.financeExpenses?.category_breakdown?.length ?? 0)
+  const hasExpenseScopedFilters = Boolean(
+    props.financeExpenseFilters?.start_date ||
+    props.financeExpenseFilters?.end_date ||
+    props.financeExpenseFilters?.search ||
+    (props.financeExpenseFilters?.category && props.financeExpenseFilters.category !== 'all') ||
+    (props.financeExpenseFilters?.filter && props.financeExpenseFilters.filter !== 'all')
+  )
+  const filteredExpenseTotal = Number(expenseStats.total ?? 0)
+  const filteredExpenseAverage = expenseRecordCount > 0 ? filteredExpenseTotal / expenseRecordCount : 0
+  const expenseSummaryCards = hasExpenseScopedFilters
+    ? [
+        ['Filtered Total', filteredExpenseTotal, 'All expenses in the active filter scope', 'seen', 'alert'],
+        ['Records', expenseRecordCount, 'Expense entries included in the current filters', 'today', 'receipt', 'count'],
+        ['Average Expense', filteredExpenseAverage, 'Average spend across the filtered expense records', 'pending', 'finance'],
+        ['Categories', expenseCategoryCount, 'Expense categories represented in the active results', 'total', 'trend', 'count'],
+      ]
+    : [
+        ['Today', expenseStats.today ?? props.financeSummary?.stats.expenses_month, 'Expenses posted today', 'seen', 'alert'],
+        ['This Week', expenseStats.weekly, 'Weekly expense total', 'today', 'finance'],
+        ['This Month', expenseStats.monthly ?? props.financeSummary?.stats.expenses_month, 'Monthly expense pressure', 'pending', 'trend'],
+        ['This Year', expenseStats.yearly, 'Year-to-date spending', 'total', 'money'],
+      ]
 
   const summaryCardsByMode = {
     default: [
@@ -84,17 +109,12 @@ export default function FinanceSection(props) {
       ['Sales + Insurance', props.financeSummary?.stats.sales_with_insurance_month, 'Full monthly sales value including insurance-backed bills', 'total', 'finance'],
     ],
     sales: [
-      ['Sales', props.financeSales?.stats.total_sales, 'Collected sales in the current filter scope', 'seen', 'money'],
-      ['Insurance Value', props.financeSales?.stats.insurance_billed_value, 'Insurance value in the same date and search scope', 'today', 'shield'],
-      ['Sales + Insurance', props.financeSales?.stats.sales_with_insurance, 'Combined sales value for the active filters', 'total', 'trend'],
-      ['Transactions', props.financeSales?.stats.transaction_count, 'Sales entries included in the current result set', 'pending', 'receipt', true],
+      ['Total Sales', props.financeSales?.stats.total_sales, 'All realized sales in the current filter scope', 'seen', 'money'],
+      ['Sales + Insurance', Number(props.financeSales?.stats.total_sales ?? 0) + Number(props.financeSales?.stats.insurance_billed_value ?? 0), 'Normal sales plus insurance-backed sales in the same scope', 'today', 'receipt'],
+      ['Loan Revenue', props.financeSales?.stats.loan_revenue_total, 'Collected sales not tied to a billing record', 'pending', 'finance'],
+      ['Insurance Value', props.financeSales?.stats.insurance_billed_value, 'Insurance value in the same date and search scope', 'total', 'shield'],
     ],
-    expenses: [
-      ['Today', props.financeExpenses?.stats.today ?? props.financeSummary?.stats.expenses_month, 'Expenses posted today', 'seen', 'alert'],
-      ['This Week', props.financeExpenses?.stats.weekly, 'Weekly expense total', 'today', 'finance'],
-      ['This Month', props.financeExpenses?.stats.monthly ?? props.financeSummary?.stats.expenses_month, 'Monthly expense pressure', 'pending', 'trend'],
-      ['This Year', props.financeExpenses?.stats.yearly, 'Year-to-date spending', 'total', 'money'],
-    ],
+    expenses: expenseSummaryCards,
     debt: [
       ['Collected', props.financePayments?.stats.total_collected, 'Payments received for the active search window', 'seen', 'money'],
       ['Outstanding', props.financePayments?.stats.outstanding_balance, 'Balances still open for recovery', 'pending', 'finance'],
@@ -130,11 +150,11 @@ export default function FinanceSection(props) {
       {props.financeSuccess ? <div className="message-banner success">{props.financeSuccess}</div> : null}
 
       <section className="stats-grid patient-stats-grid">
-        {summaryCards.map(([label, value, note, className, icon]) => (
+        {summaryCards.map(([label, value, note, className, icon, valueType]) => (
           <StatWidget
             key={label}
             label={label}
-            value={label === 'Transactions'
+            value={valueType === 'count' || label === 'Transactions'
               ? String(Number(value ?? 0))
               : props.isLoadingFinanceSummary && !props.financeSummary
                 ? '...'
@@ -640,6 +660,9 @@ function AccountantSalesView(props) {
 
           <div className="payment-summary-row">
             <Metric label="Filtered Days" value={dailyBreakdown.length} raw />
+            <Metric label="Total Sales" value={salesStats.total_sales} />
+            <Metric label="Sales + Insurance" value={Number(salesStats.total_sales ?? 0) + Number(salesStats.insurance_billed_value ?? 0)} />
+            <Metric label="Loan Revenue" value={salesStats.loan_revenue_total} />
             <Metric label="Consultation" value={salesStats.consultation_total} />
             <Metric label="Frames" value={salesStats.frame_total} />
             <Metric label="Lenses" value={salesStats.lens_total} />
@@ -1442,7 +1465,8 @@ function PaymentWorkspace(props) {
 }
 
 function SalesTab(props) {
-  const todayBreakdown = props.financeSales?.stats?.today_breakdown ?? {}
+  const todayBreakdown = props.financeSales?.stats?.scope_breakdown ?? props.financeSales?.stats?.today_breakdown ?? {}
+  const todayLabel = todayBreakdown.label ?? 'Today'
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1464,17 +1488,18 @@ function SalesTab(props) {
         </div>
 
         <div className="payment-summary-row">
-          <Metric label="Cash Today" value={todayBreakdown.cash} />
-          <Metric label="MoMo Today" value={todayBreakdown.mobile_money} />
-          <Metric label="Paystack Today" value={todayBreakdown.paystack} />
-          <Metric label="Insurance Today" value={todayBreakdown.insurance} />
-          <Metric label="Today Total" value={todayBreakdown.grand_total} />
+          <Metric label={`Cash ${todayLabel}`} value={todayBreakdown.cash} />
+          <Metric label={`MoMo ${todayLabel}`} value={todayBreakdown.mobile_money} />
+          <Metric label={`Paystack ${todayLabel}`} value={todayBreakdown.paystack} />
+          <Metric label={`Insurance ${todayLabel}`} value={todayBreakdown.insurance} />
+          <Metric label={`${todayLabel} Total`} value={todayBreakdown.grand_total} />
         </div>
 
         <div className="payment-summary-row">
-          <Metric label="Collected Sales" value={props.financeSales?.stats.total_sales} />
+          <Metric label="Total Sales" value={props.financeSales?.stats.total_sales} />
           <Metric label="Insurance Value" value={props.financeSales?.stats.insurance_billed_value} />
-          <Metric label="Sales + Insurance" value={props.financeSales?.stats.sales_with_insurance} />
+          <Metric label="Sales + Insurance" value={Number(props.financeSales?.stats.total_sales ?? 0) + Number(props.financeSales?.stats.insurance_billed_value ?? 0)} />
+          <Metric label="Loan Revenue" value={props.financeSales?.stats.loan_revenue_total} />
           <Metric label="Transactions" value={props.financeSales?.stats.transaction_count} raw />
           <Metric label="Average Sale" value={props.financeSales?.stats.average_sale} />
         </div>

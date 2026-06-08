@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CustomerServiceController;
 use App\Http\Controllers\DatabaseAdminController;
@@ -29,7 +30,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/company-profile', [CompanyProfileController::class, 'show']);
 
-    Route::middleware('auth.token')->group(function (): void {
+    Route::middleware(['auth.token', 'audit.mutations'])->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/me/profile', [AuthController::class, 'updateProfile']);
         Route::post('/me/password', [AuthController::class, 'changePassword']);
@@ -110,7 +111,9 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/inventory/lens-tracker', [InventoryController::class, 'lensTracker']);
         Route::get('/inventory/bsmi-tracker', [InventoryController::class, 'bsmiTracker']);
         Route::post('/inventory/lens-tracker/{billingId}', [InventoryController::class, 'storeLensCost']);
+        Route::delete('/inventory/lens-tracker/{billingId}', [InventoryController::class, 'deleteLensCost']);
         Route::get('/manager/overview', [ManagerController::class, 'overview']);
+        Route::get('/manager/audit-logs', [AuditLogController::class, 'index']);
         Route::get('/manager/users', [ManagerController::class, 'users']);
         Route::post('/manager/users', [ManagerController::class, 'storeUser']);
         Route::post('/manager/users/{userId}', [ManagerController::class, 'updateUser']);

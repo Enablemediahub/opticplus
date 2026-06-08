@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\BsmiTransactionService;
+use App\Support\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Schema\Blueprint;
@@ -140,6 +141,12 @@ class FinanceController extends Controller
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
         $today = now()->toDateString();
+        $searchTerm = trim($request->string('search')->toString());
+        $selectedPaymentMethod = $request->string('payment_method')->toString();
+        $hasScopedFilters = $request->filled('date_from')
+            || $request->filled('date_to')
+            || $searchTerm !== ''
+            || ($selectedPaymentMethod && $selectedPaymentMethod !== 'all');
 
         $query = DB::table('sales as s')
             ->leftJoin('billing as b', function ($join): void {
@@ -180,9 +187,8 @@ class FinanceController extends Controller
             $insuranceBilledQuery->whereDate('ic.date', '<=', $request->string('date_to')->toString());
         }
 
-        $search = trim($request->string('search')->toString());
-        if ($search !== '') {
-            $like = '%'.$search.'%';
+        if ($searchTerm !== '') {
+            $like = '%'.$searchTerm.'%';
             $insuranceBilledQuery->where(function ($inner) use ($like): void {
                 $inner->where('b.name', 'like', $like)
                     ->orWhere('ic.folder_id', 'like', $like)
@@ -201,12 +207,24 @@ class FinanceController extends Controller
             ->orderByDesc('sale_date')
             ->get();
 
-        $todayMethodBreakdown = tap(
+        $scopeMethodBreakdownQuery = tap(
             DB::table('sales as s')
-                ->whereDate('s.date', $today)
                 ->where('s.payment_method', '!=', 'Insurance'),
             fn ($builder) => $this->applyBranchScope($builder, 's.branch_id', $branchId)
-        )
+        );
+
+        if ($hasScopedFilters) {
+            $scopeMethodBreakdownQuery->leftJoin('billing as b', function ($join): void {
+                $join->on('s.billing_id', '=', 'b.id')
+                    ->on('s.branch_id', '=', 'b.branch_id');
+            });
+
+            $this->applySalesFilters($scopeMethodBreakdownQuery, $request);
+        } else {
+            $scopeMethodBreakdownQuery->whereDate('s.date', $today);
+        }
+
+        $scopeMethodBreakdown = $scopeMethodBreakdownQuery
             ->select('s.payment_method', DB::raw('SUM(s.amount_paid) as total'))
             ->groupBy('s.payment_method')
             ->get();
@@ -215,7 +233,7 @@ class FinanceController extends Controller
         $todayMobileMoneyTotal = 0.0;
         $todayPaystackTotal = 0.0;
         $todayOtherTotal = 0.0;
-        foreach ($todayMethodBreakdown as $row) {
+        foreach ($scopeMethodBreakdown as $row) {
             $bucket = $this->classifyPaymentMethod((string) $row->payment_method);
             $value = (float) $row->total;
             match ($bucket) {
@@ -226,10 +244,41 @@ class FinanceController extends Controller
             };
         }
 
-        $todayInsuranceSales = (float) tap(
-            DB::table('insurance_claims')->whereDate('date', $today),
-            fn ($builder) => $this->applyBranchScope($builder, 'branch_id', $branchId)
-        )->sum('amount_paid');
+        $scopeInsuranceQuery = tap(
+            DB::table('insurance_claims as ic'),
+            fn ($builder) => $this->applyBranchScope($builder, 'ic.branch_id', $branchId)
+        );
+
+        if ($hasScopedFilters) {
+            $scopeInsuranceQuery->leftJoin('billing as b', function ($join): void {
+                $join->on('ic.billing_id', '=', 'b.id')
+                    ->on('ic.branch_id', '=', 'b.branch_id');
+            });
+
+            if ($request->filled('date_from')) {
+                $scopeInsuranceQuery->whereDate('ic.date', '>=', $request->string('date_from')->toString());
+            }
+
+            if ($request->filled('date_to')) {
+                $scopeInsuranceQuery->whereDate('ic.date', '<=', $request->string('date_to')->toString());
+            }
+
+            if ($searchTerm !== '') {
+                $like = '%'.$searchTerm.'%';
+                $scopeInsuranceQuery->where(function ($inner) use ($like): void {
+                    $inner->where('b.name', 'like', $like)
+                        ->orWhere('ic.folder_id', 'like', $like)
+                        ->orWhere('b.receipt_number', 'like', $like)
+                        ->orWhere('ic.insurance_provider', 'like', $like)
+                        ->orWhere('ic.insurance_number', 'like', $like)
+                        ->orWhere('ic.insurance_package', 'like', $like);
+                });
+            }
+        } else {
+            $scopeInsuranceQuery->whereDate('ic.date', $today);
+        }
+
+        $todayInsuranceSales = (float) $scopeInsuranceQuery->sum('ic.amount_paid');
 
         $todayCashMomoTotal = $todayCashTotal + $todayMobileMoneyTotal;
 
@@ -356,6 +405,16 @@ class FinanceController extends Controller
                 'sales_with_insurance' => $totalAmount + $insuranceBilledValue,
                 'transaction_count' => $total,
                 'insurance_bill_count' => $insuranceBillCount,
+                'scope_breakdown' => [
+                    'cash' => round($todayCashTotal, 2),
+                    'mobile_money' => round($todayMobileMoneyTotal, 2),
+                    'paystack' => round($todayPaystackTotal, 2),
+                    'other' => round($todayOtherTotal, 2),
+                    'insurance' => round($todayInsuranceSales, 2),
+                    'collected_total' => round($todayCashTotal + $todayMobileMoneyTotal + $todayPaystackTotal + $todayOtherTotal, 2),
+                    'grand_total' => round($todayCashTotal + $todayMobileMoneyTotal + $todayPaystackTotal + $todayOtherTotal + $todayInsuranceSales, 2),
+                    'label' => $hasScopedFilters ? 'Filtered Scope' : 'Today',
+                ],
                 'today_breakdown' => [
                     'cash' => round($todayCashTotal, 2),
                     'mobile_money' => round($todayMobileMoneyTotal, 2),
@@ -431,8 +490,7 @@ class FinanceController extends Controller
                 'updated_at',
             ]);
 
-        $categoryBreakdown = tap(DB::table('expenses'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
-            ->whereDate('date', '>=', $today->copy()->subMonths(3)->toDateString())
+        $categoryBreakdown = (clone $filteredStatsQuery)
             ->select('category', DB::raw('SUM(amount) as total'))
             ->groupBy('category')
             ->orderByDesc('total')
@@ -526,6 +584,14 @@ class FinanceController extends Controller
             'created_by' => $userId,
         ]);
 
+        AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
+            'description' => $validated['description'],
+            'amount' => $validated['amount'],
+            'date' => $validated['date'],
+            'category' => $category,
+            'branch_id' => $branchId,
+        ], 201);
+
         return response()->json([
             'message' => 'Expense saved successfully.',
             'expense_id' => $expenseId,
@@ -581,6 +647,14 @@ class FinanceController extends Controller
                 'category' => $category,
             ]);
 
+        AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
+            'description' => $validated['description'],
+            'amount' => $validated['amount'],
+            'date' => $validated['date'],
+            'category' => $category,
+            'branch_id' => $branchId,
+        ]);
+
         return response()->json([
             'message' => 'Expense updated successfully.',
         ]);
@@ -603,6 +677,10 @@ class FinanceController extends Controller
                 'message' => 'Expense record not found for this branch.',
             ], 404);
         }
+
+        AuditLog::logManual($request, 'delete', 'expenses', 'expense_id: '.$expenseId, [
+            'branch_id' => $branchId,
+        ]);
 
         return response()->json([
             'message' => 'Expense deleted successfully.',
@@ -654,6 +732,11 @@ class FinanceController extends Controller
                     'updated_at' => now(),
                 ]);
 
+            AuditLog::logManual($request, 'edit', 'expense_categories', 'id: '.$existing->id, [
+                'name' => $name,
+                'is_active' => true,
+            ]);
+
             return response()->json([
                 'message' => 'Expense category restored successfully.',
                 'category' => DB::table('expense_categories')->where('id', $existing->id)->first(['id', 'name', 'is_active', 'created_at', 'updated_at']),
@@ -666,6 +749,11 @@ class FinanceController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        AuditLog::logManual($request, 'edit', 'expense_categories', 'id: '.$categoryId, [
+            'name' => $name,
+            'is_active' => true,
+        ], 201);
 
         return response()->json([
             'message' => 'Expense category added successfully.',
@@ -718,6 +806,11 @@ class FinanceController extends Controller
                 ->update(['category' => $name]);
         });
 
+        AuditLog::logManual($request, 'edit', 'expense_categories', 'id: '.$categoryId, [
+            'previous_name' => $current->name,
+            'name' => $name,
+        ]);
+
         return response()->json([
             'message' => 'Expense category updated successfully.',
             'category' => DB::table('expense_categories')->where('id', $categoryId)->first(['id', 'name', 'is_active', 'created_at', 'updated_at']),
@@ -743,6 +836,10 @@ class FinanceController extends Controller
                 'is_active' => false,
                 'updated_at' => now(),
             ]);
+
+        AuditLog::logManual($request, 'delete', 'expense_categories', 'id: '.$categoryId, [
+            'name' => $current->name,
+        ]);
 
         return response()->json([
             'message' => 'Expense category deleted successfully.',
@@ -965,10 +1062,10 @@ class FinanceController extends Controller
             ], 404);
         }
 
-        $salesSummary = tap(
-            DB::table('sales')->where('billing_id', $billingId),
-            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )->selectRaw("
+        $alignedSalesQuery = $this->alignedSalesEntriesQuery($branchId, $billing);
+        $alignedClaimQuery = $this->alignedClaimEntriesQuery($branchId, $billing);
+
+        $salesSummary = (clone $alignedSalesQuery)->selectRaw("
             COALESCE(SUM(CASE WHEN payment_method = 'Cash' THEN amount_paid ELSE 0 END), 0) as cash_paid,
             COALESCE(SUM(CASE WHEN payment_method = 'Mobile Money' THEN amount_paid ELSE 0 END), 0) as mobile_paid,
             COALESCE(SUM(CASE WHEN payment_method = 'Paystack' THEN amount_paid ELSE 0 END), 0) as paystack_paid,
@@ -976,11 +1073,7 @@ class FinanceController extends Controller
             COALESCE(SUM(CASE WHEN payment_method != 'Insurance' THEN amount_paid ELSE 0 END), 0) as total_sales_paid
         ")->first();
 
-        $insuranceClaimed = (float) (tap(
-            DB::table('insurance_claims')
-                ->where('billing_id', $billingId),
-            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )->sum('amount_paid') ?? 0);
+        $insuranceClaimed = (float) ((clone $alignedClaimQuery)->sum('amount_paid') ?? 0);
 
         $billing->cash_paid = (float) ($salesSummary->cash_paid ?? 0);
         $billing->mobile_paid = (float) ($salesSummary->mobile_paid ?? 0);
@@ -991,10 +1084,7 @@ class FinanceController extends Controller
         $billing->total_paid = round($billing->total_sales_paid + $billing->insurance_claimed, 2);
         $billing->calculated_balance = max(round((float) $billing->balance, 2), 0.0);
 
-        $recentTransactions = tap(
-            DB::table('sales')->where('billing_id', $billingId),
-            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )
+        $recentTransactions = (clone $alignedSalesQuery)
             ->orderByDesc('created_at')
             ->limit(12)
             ->get([
@@ -1007,17 +1097,9 @@ class FinanceController extends Controller
                 'reference',
                 'created_at',
             ])
-            ->map(function ($transaction) {
-                $transaction->entry_type = 'payment';
-                $transaction->entry_label = $transaction->payment_method;
+            ->map(fn ($transaction) => $this->mapPaymentHistoryTransaction($transaction));
 
-                return $transaction;
-            });
-
-        $insuranceClaims = tap(
-            DB::table('insurance_claims')->where('billing_id', $billingId),
-            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )
+        $insuranceClaims = (clone $alignedClaimQuery)
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->limit(12)
@@ -1032,20 +1114,7 @@ class FinanceController extends Controller
                 'status',
                 DB::raw('date as created_at'),
             ])
-            ->map(function ($claim) {
-                $claim->entry_type = 'claim';
-                $claim->entry_label = 'Insurance Claim';
-                $claim->payment_method = 'Insurance';
-                $claim->reference = $claim->insurance_number;
-                $claim->transaction_id = null;
-                $claim->description = trim(implode(' / ', array_filter([
-                    $claim->insurance_provider,
-                    $claim->insurance_package,
-                    $claim->status,
-                ])));
-
-                return $claim;
-            });
+            ->map(fn ($claim) => $this->mapInsuranceHistoryTransaction($claim));
 
         $paymentHistory = $recentTransactions
             ->concat($insuranceClaims)
@@ -1055,11 +1124,23 @@ class FinanceController extends Controller
             ->values()
             ->take(12);
 
+        $previousBillingTransactions = $this->previousBillingTransactions($branchId, $billing)
+            ->sortByDesc(function ($entry) {
+                return $entry->created_at ?? $entry->date;
+            })
+            ->values()
+            ->take(20);
+
         return response()->json([
             'branch_id' => $branchId,
             'branch_name' => $this->branchName($branchId),
             'billing' => $billing,
             'recent_transactions' => $paymentHistory,
+            'previous_billing_transactions' => $previousBillingTransactions,
+            'previous_billing_summary' => [
+                'transaction_count' => $previousBillingTransactions->count(),
+                'total_paid' => round((float) $previousBillingTransactions->sum('amount_paid'), 2),
+            ],
             'insurance_claims' => $insuranceClaims,
             'integrations' => [
                 'paystack_configured' => $this->paystackConfigured(),
@@ -1514,6 +1595,10 @@ class FinanceController extends Controller
 
         if ($startDate && $endDate) {
             $query->whereBetween('date', [$startDate, $endDate]);
+        } elseif ($startDate) {
+            $query->whereDate('date', '>=', $startDate);
+        } elseif ($endDate) {
+            $query->whereDate('date', '<=', $endDate);
         } elseif ($filter !== 'all') {
             match ($filter) {
                 'daily' => $query->whereDate('date', $today->toDateString()),
@@ -1551,15 +1636,8 @@ class FinanceController extends Controller
 
     private function outstandingBillingQuery(int $branchId)
     {
-        $salesTotals = DB::table('sales')
-            ->select('billing_id', DB::raw("SUM(CASE WHEN payment_method NOT IN ('Insurance') THEN amount_paid ELSE 0 END) as sales_paid"))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
-
-        $claimTotals = DB::table('insurance_claims')
-            ->select('billing_id', DB::raw('SUM(amount_paid) as insurance_claimed'))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
+        $salesTotals = $this->alignedSalesTotalsQuery();
+        $claimTotals = $this->alignedClaimTotalsQuery();
 
         $query = DB::table('billing as b')
             ->leftJoin('patient_records as pr', 'b.folder_id', '=', 'pr.folder_id')
@@ -1583,22 +1661,8 @@ class FinanceController extends Controller
             ? 'COALESCE(pr.phone, c.phone, "") as phone'
             : 'COALESCE(c.phone, "") as phone';
 
-        $salesTotals = DB::table('sales')
-            ->select(
-                'billing_id',
-                DB::raw("SUM(CASE WHEN payment_method = 'Cash' THEN amount_paid ELSE 0 END) as cash_paid"),
-                DB::raw("SUM(CASE WHEN payment_method = 'Mobile Money' THEN amount_paid ELSE 0 END) as mobile_paid"),
-                DB::raw("SUM(CASE WHEN payment_method = 'Paystack' THEN amount_paid ELSE 0 END) as paystack_paid"),
-                DB::raw("SUM(CASE WHEN payment_method = 'Insurance' THEN amount_paid ELSE 0 END) as insurance_paid"),
-                DB::raw("SUM(CASE WHEN payment_method != 'Insurance' THEN amount_paid ELSE 0 END) as total_sales_paid")
-            )
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
-
-        $claimTotals = DB::table('insurance_claims')
-            ->select('billing_id', DB::raw('SUM(amount_paid) as insurance_claimed'))
-            ->whereNotNull('billing_id')
-            ->groupBy('billing_id');
+        $salesTotals = $this->alignedSalesTotalsQuery();
+        $claimTotals = $this->alignedClaimTotalsQuery();
 
         $query = DB::table('billing as b')
             ->leftJoin('patient_records as pr', 'b.patient_id', '=', 'pr.id')
@@ -1646,6 +1710,214 @@ class FinanceController extends Controller
         $this->applyBranchScope($query, 'b.branch_id', $branchId);
 
         return $query;
+    }
+
+    private function alignedSalesTotalsQuery()
+    {
+        return DB::table('sales as s')
+            ->join('billing as matched_billing', function ($join): void {
+                $join->on('s.billing_id', '=', 'matched_billing.id')
+                    ->on('s.branch_id', '=', 'matched_billing.branch_id')
+                    ->on('s.folder_id', '=', 'matched_billing.folder_id')
+                    ->whereRaw('(s.patient_id IS NULL OR matched_billing.patient_id IS NULL OR s.patient_id = matched_billing.patient_id)');
+            })
+            ->select(
+                's.billing_id',
+                DB::raw("SUM(CASE WHEN s.payment_method = 'Cash' THEN s.amount_paid ELSE 0 END) as cash_paid"),
+                DB::raw("SUM(CASE WHEN s.payment_method = 'Mobile Money' THEN s.amount_paid ELSE 0 END) as mobile_paid"),
+                DB::raw("SUM(CASE WHEN s.payment_method = 'Paystack' THEN s.amount_paid ELSE 0 END) as paystack_paid"),
+                DB::raw("SUM(CASE WHEN s.payment_method = 'Insurance' THEN s.amount_paid ELSE 0 END) as insurance_paid"),
+                DB::raw("SUM(CASE WHEN s.payment_method != 'Insurance' THEN s.amount_paid ELSE 0 END) as total_sales_paid")
+            )
+            ->whereNotNull('s.billing_id')
+            ->groupBy('s.billing_id');
+    }
+
+    private function alignedClaimTotalsQuery()
+    {
+        return DB::table('insurance_claims as ic')
+            ->join('billing as matched_billing', function ($join): void {
+                $join->on('ic.billing_id', '=', 'matched_billing.id')
+                    ->on('ic.branch_id', '=', 'matched_billing.branch_id')
+                    ->on('ic.folder_id', '=', 'matched_billing.folder_id')
+                    ->whereRaw('(ic.patient_id IS NULL OR matched_billing.patient_id IS NULL OR ic.patient_id = matched_billing.patient_id)');
+            })
+            ->select('ic.billing_id', DB::raw('SUM(ic.amount_paid) as insurance_claimed'))
+            ->whereNotNull('ic.billing_id')
+            ->groupBy('ic.billing_id');
+    }
+
+    private function alignedSalesEntriesQuery(int $branchId, object $billing)
+    {
+        return tap(
+            DB::table('sales')
+                ->where('billing_id', $billing->id)
+                ->where('folder_id', $billing->folder_id)
+                ->where(function ($query) use ($billing): void {
+                    if ($billing->patient_id === null) {
+                        $query->whereNull('patient_id');
+
+                        return;
+                    }
+
+                    $query->where('patient_id', $billing->patient_id)
+                        ->orWhereNull('patient_id');
+                }),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+    }
+
+    private function alignedClaimEntriesQuery(int $branchId, object $billing)
+    {
+        return tap(
+            DB::table('insurance_claims')
+                ->where('billing_id', $billing->id)
+                ->where('folder_id', $billing->folder_id)
+                ->when($billing->patient_id !== null, fn ($query) => $query->where('patient_id', $billing->patient_id)),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+    }
+
+    private function previousBillingTransactions(int $branchId, object $billing)
+    {
+        $previousBills = tap(
+            DB::table('billing as b')->where('b.id', '!=', $billing->id),
+            fn ($query) => $this->applyBranchScope($query, 'b.branch_id', $branchId)
+        );
+
+        $this->applyRelatedBillingIdentityScope($previousBills, $billing, 'b');
+
+        $previousBills = $previousBills
+            ->orderByDesc('b.date')
+            ->orderByDesc('b.id')
+            ->limit(12)
+            ->get([
+                'b.id',
+                'b.patient_id',
+                'b.customer_id',
+                'b.folder_id',
+                'b.name',
+                'b.date',
+                'b.receipt_number',
+            ]);
+
+        if ($previousBills->isEmpty()) {
+            return collect();
+        }
+
+        $transactions = collect();
+
+        foreach ($previousBills as $previousBill) {
+            $billSales = $this->alignedSalesEntriesQuery($branchId, $previousBill)
+                ->orderByDesc('created_at')
+                ->limit(12)
+                ->get([
+                    'id',
+                    'date',
+                    'amount_paid',
+                    'payment_method',
+                    'description',
+                    'transaction_id',
+                    'reference',
+                    'created_at',
+                ])
+                ->map(function ($transaction) use ($previousBill) {
+                    $mapped = $this->mapPaymentHistoryTransaction($transaction);
+                    $mapped->billing_id = $previousBill->id;
+                    $mapped->billing_receipt_number = $previousBill->receipt_number;
+                    $mapped->billing_folder_id = $previousBill->folder_id;
+                    $mapped->billing_date = $previousBill->date;
+
+                    return $mapped;
+                });
+
+            $billClaims = $this->alignedClaimEntriesQuery($branchId, $previousBill)
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get([
+                    'id',
+                    'insurance_provider',
+                    'insurance_number',
+                    'insurance_package',
+                    'patient_organization',
+                    'amount_paid',
+                    'date',
+                    'status',
+                    DB::raw('date as created_at'),
+                ])
+                ->map(function ($claim) use ($previousBill) {
+                    $mapped = $this->mapInsuranceHistoryTransaction($claim);
+                    $mapped->billing_id = $previousBill->id;
+                    $mapped->billing_receipt_number = $previousBill->receipt_number;
+                    $mapped->billing_folder_id = $previousBill->folder_id;
+                    $mapped->billing_date = $previousBill->date;
+
+                    return $mapped;
+                });
+
+            $transactions = $transactions->concat($billSales)->concat($billClaims);
+        }
+
+        return $transactions;
+    }
+
+    private function applyRelatedBillingIdentityScope($query, object $billing, string $alias = 'b'): void
+    {
+        $query->where(function ($inner) use ($billing, $alias): void {
+            $hasIdentity = false;
+
+            if (! empty($billing->folder_id)) {
+                $inner->where($alias.'.folder_id', $billing->folder_id);
+                $hasIdentity = true;
+            }
+
+            if (! empty($billing->patient_id)) {
+                if ($hasIdentity) {
+                    $inner->orWhere($alias.'.patient_id', $billing->patient_id);
+                } else {
+                    $inner->where($alias.'.patient_id', $billing->patient_id);
+                    $hasIdentity = true;
+                }
+            }
+
+            if (! empty($billing->customer_id)) {
+                if ($hasIdentity) {
+                    $inner->orWhere($alias.'.customer_id', $billing->customer_id);
+                } else {
+                    $inner->where($alias.'.customer_id', $billing->customer_id);
+                    $hasIdentity = true;
+                }
+            }
+
+            if (! $hasIdentity) {
+                $inner->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function mapPaymentHistoryTransaction(object $transaction): object
+    {
+        $transaction->entry_type = 'payment';
+        $transaction->entry_label = $transaction->payment_method;
+
+        return $transaction;
+    }
+
+    private function mapInsuranceHistoryTransaction(object $claim): object
+    {
+        $claim->entry_type = 'claim';
+        $claim->entry_label = 'Insurance Claim';
+        $claim->payment_method = 'Insurance';
+        $claim->reference = $claim->insurance_number;
+        $claim->transaction_id = null;
+        $claim->description = trim(implode(' / ', array_filter([
+            $claim->insurance_provider,
+            $claim->insurance_package,
+            $claim->status,
+        ])));
+
+        return $claim;
     }
 
     private function resolveBillingStatus(int $branchId, int $billingId, float $balance, float $totalAmount): string
