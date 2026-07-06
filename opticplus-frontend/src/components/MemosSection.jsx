@@ -317,7 +317,8 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
       payload.append('approval_notes', decisionForm.approval_notes)
       if (decisionForm.gm_signature) payload.append('gm_signature', decisionForm.gm_signature)
 
-      const response = await apiFetch(`/memos/${selectedMemoId}/decision?branch_id=${branchId}`, {
+      const decisionBranchId = detail?.memo?.branch_id ?? branchId
+      const response = await apiFetch(`/memos/${selectedMemoId}/decision?branch_id=${decisionBranchId}`, {
         method: 'POST',
         token,
         body: payload,
@@ -768,14 +769,14 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
                           onChange={(event) => setDecisionForm((current) => ({ ...current, gm_signature: event.target.files?.[0] ?? null }))}
                         />
                         <strong>{decisionForm.gm_signature ? 'Replace signature image' : 'Select signature image'}</strong>
-                        <span>Upload the signature that will be applied to this approval decision.</span>
+                        <span>Optional. Upload the signature that will be applied to this decision.</span>
                       </label>
                       {decisionForm.gm_signature ? (
                         <div className="memo-file-pill-list">
                           <span className="memo-file-pill">{decisionForm.gm_signature.name}</span>
                         </div>
                       ) : (
-                        <p className="muted-copy">No approval signature image selected yet.</p>
+                        <p className="muted-copy">No approval signature image selected. The decision can still be submitted.</p>
                       )}
                     </div>
                     <button type="submit" className="primary-button" disabled={isDeciding}>

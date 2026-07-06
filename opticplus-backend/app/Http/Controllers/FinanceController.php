@@ -575,22 +575,26 @@ class FinanceController extends Controller
         $this->upsertExpenseCategory($category);
 
         $userId = $request->user()?->id;
-        $expenseId = DB::table('expenses')->insertGetId([
-            'description' => $validated['description'],
-            'amount' => $validated['amount'],
-            'date' => $validated['date'],
-            'category' => $category,
-            'branch_id' => $branchId,
-            'created_by' => $userId,
-        ]);
+        $expenseId = DB::transaction(function () use ($request, $validated, $category, $branchId, $userId): int {
+            $expenseId = DB::table('expenses')->insertGetId([
+                'description' => $validated['description'],
+                'amount' => $validated['amount'],
+                'date' => $validated['date'],
+                'category' => $category,
+                'branch_id' => $branchId,
+                'created_by' => $userId,
+            ]);
 
-        AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
-            'description' => $validated['description'],
-            'amount' => $validated['amount'],
-            'date' => $validated['date'],
-            'category' => $category,
-            'branch_id' => $branchId,
-        ], 201);
+            AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
+                'description' => $validated['description'],
+                'amount' => $validated['amount'],
+                'date' => $validated['date'],
+                'category' => $category,
+                'branch_id' => $branchId,
+            ], 201);
+
+            return $expenseId;
+        });
 
         return response()->json([
             'message' => 'Expense saved successfully.',
@@ -927,6 +931,7 @@ class FinanceController extends Controller
                 'b.name',
                 'b.receipt_number',
                 'b.total_amount',
+                'b.discount',
                 'b.balance',
                 'b.tax',
                 'b.nhil_amount',
@@ -943,12 +948,13 @@ class FinanceController extends Controller
                 'b.name',
                 'b.date',
                 'b.total_amount',
+                'b.discount',
                 'b.health_insurance',
                 'b.receipt_number',
                 'b.status',
-                DB::raw('COALESCE(sales_totals.sales_paid, 0) as sales_paid'),
+                DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
                 DB::raw('COALESCE(claim_totals.insurance_claimed, 0) as insurance_claimed'),
-                DB::raw('COALESCE(sales_totals.sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
+                DB::raw('COALESCE(sales_totals.total_sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
                 DB::raw('COALESCE(b.balance, 0) as outstanding_balance'),
             ])
             ->havingRaw('outstanding_balance > 0.009');
@@ -1042,6 +1048,7 @@ class FinanceController extends Controller
             'b.frame_price',
             'b.lens_price',
             'b.case_price',
+            'b.discount',
             'b.tax',
             'b.nhil_amount',
             'b.getfund_amount',
@@ -1686,6 +1693,7 @@ class FinanceController extends Controller
                 'b.frame_price',
                 'b.lens_price',
                 'b.case_price',
+                'b.discount',
                 'b.tax',
                 'b.nhil_amount',
                 'b.getfund_amount',
@@ -2026,10 +2034,27 @@ class FinanceController extends Controller
 
     private function ensureExpenseRecorderSchema(): void
     {
+        $this->ensureExpenseIdAutoIncrement();
+
         if (! Schema::hasColumn('expenses', 'created_by')) {
             Schema::table('expenses', function (Blueprint $table): void {
                 $table->unsignedBigInteger('created_by')->nullable()->index();
             });
+        }
+    }
+
+    private function ensureExpenseIdAutoIncrement(): void
+    {
+        $column = DB::selectOne("
+            SELECT EXTRA
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'expenses'
+              AND COLUMN_NAME = 'expense_id'
+        ");
+
+        if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE expenses MODIFY expense_id INT NOT NULL AUTO_INCREMENT');
         }
     }
 

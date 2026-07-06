@@ -426,7 +426,7 @@ class MemoController extends Controller
         $validated = $request->validate([
             'decision' => ['required', 'in:approved,rejected'],
             'approval_notes' => ['nullable', 'string'],
-            'gm_signature' => ['required', 'image', 'max:4096'],
+            'gm_signature' => ['nullable', 'image', 'max:4096'],
         ]);
 
         $memo = DB::table('memos')
@@ -438,7 +438,9 @@ class MemoController extends Controller
             return response()->json(['message' => 'Memo not found for this branch.'], 404);
         }
 
-        $signaturePath = $this->storeUpload($request->file('gm_signature'), 'memo-signatures', 'gm_'.$user->id);
+        $signaturePath = $request->hasFile('gm_signature')
+            ? $this->storeUpload($request->file('gm_signature'), 'memo-signatures', 'gm_'.$user->id)
+            : ($memo->gm_signature ?? null);
         $decision = $validated['decision'];
 
         DB::table('memos')

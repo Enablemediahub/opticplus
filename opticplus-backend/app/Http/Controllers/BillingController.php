@@ -251,9 +251,9 @@ class BillingController extends Controller
                 'b.receipt_number',
                 'p.phone as patient_phone',
                 'c.phone as customer_phone',
-                DB::raw('COALESCE(sales_totals.sales_paid, 0) as sales_paid'),
+                DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
                 DB::raw('COALESCE(claim_totals.insurance_claimed, 0) as insurance_claimed'),
-                DB::raw('COALESCE(sales_totals.sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
+                DB::raw('COALESCE(sales_totals.total_sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
                 DB::raw('COALESCE(b.balance, 0) as calculated_balance'),
             ])
             ->map(fn ($record) => $this->mapBillingRecord($record));
@@ -380,9 +380,9 @@ class BillingController extends Controller
                 'b.balance',
                 'p.phone as patient_phone',
                 'c.phone as customer_phone',
-                DB::raw('COALESCE(sales_totals.sales_paid, 0) as sales_paid'),
+                DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
                 DB::raw('COALESCE(claim_totals.insurance_claimed, 0) as insurance_claimed'),
-                DB::raw('COALESCE(sales_totals.sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
+                DB::raw('COALESCE(sales_totals.total_sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
                 DB::raw('COALESCE(b.balance, 0) as calculated_balance'),
             ])
             ->map(fn ($record) => $this->mapBillingRecord($record));
@@ -495,6 +495,15 @@ class BillingController extends Controller
             ->groupBy('frame_code_id')
             ->map(fn ($items) => $items->count());
 
+        $billingFrameRows = $frameItems
+            ->groupBy('frame_code_id')
+            ->map(fn ($items, $frameCodeId) => [
+                'frame_code_id' => $frameCodeId,
+                'frame_price' => $this->money($items->sum('frame_price')),
+                'quantity' => $items->count(),
+            ])
+            ->values();
+
         foreach ($frameItems as $frameItem) {
             $frameCodeId = $frameItem['frame_code_id'];
             $currentFramePrice = $frameItem['frame_price'];
@@ -545,7 +554,7 @@ class BillingController extends Controller
         $billingId = DB::transaction(function () use (
             $validated,
             $branchId,
-            $frameItems,
+            $billingFrameRows,
             $consultationPrice,
             $framePrice,
             $lensPrice,
@@ -586,7 +595,7 @@ class BillingController extends Controller
                 'branch_id' => $branchId,
             ]);
 
-            foreach ($frameItems as $frameItem) {
+            foreach ($billingFrameRows as $frameItem) {
                 DB::table('billing_frames')->insert([
                     'billing_id' => $billingId,
                     'frame_code_id' => $frameItem['frame_code_id'],
@@ -603,17 +612,18 @@ class BillingController extends Controller
                 DB::table('products')
                     ->where('branch_id', $branchId)
                     ->where('code', $frameItem['frame_code_id'])
-                    ->where('stock', '>', 0)
-                    ->decrement('stock');
+                    ->where('stock', '>=', $frameItem['quantity'])
+                    ->decrement('stock', $frameItem['quantity']);
 
                 if ($productBeforeSale && Schema::hasTable('inventory_movements') && (int) $productBeforeSale->stock > 0) {
+                    $stockAfter = max(0, (int) $productBeforeSale->stock - (int) $frameItem['quantity']);
                     DB::table('inventory_movements')->insert([
                         'product_id' => $productBeforeSale->id,
                         'branch_id' => $branchId,
                         'movement_type' => 'sale',
-                        'quantity_change' => -1,
+                        'quantity_change' => -1 * (int) $frameItem['quantity'],
                         'stock_before' => (int) $productBeforeSale->stock,
-                        'stock_after' => (int) $productBeforeSale->stock - 1,
+                        'stock_after' => $stockAfter,
                         'reference_table' => 'billing',
                         'reference_id' => $billingId,
                         'notes' => 'Frame stock reduced from billing sale.',
@@ -684,7 +694,7 @@ class BillingController extends Controller
                     ->on('s.folder_id', '=', 'matched_billing.folder_id')
                     ->whereRaw('(s.patient_id IS NULL OR matched_billing.patient_id IS NULL OR s.patient_id = matched_billing.patient_id)');
             })
-            ->select('s.billing_id', DB::raw("SUM(CASE WHEN s.payment_method != 'Insurance' THEN s.amount_paid ELSE 0 END) as sales_paid"))
+            ->select('s.billing_id', DB::raw("SUM(CASE WHEN s.payment_method != 'Insurance' THEN s.amount_paid ELSE 0 END) as total_sales_paid"))
             ->whereNotNull('s.billing_id')
             ->groupBy('s.billing_id');
     }

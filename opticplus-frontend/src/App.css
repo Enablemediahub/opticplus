@@ -3989,6 +3989,75 @@
   overflow-y: auto;
 }
 
+.patient-name-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.patient-name-link:hover,
+.patient-name-link:focus-visible {
+  color: var(--text-primary);
+}
+
+.patient-modal-overview-grid,
+.patient-payment-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.patient-name-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.patient-payment-summary div,
+.patient-payment-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.patient-payment-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.patient-payment-summary span,
+.patient-payment-row span {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.patient-payment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.patient-payment-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.patient-payment-row > div:last-child {
+  text-align: right;
+}
+
 .optometrist-exam-tabs {
   display: flex;
   gap: 10px;
@@ -8872,7 +8941,10 @@ td.billing-balance-due,
   .billing-summary-grid,
   .patient-record-meta,
   .assign-grid,
-  .patient-table-actions {
+  .patient-table-actions,
+  .patient-modal-overview-grid,
+  .patient-payment-summary,
+  .patient-name-edit-grid {
     grid-template-columns: 1fr;
   }
 
@@ -8909,6 +8981,14 @@ td.billing-balance-due,
     padding: 18px;
     border-radius: 20px;
     max-height: calc(100vh - 24px);
+  }
+
+  .patient-payment-row {
+    display: grid;
+  }
+
+  .patient-payment-row > div:last-child {
+    text-align: left;
   }
 
   .messenger-panel {

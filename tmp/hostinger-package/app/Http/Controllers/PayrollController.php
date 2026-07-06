@@ -421,6 +421,30 @@ class PayrollController extends Controller
         ], 201);
     }
 
+    public function deleteHistory(Request $request, int $historyId): JsonResponse
+    {
+        $this->ensurePayrollTables();
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $record = $this->historyQuery($branchId)
+            ->where('ph.id', $historyId)
+            ->first(['ph.id', 'ph.employee_name']);
+
+        if (! $record) {
+            return response()->json(['message' => 'Payroll history entry not found for this branch.'], 404);
+        }
+
+        DB::table('payroll_history')->where('id', $historyId)->delete();
+
+        return response()->json([
+            'message' => 'Payroll history entry deleted successfully.',
+        ]);
+    }
+
     public function bankRegister(Request $request): JsonResponse
     {
         $this->ensurePayrollTables();
@@ -608,6 +632,9 @@ class PayrollController extends Controller
                 'allowance_amount' => $allowanceAmount,
                 'declared_paid' => $declaredPaid,
                 'allowance_paid' => $allowancePaid,
+                'pay_month' => $currentPayroll ? $month : null,
+                'pay_year' => $currentPayroll ? $year : null,
+                'payment_date' => $currentPayroll?->payment_date,
                 'pending_advances' => round($pendingAdvances, 2),
                 'net_payable' => $netPayable,
                 'is_paid' => $isPaid,
@@ -770,6 +797,7 @@ class PayrollController extends Controller
                 'ph.advance_deduction',
                 'ph.net_salary',
                 'ph.notes',
+                'ph.payment_date',
             ]);
     }
 
@@ -840,6 +868,8 @@ class PayrollController extends Controller
 
     private function ensurePayrollTables(): void
     {
+        $this->ensureExpenseIdAutoIncrement();
+
         if (! Schema::hasTable('payroll_history')) {
             Schema::create('payroll_history', function (Blueprint $table): void {
                 $table->id();
@@ -894,6 +924,9 @@ class PayrollController extends Controller
             });
         }
 
+        $this->ensureTimestampColumn('payroll_history', 'created_at');
+        $this->ensureTimestampColumn('payroll_history', 'updated_at');
+
         if (! Schema::hasTable('salary_advances')) {
             Schema::create('salary_advances', function (Blueprint $table): void {
                 $table->id();
@@ -923,6 +956,9 @@ class PayrollController extends Controller
             });
         }
 
+        $this->ensureTimestampColumn('salary_advances', 'created_at');
+        $this->ensureTimestampColumn('salary_advances', 'updated_at');
+
         if (! Schema::hasTable('bank_balance')) {
             Schema::create('bank_balance', function (Blueprint $table): void {
                 $table->id();
@@ -938,6 +974,9 @@ class PayrollController extends Controller
                 $table->unsignedInteger('branch_id')->default(1)->after('id')->index();
             });
         }
+
+        $this->ensureTimestampColumn('bank_balance', 'created_at');
+        $this->ensureTimestampColumn('bank_balance', 'updated_at');
 
         if (! Schema::hasTable('bank_deposits')) {
             Schema::create('bank_deposits', function (Blueprint $table): void {
@@ -968,6 +1007,44 @@ class PayrollController extends Controller
                 $table->string('payment_method', 50)->default('bank_transfer')->after('description');
             });
         }
+
+        $this->ensureTimestampColumn('bank_deposits', 'created_at');
+        $this->ensureTimestampColumn('bank_deposits', 'updated_at');
+
+        if (Schema::hasTable('expenses')) {
+            $this->ensureTimestampColumn('expenses', 'created_at');
+            $this->ensureTimestampColumn('expenses', 'updated_at');
+        }
+    }
+
+    private function ensureExpenseIdAutoIncrement(): void
+    {
+        if (! Schema::hasTable('expenses') || ! Schema::hasColumn('expenses', 'expense_id')) {
+            return;
+        }
+
+        $column = DB::selectOne("
+            SELECT EXTRA
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'expenses'
+              AND COLUMN_NAME = 'expense_id'
+        ");
+
+        if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE expenses MODIFY expense_id INT NOT NULL AUTO_INCREMENT');
+        }
+    }
+
+    private function ensureTimestampColumn(string $tableName, string $columnName): void
+    {
+        if (! Schema::hasTable($tableName) || Schema::hasColumn($tableName, $columnName)) {
+            return;
+        }
+
+        Schema::table($tableName, function (Blueprint $table) use ($columnName): void {
+            $table->timestamp($columnName)->nullable();
+        });
     }
 
     private function monthLabel(int $month, int $year): string

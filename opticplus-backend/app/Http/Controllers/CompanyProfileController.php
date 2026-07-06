@@ -97,7 +97,7 @@ class CompanyProfileController extends Controller
             'company_name' => 'Bealet Optical Center',
             'company_email' => 'bealetopticalcenter@gmail.com',
             'company_phone_primary' => '+233502484144',
-            'company_phone_secondary' => '+233593998962',
+            'company_phone_secondary' => '+233553998962',
             'labadi_address' => 'Labadi Rd, Opp Advent Press',
             'madina_address' => 'FireStone Madina Road, Opp Cal Bank',
             'tagline' => 'Professional Eye Care and Optical Services',

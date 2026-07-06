@@ -36,6 +36,10 @@ const CANONICAL_PATIENT_PURPOSES = [
 ]
 
 const EXAM_LEARNED_VALUES_KEY = 'opticplus-exam-learned-values-v1'
+const patientCurrency = new Intl.NumberFormat('en-GH', {
+  style: 'currency',
+  currency: 'GHS',
+})
 
 export function defaultPatientFilters(isManagementView = false) {
   return {
@@ -99,7 +103,9 @@ export default function PatientsSection({
   markAsSeen,
   assignOptometrist,
   updatePatientDetails,
+  deletePatientRecord,
   fetchPatientPrescriptions,
+  fetchPatientPayments,
   addPatientPrescription,
   fetchMedicalReport,
   fetchPatientExamForm,
@@ -159,7 +165,9 @@ export default function PatientsSection({
         markAsSeen={markAsSeen}
         assignOptometrist={assignOptometrist}
         updatePatientDetails={updatePatientDetails}
+          deletePatientRecord={deletePatientRecord}
           fetchPatientPrescriptions={fetchPatientPrescriptions}
+          fetchPatientPayments={fetchPatientPayments}
           addPatientPrescription={addPatientPrescription}
           fetchMedicalReport={fetchMedicalReport}
           fetchPatientExamForm={fetchPatientExamForm}
@@ -285,6 +293,14 @@ export default function PatientsSection({
           rowBusyId={rowBusyId}
           markAsSeen={markAsSeen}
           assignOptometrist={assignOptometrist}
+          updatePatientDetails={updatePatientDetails}
+          deletePatientRecord={deletePatientRecord}
+          fetchPatientPrescriptions={fetchPatientPrescriptions}
+          fetchPatientPayments={fetchPatientPayments}
+          addPatientPrescription={addPatientPrescription}
+          fetchMedicalReport={fetchMedicalReport}
+          fetchPatientExamForm={fetchPatientExamForm}
+          savePatientExamForm={savePatientExamForm}
           defaultFilters={defaultFilters}
         />
       ) : (
@@ -1458,14 +1474,24 @@ function ManagerPatientsWorkspace({
   rowBusyId,
   markAsSeen,
   assignOptometrist,
+  updatePatientDetails,
+  deletePatientRecord,
+  fetchPatientPrescriptions,
+  fetchPatientPayments,
+  addPatientPrescription,
+  fetchMedicalReport,
+  fetchPatientExamForm,
+  savePatientExamForm,
   defaultFilters,
 }) {
+  const [managementModalPatient, setManagementModalPatient] = useState(null)
   const stats = patientData?.stats ?? {}
   const activeDateRange = patientFilters.date_from || patientFilters.date_to
     ? `${patientFilters.date_from || 'Start'} to ${patientFilters.date_to || 'Today'}`
     : 'All dates'
 
   return (
+    <>
     <section className="patient-manager-shell">
       <article className="panel patient-manager-panel">
         <div className="panel-heading">
@@ -1678,7 +1704,13 @@ function ManagerPatientsWorkspace({
                     <tr key={record.id}>
                       <td>
                         <div className="patient-table-primary">
-                          <strong>{record.name}</strong>
+                          <button
+                            type="button"
+                            className="patient-name-link"
+                            onClick={() => setManagementModalPatient(record)}
+                          >
+                            {record.name}
+                          </button>
                           <span>{record.residence || record.address || 'Location not set'}</span>
                         </div>
                       </td>
@@ -1791,6 +1823,24 @@ function ManagerPatientsWorkspace({
         ) : null}
       </article>
     </section>
+    {managementModalPatient ? (
+      <PatientManagementModal
+        patient={managementModalPatient}
+        onClose={() => setManagementModalPatient(null)}
+        setActiveView={() => {}}
+        updatePatientDetails={updatePatientDetails}
+        deletePatientRecord={deletePatientRecord}
+        fetchPatientPrescriptions={fetchPatientPrescriptions}
+        fetchPatientPayments={fetchPatientPayments}
+        addPatientPrescription={addPatientPrescription}
+        fetchMedicalReport={fetchMedicalReport}
+        fetchPatientExamForm={fetchPatientExamForm}
+        savePatientExamForm={savePatientExamForm}
+        onDeleted={() => setManagementModalPatient(null)}
+        onPatientUpdated={(updatedPatient) => setManagementModalPatient(updatedPatient)}
+      />
+    ) : null}
+    </>
   )
 }
 
@@ -1812,7 +1862,9 @@ function OptometristPatientsWorkspace({
   markAsSeen,
   assignOptometrist,
   updatePatientDetails,
+  deletePatientRecord,
   fetchPatientPrescriptions,
+  fetchPatientPayments,
   addPatientPrescription,
   fetchMedicalReport,
   fetchPatientExamForm,
@@ -2177,7 +2229,15 @@ function OptometristPatientsWorkspace({
               openExamModal(patient)
             }}
             updatePatientDetails={updatePatientDetails}
+            deletePatientRecord={deletePatientRecord}
             fetchPatientPrescriptions={fetchPatientPrescriptions}
+            fetchPatientPayments={fetchPatientPayments}
+            addPatientPrescription={addPatientPrescription}
+            fetchMedicalReport={fetchMedicalReport}
+            fetchPatientExamForm={fetchPatientExamForm}
+            savePatientExamForm={savePatientExamForm}
+            onDeleted={() => setManagementModalPatient(null)}
+            onPatientUpdated={(updatedPatient) => setManagementModalPatient(updatedPatient)}
           />
         ) : null}
         {referenceModalPatient ? (
@@ -2858,6 +2918,7 @@ function OptometristManagementView({
   openExamModal,
   updatePatientDetails,
   fetchPatientPrescriptions,
+  onRecordUpdated,
   showReference = true,
 }) {
   const [editForm, setEditForm] = useState(() => createPatientEditForm(record))
@@ -2903,7 +2964,20 @@ function OptometristManagementView({
     setLocalMessage('')
 
     try {
-      await updatePatientDetails(record.id, editForm)
+      const response = await updatePatientDetails(record.id, editForm)
+      const updatedRecord = response.record
+        ? {
+            ...record,
+            ...response.record,
+            patient_name: response.record.name || record.patient_name,
+          }
+        : {
+            ...record,
+            ...editForm,
+            name: [editForm.surname, editForm.firstname, editForm.othernames].filter(Boolean).join(' '),
+          }
+      setEditForm(createPatientEditForm(updatedRecord))
+      onRecordUpdated?.(updatedRecord)
       setLocalMessage('Patient details updated.')
     } finally {
       setIsSaving(false)
@@ -3235,32 +3309,285 @@ function PatientManagementModal({
   setActiveView,
   openExamModal,
   updatePatientDetails,
+  deletePatientRecord,
   fetchPatientPrescriptions,
+  fetchPatientPayments,
+  addPatientPrescription,
+  fetchMedicalReport,
+  fetchPatientExamForm,
+  savePatientExamForm,
+  onDeleted,
+  onPatientUpdated,
 }) {
+  const [currentPatient, setCurrentPatient] = useState(patient)
+  const [modalWorkspace, setModalWorkspace] = useState('Management')
+  const [examModalPatient, setExamModalPatient] = useState(null)
+  const [nameForm, setNameForm] = useState(() => createPatientEditForm(patient))
+  const [payments, setPayments] = useState(null)
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false)
+  const [isSavingName, setIsSavingName] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [modalMessage, setModalMessage] = useState('')
+
+  useEffect(() => {
+    setCurrentPatient(patient)
+    setNameForm(createPatientEditForm(patient))
+    setModalWorkspace('Management')
+    setExamModalPatient(null)
+    setModalMessage('')
+  }, [patient])
+
+  useEffect(() => {
+    if (!fetchPatientPayments) return
+
+    let cancelled = false
+    setIsLoadingPayments(true)
+    fetchPatientPayments(patient.id)
+      .then((response) => {
+        if (!cancelled) setPayments(response)
+      })
+      .catch(() => {
+        if (!cancelled) setPayments(null)
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPayments(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [fetchPatientPayments, patient.id])
+
+  useEffect(() => {
+    if (modalWorkspace !== 'Patient Form') return
+
+    if (openExamModal) {
+      openExamModal(currentPatient)
+      setModalWorkspace('Management')
+      return
+    }
+
+    if (fetchPatientExamForm && savePatientExamForm) {
+      setExamModalPatient(currentPatient)
+      setModalWorkspace('Management')
+    }
+  }, [currentPatient, fetchPatientExamForm, modalWorkspace, openExamModal, savePatientExamForm])
+
+  async function handleNameSave(event) {
+    event.preventDefault()
+    setIsSavingName(true)
+    setModalMessage('')
+
+    try {
+      const response = await updatePatientDetails(currentPatient.id, nameForm)
+      const updatedPatient = response.record
+        ? {
+            ...currentPatient,
+            ...response.record,
+            patient_name: response.record.name || currentPatient.patient_name,
+          }
+        : {
+            ...currentPatient,
+            ...nameForm,
+            name: [nameForm.surname, nameForm.firstname, nameForm.othernames].filter(Boolean).join(' '),
+          }
+      setCurrentPatient(updatedPatient)
+      setNameForm(createPatientEditForm(updatedPatient))
+      onPatientUpdated?.(updatedPatient)
+      setModalMessage('Patient name updated.')
+    } catch (error) {
+      setModalMessage(error.message || 'Could not update patient name.')
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deletePatientRecord) return
+    const patientName = currentPatient.patient_name || currentPatient.name
+    const confirmed = window.confirm(`Delete ${patientName} from the patient database? Past billing and payments will remain for audit history.`)
+    if (!confirmed) return
+
+    setIsDeleting(true)
+    setModalMessage('')
+    try {
+      await deletePatientRecord(currentPatient.id)
+      onDeleted?.()
+    } catch (error) {
+      setModalMessage(error.message || 'Could not delete patient.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  function openModalWorkspace(record, view) {
+    if (view === 'Patient Form') {
+      if (openExamModal) {
+        openExamModal(record)
+        return
+      }
+
+      if (fetchPatientExamForm && savePatientExamForm) {
+        setExamModalPatient(record)
+        return
+      }
+    }
+
+    setModalWorkspace(view || 'Management')
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <article className="modal-panel patient-management-modal" onClick={(event) => event.stopPropagation()}>
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Patient Management</p>
-            <h3>{patient.patient_name || patient.name}</h3>
+            <h3>{currentPatient.patient_name || currentPatient.name}</h3>
             <p className="muted-copy">{patient.folder_id} â€¢ {patient.phone || 'No phone on file'}</p>
           </div>
           <div className="modal-actions">
+            <button type="button" className="ghost-button danger-outline" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete Name'}
+            </button>
             <button type="button" className="ghost-button" onClick={onClose}>
               Close
             </button>
           </div>
         </div>
 
+        <div className="patient-modal-overview-grid">
+          <section className="optometrist-workspace-card is-compact">
+            <p className="eyebrow">Patient Profile</p>
+            <div className="optometrist-checklist">
+              <div><span>Folder ID</span><strong>{currentPatient.folder_id}</strong></div>
+              <div><span>Name</span><strong>{currentPatient.patient_name || currentPatient.name}</strong></div>
+              <div><span>Phone</span><strong>{currentPatient.phone || 'No phone'}</strong></div>
+              <div><span>Email</span><strong>{currentPatient.email || 'No email'}</strong></div>
+              <div><span>Sex / Age</span><strong>{currentPatient.sex || 'N/A'} / {currentPatient.age || 'N/A'}</strong></div>
+              <div><span>Residence</span><strong>{currentPatient.residence || currentPatient.address || 'Not recorded'}</strong></div>
+            </div>
+          </section>
+
+          <form className="optometrist-workspace-card is-compact patient-name-edit-card" onSubmit={handleNameSave}>
+            <p className="eyebrow">Edit Name</p>
+            <div className="patient-name-edit-grid">
+              <Field label="Surname" required>
+                <input
+                  value={nameForm.surname}
+                  onChange={(event) => setNameForm((current) => ({ ...current, surname: event.target.value }))}
+                  required
+                />
+              </Field>
+              <Field label="First name" required>
+                <input
+                  value={nameForm.firstname}
+                  onChange={(event) => setNameForm((current) => ({ ...current, firstname: event.target.value }))}
+                  required
+                />
+              </Field>
+              <Field label="Other names">
+                <input
+                  value={nameForm.othernames}
+                  onChange={(event) => setNameForm((current) => ({ ...current, othernames: event.target.value }))}
+                />
+              </Field>
+            </div>
+            <div className="optometrist-inline-actions">
+              <button type="submit" className="primary-button" disabled={isSavingName}>
+                {isSavingName ? 'Saving...' : 'Edit Name'}
+              </button>
+              {modalMessage ? <span className="panel-tag">{modalMessage}</span> : null}
+            </div>
+          </form>
+        </div>
+
+        <section className="optometrist-workspace-card is-compact patient-payment-history-card">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Past Payments</p>
+              <h4>Billing and payment history</h4>
+            </div>
+            <span className="panel-tag">{payments?.summary?.transaction_count ?? 0} payments</span>
+          </div>
+          {isLoadingPayments ? (
+            <p className="muted-copy">Loading payment history...</p>
+          ) : payments ? (
+            <>
+              <div className="patient-payment-summary">
+                <div><span>Bills</span><strong>{payments.summary?.billing_count ?? 0}</strong></div>
+                <div><span>Total billed</span><strong>{patientCurrency.format(Number(payments.summary?.total_billed ?? 0))}</strong></div>
+                <div><span>Total paid</span><strong>{patientCurrency.format(Number(payments.summary?.total_paid ?? 0))}</strong></div>
+                <div><span>Balance</span><strong>{patientCurrency.format(Number(payments.summary?.total_balance ?? 0))}</strong></div>
+              </div>
+              {payments.transactions?.length ? (
+                <div className="patient-payment-list">
+                  {payments.transactions.slice(0, 10).map((payment) => (
+                    <article key={payment.id} className="patient-payment-row">
+                      <div>
+                        <strong>{patientCurrency.format(Number(payment.amount_paid ?? 0))}</strong>
+                        <span>{payment.payment_method || 'Payment'} - {payment.date || 'No date'}</span>
+                      </div>
+                      <div>
+                        <strong>{payment.status || 'paid'}</strong>
+                        <span>{payment.reference || payment.description || `Bill #${payment.billing_id}`}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted-copy">No payments were found for this patient yet.</p>
+              )}
+            </>
+          ) : (
+            <p className="muted-copy">Payment history could not be loaded.</p>
+          )}
+        </section>
+
         <OptometristManagementView
-          record={patient}
+          record={currentPatient}
           setActiveView={setActiveView}
+          openPatientWorkspace={openModalWorkspace}
           openExamModal={openExamModal}
           updatePatientDetails={updatePatientDetails}
           fetchPatientPrescriptions={fetchPatientPrescriptions}
-          showReference={false}
+          onRecordUpdated={(updatedPatient) => {
+            setCurrentPatient(updatedPatient)
+            setNameForm(createPatientEditForm(updatedPatient))
+            onPatientUpdated?.(updatedPatient)
+          }}
+          showReference={modalWorkspace === 'Management'}
         />
+        {modalWorkspace === 'Prescriptions' ? (
+          <PatientPrescriptionsView
+            record={currentPatient}
+            setActiveView={setModalWorkspace}
+            fetchPatientPrescriptions={fetchPatientPrescriptions}
+          />
+        ) : null}
+        {modalWorkspace === 'Patient Review' && addPatientPrescription && fetchMedicalReport ? (
+          <OptometristReviewView
+            record={currentPatient}
+            setActiveView={setModalWorkspace}
+            setSelectedPatientId={() => {}}
+            patientLookupSearch=""
+            setPatientLookupSearch={() => {}}
+            patientLookupResults={[]}
+            isSearchingPatientLookup={false}
+            fetchPatientPrescriptions={fetchPatientPrescriptions}
+            addPatientPrescription={addPatientPrescription}
+            fetchMedicalReport={fetchMedicalReport}
+            openExamModal={openExamModal || ((record) => setExamModalPatient(record))}
+            showPatientLookup={false}
+          />
+        ) : null}
+        {examModalPatient ? (
+          <PatientExamModal
+            patient={examModalPatient}
+            onClose={() => setExamModalPatient(null)}
+            fetchPatientExamForm={fetchPatientExamForm}
+            savePatientExamForm={savePatientExamForm}
+          />
+        ) : null}
       </article>
     </div>
   )
@@ -5826,10 +6153,11 @@ function buildPrefilledPrescriptionFromExamForm(response) {
 }
 
 function createPatientEditForm(record) {
+  const nameParts = String(record.name || record.patient_name || '').trim().split(/\s+/).filter(Boolean)
   return {
-    surname: record.surname || '',
-    firstname: record.firstname || '',
-    othernames: record.othernames || '',
+    surname: record.surname || nameParts[0] || '',
+    firstname: record.firstname || nameParts[1] || '',
+    othernames: record.othernames || nameParts.slice(2).join(' '),
     sex: record.sex || 'Male',
     dob: record.dob || '',
     age: record.age || '',

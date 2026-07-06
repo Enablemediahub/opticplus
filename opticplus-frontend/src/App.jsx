@@ -518,7 +518,7 @@ const defaultCompanyProfile = () => ({
   company_name: 'Bealet Optical Center',
   company_email: 'bealetopticalcenter@gmail.com',
   company_phone_primary: '+233502484144',
-  company_phone_secondary: '+233593998962',
+  company_phone_secondary: '+233553998962',
   labadi_address: 'Labadi Rd, Opp Advent Press',
   madina_address: 'FireStone Madina Road, Opp Cal Bank',
   tagline: 'Professional Eye Care and Optical Services',
@@ -758,6 +758,7 @@ function App() {
     const branchName = financePayments?.branch_name || session?.branch_name || 'Active branch'
     const amountPaid = Number(receipt?.amount_paid ?? 0)
     const totalAmount = Number(billing?.total_amount ?? receipt?.total_amount ?? 0)
+    const discount = Number(billing?.discount ?? receipt?.discount ?? 0)
     const balance = Number(billing?.calculated_balance ?? billing?.balance ?? receipt?.balance ?? 0)
     const nhilAmount = Number(billing?.nhil_amount ?? receipt?.nhil_amount ?? 0)
     const getfundAmount = Number(billing?.getfund_amount ?? receipt?.getfund_amount ?? 0)
@@ -775,6 +776,7 @@ function App() {
       payment_method: receipt?.payment_method || 'Cash',
       amount_paid: amountPaid,
       total_amount: totalAmount,
+      discount,
       outstanding_balance: balance,
       reference: receipt?.reference || receipt?.transaction_id || 'N/A',
       transaction_id: receipt?.transaction_id || '',
@@ -825,6 +827,7 @@ function App() {
     const safe = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     const amount = currency.format(Number(receiptData?.amount_paid ?? 0))
     const total = currency.format(Number(receiptData?.total_amount ?? 0))
+    const discount = currency.format(Number(receiptData?.discount ?? 0))
     const balance = currency.format(Number(receiptData?.outstanding_balance ?? 0))
     const taxRows = (receiptData?.tax_breakdown ?? [])
       .map(([label, value]) => `<div class="row"><span>${safe(label)}</span><strong>${safe(currency.format(Number(value ?? 0)))}</strong></div>`)
@@ -1000,6 +1003,7 @@ function App() {
               </div>
               <div class="summary">
                 <div class="row"><span>Total bill</span><strong>${safe(total)}</strong></div>
+                <div class="row"><span>Discount</span><strong>${safe(discount)}</strong></div>
                 <div class="row"><span>Amount paid</span><strong>${safe(amount)}</strong></div>
                 <div class="row total-row"><span>Balance after payment</span><strong>${safe(balance)}</strong></div>
               </div>
@@ -1485,17 +1489,26 @@ function App() {
   }, [activeView, patientLookupSearch, selectedBranchId, session, token])
 
   useEffect(() => {
-    if (activeView !== 'Patient Management') return undefined
+    if (!['Patients', 'Patient Management'].includes(activeView)) return undefined
 
     const timeoutId = window.setTimeout(() => {
       setPatientQuery((current) => {
-        if (current.search === patientFilters.search && current.page === 1) {
+        if (
+          current.search === patientFilters.search &&
+          current.status === patientFilters.status &&
+          current.sex === patientFilters.sex &&
+          current.purpose === patientFilters.purpose &&
+          current.date_from === patientFilters.date_from &&
+          current.date_to === patientFilters.date_to &&
+          Number(current.per_page) === Number(patientFilters.per_page) &&
+          current.page === 1
+        ) {
           return current
         }
 
         return {
           ...current,
-          search: patientFilters.search,
+          ...patientFilters,
           page: 1,
         }
       })
@@ -1504,7 +1517,16 @@ function App() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [activeView, patientFilters.search])
+  }, [
+    activeView,
+    patientFilters.search,
+    patientFilters.status,
+    patientFilters.sex,
+    patientFilters.purpose,
+    patientFilters.date_from,
+    patientFilters.date_to,
+    patientFilters.per_page,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -2824,12 +2846,14 @@ function App() {
   async function updatePatientDetails(recordId, payload) {
     setPatientError('')
     setPatientSuccess('')
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
 
     const response = await apiFetch(`/patients/${recordId}`, {
       method: 'PUT',
       token,
       body: {
         ...payload,
+        branch_id: branchId,
         age: payload.age ? Number(payload.age) : null,
       },
     })
@@ -2839,28 +2863,79 @@ function App() {
     return response
   }
 
+  async function deletePatientRecord(recordId) {
+    setPatientError('')
+    setPatientSuccess('')
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+
+    const response = await apiFetch(`/patients/${recordId}`, {
+      method: 'DELETE',
+      token,
+      body: {
+        branch_id: branchId,
+      },
+    })
+
+    setPatientSuccess(response.message || 'Patient deleted successfully.')
+    setPatientQuery((current) => ({ ...current }))
+    return response
+  }
+
   async function fetchPatientPrescriptions(recordId) {
-    return apiFetch(`/patients/${recordId}/prescriptions`, {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    const params = new URLSearchParams()
+    if (branchId !== undefined && branchId !== null) {
+      params.set('branch_id', String(branchId))
+    }
+
+    return apiFetch(`/patients/${recordId}/prescriptions${params.toString() ? `?${params.toString()}` : ''}`, {
+      token,
+    })
+  }
+
+  async function fetchPatientPayments(recordId) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    const params = new URLSearchParams()
+    if (branchId !== undefined && branchId !== null) {
+      params.set('branch_id', String(branchId))
+    }
+
+    return apiFetch(`/patients/${recordId}/payments${params.toString() ? `?${params.toString()}` : ''}`, {
       token,
     })
   }
 
   async function addPatientPrescription(recordId, payload) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+
     return apiFetch(`/patients/${recordId}/prescriptions`, {
       method: 'POST',
       token,
-      body: payload,
+      body: {
+        ...payload,
+        branch_id: branchId,
+      },
     })
   }
 
   async function fetchMedicalReport(recordId) {
-    return apiFetch(`/patients/${recordId}/medical-report`, {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    const params = new URLSearchParams()
+    if (branchId !== undefined && branchId !== null) {
+      params.set('branch_id', String(branchId))
+    }
+
+    return apiFetch(`/patients/${recordId}/medical-report${params.toString() ? `?${params.toString()}` : ''}`, {
       token,
     })
   }
 
   async function fetchPatientExamForm(recordId, options = {}) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
     const params = new URLSearchParams()
+    if (branchId !== undefined && branchId !== null) {
+      params.set('branch_id', String(branchId))
+    }
     if (options.formId) {
       params.set('form_id', String(options.formId))
     }
@@ -2871,20 +2946,36 @@ function App() {
   }
 
   async function savePatientExamForm(recordId, payload) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+
     return apiFetch(`/patients/${recordId}/exam-form`, {
       method: 'POST',
       token,
-      body: payload,
+      body: {
+        ...payload,
+        branch_id: branchId,
+      },
     })
   }
 
   async function fetchPatientDocuments(recordId) {
-    return apiFetch(`/patients/${recordId}/documents`, {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    const params = new URLSearchParams()
+    if (branchId !== undefined && branchId !== null) {
+      params.set('branch_id', String(branchId))
+    }
+
+    return apiFetch(`/patients/${recordId}/documents${params.toString() ? `?${params.toString()}` : ''}`, {
       token,
     })
   }
 
   async function uploadPatientDocuments(recordId, formData) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    if (branchId !== undefined && branchId !== null && typeof formData?.set === 'function') {
+      formData.set('branch_id', String(branchId))
+    }
+
     return apiFetch(`/patients/${recordId}/documents`, {
       method: 'POST',
       token,
@@ -3094,8 +3185,12 @@ function App() {
       setExpenseForm(defaultExpenseForm(financeExpenses?.categories?.[0] ?? ''))
       setFinanceExpenseQuery((current) => ({ ...current }))
       setFinancePaymentQuery((current) => ({ ...current }))
-      const summary = await apiFetch(`/finance/summary?branch_id=${branchId}`, { token })
-      setFinanceSummary(summary)
+      try {
+        const summary = await apiFetch(`/finance/summary?branch_id=${branchId}`, { token })
+        setFinanceSummary(summary)
+      } catch {
+        setFinanceSuccess('Expense saved successfully. The finance summary will refresh shortly.')
+      }
     } catch (error) {
       setFinanceError(error.message)
       throw error
@@ -3478,16 +3573,17 @@ function App() {
     setInventorySuccess('')
 
     try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
       await apiFetch(`/inventory/lens-tracker/${billingId}`, {
         method: 'POST',
         token,
         body: {
+          branch_id: branchId,
           cost_price: Number(payload.cost_price || 0),
           selling_price: Number(payload.selling_price || 0),
         },
       })
 
-      const branchId = session.is_admin ? selectedBranchId : session.branch_id
       const [inventoryResponse, lensResponse] = await Promise.all([
         apiFetch(`/inventory?${buildInventoryParams(branchId).toString()}`, { token }),
         apiFetch(
@@ -3520,12 +3616,13 @@ function App() {
     setInventorySuccess('')
 
     try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
       await apiFetch(`/inventory/lens-tracker/${billingId}`, {
         method: 'DELETE',
         token,
+        body: { branch_id: branchId },
       })
 
-      const branchId = session.is_admin ? selectedBranchId : session.branch_id
       const [inventoryResponse, lensResponse] = await Promise.all([
         apiFetch(`/inventory?${buildInventoryParams(branchId).toString()}`, { token }),
         apiFetch(
@@ -3770,13 +3867,20 @@ function App() {
         })),
       )
 
-      syncPickupStatusState(billingIds, action === 'ready' ? 'ready' : 'picked_up')
+      const nextStatus = action === 'ready'
+        ? 'ready'
+        : action === 'not-ready'
+          ? 'pending'
+          : 'picked_up'
+      syncPickupStatusState(billingIds, nextStatus)
 
       const plural = billingIds.length > 1
       setCustomerServiceSuccess(
         action === 'ready'
           ? (plural ? 'Selected records marked as ready for pickup.' : 'Marked as ready for pickup.')
-          : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
+          : action === 'not-ready'
+            ? (plural ? 'Selected records marked as not ready.' : 'Marked as not ready.')
+            : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
       )
       setCustomerServiceQuery((current) => ({ ...current }))
     } catch (error) {
@@ -3806,6 +3910,7 @@ function App() {
             getfund_amount: detailResponse.billing?.getfund_amount ?? receipt?.getfund_amount,
             vat_amount: detailResponse.billing?.vat_amount ?? receipt?.vat_amount,
             tax: detailResponse.billing?.tax ?? receipt?.tax,
+            discount: detailResponse.billing?.discount ?? receipt?.discount,
           },
           detailResponse.billing,
         )
@@ -4352,7 +4457,9 @@ function App() {
                 markAsSeen={markAsSeen}
                 assignOptometrist={assignOptometrist}
                 updatePatientDetails={updatePatientDetails}
+                deletePatientRecord={deletePatientRecord}
                 fetchPatientPrescriptions={fetchPatientPrescriptions}
+                fetchPatientPayments={fetchPatientPayments}
                 addPatientPrescription={addPatientPrescription}
                 fetchMedicalReport={fetchMedicalReport}
                 fetchPatientExamForm={fetchPatientExamForm}
@@ -5131,6 +5238,10 @@ function ThermalReceiptPreview({ receipt }) {
           <div>
             <span>Total bill</span>
             <strong>{currency.format(Number(receipt.total_amount ?? 0))}</strong>
+          </div>
+          <div>
+            <span>Discount</span>
+            <strong>{currency.format(Number(receipt.discount ?? 0))}</strong>
           </div>
           <div>
             <span>Amount paid</span>

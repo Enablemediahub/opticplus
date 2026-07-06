@@ -14,6 +14,7 @@ class AuditLog
     public static function ensureTable(): void
     {
         if (Schema::hasTable('audit_logs')) {
+            self::ensureIdAutoIncrement();
             return;
         }
 
@@ -35,6 +36,21 @@ class AuditLog
             $table->unsignedSmallInteger('response_status')->default(200);
             $table->timestamp('created_at')->useCurrent();
         });
+    }
+
+    private static function ensureIdAutoIncrement(): void
+    {
+        $column = DB::selectOne("
+            SELECT EXTRA
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'audit_logs'
+              AND COLUMN_NAME = 'id'
+        ");
+
+        if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE audit_logs MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT');
+        }
     }
 
     public static function recordMutation(Request $request, Response $response): void

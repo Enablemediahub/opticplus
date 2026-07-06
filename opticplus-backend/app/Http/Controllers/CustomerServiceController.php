@@ -612,6 +612,38 @@ class CustomerServiceController extends Controller
         ]);
     }
 
+    public function markNotReady(Request $request, int $billingId): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $updateQuery = DB::table('glasses_prescriptions')
+            ->where('prescription_id', $billingId)
+            ->whereIn('status', ['ready', 'notified']);
+
+        if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
+            $updateQuery->where('branch_id', $branchId);
+        }
+
+        $payload = ['status' => 'pending'];
+        if (Schema::hasColumn('glasses_prescriptions', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        $updated = $updateQuery->update($payload);
+        if (! $updated) {
+            return response()->json([
+                'message' => 'Only ready or notified pickup entries can be changed back to not ready.',
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Marked as not ready.',
+        ]);
+    }
+
     private function resolveBranchId(Request $request): int
     {
         $user = $request->user();

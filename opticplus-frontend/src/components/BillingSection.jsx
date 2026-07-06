@@ -297,6 +297,7 @@ export default function BillingSection({
                       <th>Date</th>
                       <th>Status</th>
                       <th>Total</th>
+                      <th>Discount</th>
                       <th>Paid</th>
                       <th>Insurance Claimed</th>
                       <th>Balance</th>
@@ -316,6 +317,7 @@ export default function BillingSection({
                           </span>
                         </td>
                         <td>{currency.format(Number(record.total_amount ?? 0))}</td>
+                        <td>{currency.format(Number(record.discount ?? 0))}</td>
                         <td>{currency.format(Number(record.total_paid ?? 0))}</td>
                         <td>{currency.format(Number(record.insurance_claimed ?? 0))}</td>
                         <td className={hasBalanceDue(record.calculated_balance) ? 'billing-balance-due' : undefined}>
@@ -835,6 +837,7 @@ export default function BillingSection({
                   <SummaryMetric label="Frame" value={paymentDetail.billing.frame_price} />
                   <SummaryMetric label="Lens" value={paymentDetail.billing.lens_price} />
                   <SummaryMetric label="Case" value={paymentDetail.billing.case_price} />
+                  <SummaryMetric label="Discount" value={paymentDetail.billing.discount} />
                   <SummaryMetric label="Total bill" value={paymentDetail.billing.total_amount} />
                 </div>
 
@@ -922,6 +925,13 @@ export default function BillingSection({
                 </div>
 
                 <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => printBillingSummarySlip(paymentDetail, billingMeta)}
+                  >
+                    Thermal print
+                  </button>
                   <button
                     type="button"
                     className="primary-button"
@@ -1408,6 +1418,171 @@ function validateFramePrice(form, meta) {
     },
     meta,
   )
+}
+
+function printBillingSummarySlip(paymentDetail, billingMeta) {
+  const billing = paymentDetail?.billing
+  if (!billing) return
+
+  const printWindow = window.open('', '_blank', 'width=420,height=900')
+  if (!printWindow) {
+    window.alert('Unable to open the print window. Please allow popups and try again.')
+    return
+  }
+
+  const safe = (value) =>
+    String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+  const money = (value) => currency.format(Number(value ?? 0))
+  const lineItems = [
+    ['Consultation', billing.consultation_price],
+    ['Frame', billing.frame_price],
+    ['Lens', billing.lens_price],
+    ['Case', billing.case_price],
+    ['Discount', billing.discount],
+  ]
+    .filter(([, value]) => Number(value ?? 0) !== 0)
+    .map(([label, value]) => `<div class="row"><span>${safe(label)}</span><strong>${safe(money(value))}</strong></div>`)
+    .join('')
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Billing Estimate ${safe(billing.folder_id || billing.id)}</title>
+        <style>
+          :root { color-scheme: light; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #eef2f7;
+            color: #000;
+            font-family: "Segoe UI", Arial, sans-serif;
+          }
+          .page {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px 12px;
+          }
+          .thermal {
+            width: 302px;
+            padding: 18px 16px 22px;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+          }
+          .brand, .center, .footnote { text-align: center; }
+          h1 {
+            margin: 0;
+            font-size: 18px;
+            text-transform: uppercase;
+          }
+          p, .meta, .footnote {
+            margin: 5px 0 0;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.5;
+          }
+          .divider {
+            margin: 14px 0;
+            border-top: 1px dashed #000;
+          }
+          .kicker {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+          .amount {
+            margin: 7px 0 2px;
+            font-size: 27px;
+            font-weight: 700;
+          }
+          .summary, .meta-grid {
+            display: grid;
+            gap: 8px;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: flex-start;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .row strong { text-align: right; }
+          .total-row {
+            padding-top: 8px;
+            border-top: 1px dashed #000;
+          }
+          .notice {
+            margin-top: 14px;
+            padding: 8px;
+            border: 1px solid #000;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+            text-transform: uppercase;
+          }
+          .footnote { margin-top: 14px; }
+          @media print {
+            body { background: #fff; }
+            .page { padding: 0; }
+            .thermal {
+              width: 80mm;
+              border: none;
+              box-shadow: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <section class="thermal">
+            <div class="brand">
+              <h1>Bealet Optical Center</h1>
+              <p>${safe(paymentDetail?.branch_name || billingMeta?.branch_name || '')}</p>
+              <p>Professional Eye Care and Optical Services</p>
+            </div>
+            <div class="divider"></div>
+            <div class="center">
+              <div class="kicker">Billing Estimate</div>
+              <div class="amount">${safe(money(billing.total_amount))}</div>
+              <div class="meta">Total billing before payment</div>
+            </div>
+            <div class="divider"></div>
+            <div class="summary">
+              ${lineItems}
+              <div class="row total-row"><span>Total bill</span><strong>${safe(money(billing.total_amount))}</strong></div>
+              <div class="row"><span>Paid so far</span><strong>${safe(money(billing.total_paid))}</strong></div>
+              <div class="row total-row"><span>Amount due</span><strong>${safe(money(billing.calculated_balance))}</strong></div>
+            </div>
+            <div class="divider"></div>
+            <div class="meta-grid">
+              <div class="row"><span>Patient</span><strong>${safe(billing.name)}</strong></div>
+              <div class="row"><span>Folder ID</span><strong>${safe(billing.folder_id)}</strong></div>
+              <div class="row"><span>Billing ID</span><strong>${safe(billing.id)}</strong></div>
+              <div class="row"><span>Bill date</span><strong>${safe(billing.date)}</strong></div>
+              <div class="row"><span>Insurance</span><strong>${safe(billing.health_insurance || 'NONE')}</strong></div>
+              <div class="row"><span>Printed</span><strong>${safe(new Date().toLocaleString())}</strong></div>
+            </div>
+            <div class="notice">Billing estimate only - not proof of payment</div>
+            <div class="footnote">
+              Please present this slip at the payment desk.<br />
+              Generated from the OPTICPLUS billing desk.
+            </div>
+          </section>
+        </div>
+      </body>
+    </html>
+  `)
+  printWindow.document.close()
+  printWindow.focus()
+  printWindow.print()
 }
 
 function SummaryMetric({ label, value, balanceHighlight = false }) {

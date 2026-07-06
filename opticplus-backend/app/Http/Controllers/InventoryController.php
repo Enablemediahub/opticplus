@@ -921,22 +921,29 @@ class InventoryController extends Controller
 
     public function storeLensCost(Request $request, int $billingId): JsonResponse
     {
-        $branchId = $this->resolveBranchId($request);
-        if ($response = $this->ensureWritableBranch($branchId)) {
+        $requestedBranchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($requestedBranchId)) {
             return $response;
         }
         $user = $request->user();
 
-        $billing = DB::table('billing')
-            ->where('branch_id', $branchId)
-            ->where('id', $billingId)
-            ->first(['id', 'folder_id', 'patient_id', 'lens_price']);
+        $billingQuery = DB::table('billing')
+            ->where('id', $billingId);
+
+        if (! $user->isAdmin() || $request->has('branch_id')) {
+            $billingQuery->where('branch_id', $requestedBranchId);
+        }
+
+        $billing = $billingQuery
+            ->first(['id', 'branch_id', 'folder_id', 'patient_id', 'lens_price']);
 
         if (! $billing) {
             return response()->json([
                 'message' => 'Billing record not found for this branch.',
             ], 404);
         }
+
+        $branchId = (int) $billing->branch_id;
 
         $existingCost = DB::table('lens_costs')
             ->where('branch_id', $branchId)
@@ -981,8 +988,8 @@ class InventoryController extends Controller
 
     public function deleteLensCost(Request $request, int $billingId): JsonResponse
     {
-        $branchId = $this->resolveBranchId($request);
-        if ($response = $this->ensureWritableBranch($branchId)) {
+        $requestedBranchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($requestedBranchId)) {
             return $response;
         }
 
@@ -992,6 +999,23 @@ class InventoryController extends Controller
                 'message' => 'Only the General Manager, CEO, or Accountant can delete a saved lens cost entry.',
             ], 403);
         }
+
+        $billingQuery = DB::table('billing')
+            ->where('id', $billingId);
+
+        if ($request->has('branch_id')) {
+            $billingQuery->where('branch_id', $requestedBranchId);
+        }
+
+        $billing = $billingQuery->first(['id', 'branch_id']);
+
+        if (! $billing) {
+            return response()->json([
+                'message' => 'Billing record not found for this branch.',
+            ], 404);
+        }
+
+        $branchId = (int) $billing->branch_id;
 
         $deleted = DB::table('lens_costs')
             ->where('branch_id', $branchId)

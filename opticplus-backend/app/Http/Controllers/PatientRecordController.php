@@ -510,6 +510,168 @@ class PatientRecordController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, int $recordId): JsonResponse
+    {
+        $role = $request->user()?->normalized_role;
+        if (! in_array($role, ['manager', 'ceo'], true)) {
+            return response()->json([
+                'message' => 'Only the General Manager or CEO can delete patient names.',
+            ], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $deleted = DB::table('patient_records')
+            ->where('id', $recordId)
+            ->where('branch_id', $branchId)
+            ->delete();
+
+        if (! $deleted) {
+            return response()->json([
+                'message' => 'Patient record not found for this branch.',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Patient name deleted from the patient database.',
+        ]);
+    }
+
+    public function payments(Request $request, int $recordId): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+
+        $record = DB::table('patient_records')
+            ->where('id', $recordId)
+            ->where('branch_id', $branchId)
+            ->first();
+
+        if (! $record) {
+            return response()->json([
+                'message' => 'Patient record not found for this branch.',
+            ], 404);
+        }
+
+        $billingQuery = DB::table('billing as b')
+            ->where(function ($query) use ($record): void {
+                $query->where('b.patient_id', $record->id)
+                    ->orWhere('b.folder_id', $record->folder_id);
+            });
+        $this->applyBranchScope($billingQuery, 'b.branch_id', $branchId);
+
+        $billingRows = $billingQuery
+            ->orderByDesc('b.date')
+            ->orderByDesc('b.id')
+            ->limit(30)
+            ->get([
+                'b.id',
+                'b.folder_id',
+                'b.name',
+                'b.total_amount',
+                'b.balance',
+                'b.status',
+                'b.date',
+                'b.receipt_number',
+            ]);
+
+        $billingIds = $billingRows->pluck('id')->filter()->values();
+
+        $salesRows = collect();
+        if ($billingIds->isNotEmpty()) {
+            $salesRows = DB::table('sales')
+                ->whereIn('billing_id', $billingIds)
+                ->where('folder_id', $record->folder_id)
+                ->orderByDesc('date')
+                ->orderByDesc('created_at')
+                ->limit(40)
+                ->get([
+                    'id',
+                    'billing_id',
+                    'folder_id',
+                    'date',
+                    'amount_paid',
+                    'payment_method',
+                    'description',
+                    'transaction_id',
+                    'reference',
+                    'created_at',
+                ]);
+        }
+
+        $insuranceRows = collect();
+        if ($billingIds->isNotEmpty()) {
+            $insuranceRows = DB::table('insurance_claims')
+                ->whereIn('billing_id', $billingIds)
+                ->where('folder_id', $record->folder_id)
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->limit(40)
+                ->get([
+                    'id',
+                    'billing_id',
+                    'folder_id',
+                    'insurance_provider',
+                    'amount_paid',
+                    'date',
+                    'status',
+                ]);
+        }
+
+        $transactions = $salesRows
+            ->map(fn ($sale) => [
+                'id' => 'sale-'.$sale->id,
+                'billing_id' => $sale->billing_id,
+                'date' => $sale->date,
+                'amount_paid' => (float) $sale->amount_paid,
+                'payment_method' => $sale->payment_method,
+                'description' => $sale->description,
+                'reference' => $sale->reference ?: $sale->transaction_id,
+                'status' => 'paid',
+                'created_at' => $sale->created_at,
+            ])
+            ->concat($insuranceRows->map(fn ($claim) => [
+                'id' => 'insurance-'.$claim->id,
+                'billing_id' => $claim->billing_id,
+                'date' => $claim->date,
+                'amount_paid' => (float) $claim->amount_paid,
+                'payment_method' => 'Insurance',
+                'description' => $claim->insurance_provider,
+                'reference' => null,
+                'status' => $claim->status,
+                'created_at' => $claim->date,
+            ]))
+            ->sortByDesc(fn ($entry) => $entry['created_at'] ?? $entry['date'])
+            ->values()
+            ->take(40);
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'patient' => $this->formatPatientRecord($record, now()->toDateString()),
+            'billings' => $billingRows->map(fn ($billing) => [
+                'id' => $billing->id,
+                'folder_id' => $billing->folder_id,
+                'name' => $billing->name,
+                'date' => $billing->date,
+                'total_amount' => (float) $billing->total_amount,
+                'balance' => (float) $billing->balance,
+                'status' => $billing->status,
+                'receipt_number' => $billing->receipt_number,
+            ])->values(),
+            'transactions' => $transactions,
+            'summary' => [
+                'billing_count' => $billingRows->count(),
+                'transaction_count' => $transactions->count(),
+                'total_billed' => round((float) $billingRows->sum('total_amount'), 2),
+                'total_paid' => round((float) $transactions->sum('amount_paid'), 2),
+                'total_balance' => round((float) $billingRows->sum('balance'), 2),
+            ],
+        ]);
+    }
+
     public function prescriptions(Request $request, int $recordId): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);

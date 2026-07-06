@@ -596,7 +596,9 @@ function PickupTab(props) {
         selectedPickupIds.includes(record.billing_id) && (
           action === 'ready'
             ? !['ready', 'notified', 'picked_up'].includes(record.pickup_status)
-            : ['ready', 'notified'].includes(record.pickup_status)
+            : action === 'not-ready'
+              ? ['ready', 'notified'].includes(record.pickup_status)
+              : ['ready', 'notified'].includes(record.pickup_status)
         )
       ))
       .map((record) => record.billing_id)
@@ -783,6 +785,14 @@ function PickupTab(props) {
             </button>
             <button
               type="button"
+              className="ghost-button"
+              disabled={props.isMergedView || !selectedPickupIds.length}
+              onClick={() => runBulkPickupAction('not-ready')}
+            >
+              Not ready selected
+            </button>
+            <button
+              type="button"
               className="mini-action danger"
               disabled={props.isMergedView || !selectedPickupIds.length}
               onClick={() => runBulkPickupAction('picked-up')}
@@ -841,9 +851,24 @@ function PickupTab(props) {
                           Ready
                         </button>
                       ) : (
-                        <span className={record.pickup_status === 'picked_up' ? 'mini-action pickup-status-chip' : 'mini-action danger pickup-status-chip'}>
-                          {record.pickup_status === 'picked_up' ? 'Picked Up' : 'Ready'}
-                        </span>
+                        <>
+                          <span className={record.pickup_status === 'picked_up' ? 'mini-action pickup-status-chip' : 'mini-action danger pickup-status-chip'}>
+                            {record.pickup_status === 'picked_up' ? 'Picked Up' : 'Ready'}
+                          </span>
+                          {['ready', 'notified'].includes(record.pickup_status) ? (
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              disabled={props.isMergedView || isPickupBusy(record.billing_id)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                props.updatePickupStatus(record.billing_id, 'not-ready')
+                              }}
+                            >
+                              Not Ready
+                            </button>
+                          ) : null}
+                        </>
                       )}
                       <button
                         type="button"

@@ -83,7 +83,8 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
             <MetricCard label="Sales" value={currency.format(Number(data?.stats.monthly_sales ?? 0))} change={data?.changes.sales ?? 0} tone="success" />
             <MetricCard label="Patients" value={String(data?.stats.monthly_patients ?? 0)} change={data?.changes.patients ?? 0} tone="info" />
             <MetricCard label="Expenses" value={currency.format(Number(data?.stats.monthly_expenses ?? 0))} change={data?.changes.expenses ?? 0} tone="warning" />
-            <MetricCard label="Pending Appointments" value={String(data?.stats.pending_appointments ?? 0)} subtext={`${data?.stats.low_stock_count ?? 0} low-stock items`} tone="danger" />
+            <MetricCard label="Profit" value={currency.format(Number(data?.stats.monthly_profit ?? 0))} change={data?.changes.profit ?? 0} subtext="Sales minus expenses" tone="success" />
+            <MetricCard label="Profit + Insurance" value={currency.format(Number(data?.stats.monthly_profit_with_insurance ?? 0))} change={data?.changes.profit_with_insurance ?? 0} subtext="Sales plus insurance minus expenses" tone="total" />
           </div>
 
           <div className="manager-performance">

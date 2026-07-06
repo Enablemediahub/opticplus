@@ -44,12 +44,14 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/patients/form-prescriptions/search', [PatientRecordController::class, 'formPrescriptionSearch']);
         Route::post('/patients', [PatientRecordController::class, 'store']);
         Route::put('/patients/{recordId}', [PatientRecordController::class, 'update']);
+        Route::delete('/patients/{recordId}', [PatientRecordController::class, 'destroy']);
         Route::patch('/patients/{recordId}/status', [PatientRecordController::class, 'updateStatus']);
         Route::patch('/patients/{recordId}/assign-optometrist', [PatientRecordController::class, 'assignOptometrist']);
         Route::get('/patients/{recordId}/exam-form', [PatientRecordController::class, 'examForm']);
         Route::post('/patients/{recordId}/exam-form', [PatientRecordController::class, 'saveExamForm']);
         Route::get('/patients/{recordId}/prescriptions', [PatientRecordController::class, 'prescriptions']);
         Route::post('/patients/{recordId}/prescriptions', [PatientRecordController::class, 'storePrescription']);
+        Route::get('/patients/{recordId}/payments', [PatientRecordController::class, 'payments']);
         Route::get('/patients/{recordId}/documents', [PatientRecordController::class, 'documents']);
         Route::post('/patients/{recordId}/documents', [PatientRecordController::class, 'storeDocuments']);
         Route::get('/patients/{recordId}/medical-report', [PatientRecordController::class, 'medicalReport']);
@@ -150,6 +152,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/payroll/advances', [PayrollController::class, 'storeAdvance']);
         Route::post('/payroll/process', [PayrollController::class, 'processPayroll']);
         Route::post('/payroll/process-bulk', [PayrollController::class, 'processBulk']);
+        Route::delete('/payroll/history/{historyId}', [PayrollController::class, 'deleteHistory']);
         Route::get('/payroll/bank-register', [PayrollController::class, 'bankRegister']);
         Route::post('/payroll/bank-register/deposits', [PayrollController::class, 'storeBankDeposit']);
         Route::post('/payroll/bank-register/balance', [PayrollController::class, 'updateBankBalance']);
@@ -159,6 +162,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::delete('/customer-service/templates/{templateId}', [CustomerServiceController::class, 'deleteTemplate']);
         Route::post('/customer-service/messages/send', [CustomerServiceController::class, 'sendMessage']);
         Route::post('/customer-service/pickups/{billingId}/ready', [CustomerServiceController::class, 'markReady']);
+        Route::post('/customer-service/pickups/{billingId}/not-ready', [CustomerServiceController::class, 'markNotReady']);
         Route::post('/customer-service/pickups/{billingId}/picked-up', [CustomerServiceController::class, 'markPickedUp']);
     });
 });

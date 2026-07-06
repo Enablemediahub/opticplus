@@ -51,6 +51,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   const [isSavingAdvance, setIsSavingAdvance] = useState(false)
   const [isProcessingBulk, setIsProcessingBulk] = useState(false)
   const [processingEmployeeId, setProcessingEmployeeId] = useState(null)
+  const [deletingHistoryId, setDeletingHistoryId] = useState(null)
   const [payrollDeclarations, setPayrollDeclarations] = useState(() => readPayrollDeclarations())
   const [salaryModalEmployee, setSalaryModalEmployee] = useState(null)
   const [salaryDraft, setSalaryDraft] = useState({ declared_salary: '', note: '' })
@@ -171,6 +172,11 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
     setQuery((current) => ({ ...current }))
   }
 
+  function showAllPayrollCandidates() {
+    setFilters((current) => ({ ...current, status: 'all' }))
+    setQuery((current) => ({ ...current, status: 'all' }))
+  }
+
   async function submitAdvance(event) {
     event.preventDefault()
     setIsSavingAdvance(true)
@@ -229,7 +235,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
 
       setSuccess(response.message)
       setProcessModalEmployee(null)
-      await refreshPayroll()
+      showAllPayrollCandidates()
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -265,11 +271,35 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
       })
 
       setSuccess(response.message)
-      await refreshPayroll()
+      showAllPayrollCandidates()
     } catch (saveError) {
       setError(saveError.message)
     } finally {
       setIsProcessingBulk(false)
+    }
+  }
+
+  async function deleteHistoryEntry(row) {
+    if (!row?.id) return
+
+    const confirmed = window.confirm(`Delete payroll history entry for ${row.employee_name}?`)
+    if (!confirmed) return
+
+    setDeletingHistoryId(row.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await apiFetch(`/payroll/history/${row.id}?branch_id=${branchId}`, {
+        method: 'DELETE',
+        token,
+      })
+      setSuccess(response.message || 'Payroll history entry deleted successfully.')
+      showAllPayrollCandidates()
+    } catch (deleteError) {
+      setError(deleteError.message)
+    } finally {
+      setDeletingHistoryId(null)
     }
   }
 
@@ -522,13 +552,14 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                   <th>Allowance</th>
                   <th>Advance Deduction</th>
                   <th>Net Payable</th>
+                  <th>Salary Month</th>
                   <th>Status</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan="10">Loading payroll records...</td></tr>
+                  <tr><td colSpan="11">Loading payroll records...</td></tr>
                 ) : (data?.employees ?? []).length ? (
                   data.employees.map((employee) => (
                     <tr key={employee.id}>
@@ -552,7 +583,13 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                       <td>{currency.format(Number(employeeDeclarations[employee.id]?.allowance_amount ?? 0))}</td>
                       <td>{currency.format(Number(employee.pending_advances ?? 0))}</td>
                       <td>{currency.format(Number(employee.net_payable ?? 0))}</td>
-                      <td>{employee.is_paid ? 'Processed' : employee.is_partial ? 'Partially Paid' : 'Pending'}</td>
+                      <td>{monthLabel(query.month, query.year)}</td>
+                      <td>
+                        <div className="patient-table-primary">
+                          <strong>{employee.is_paid ? 'Processed' : employee.is_partial ? 'Partially Paid' : 'Pending'}</strong>
+                          <span>{employee.payment_date ? `Paid on ${formatDate(employee.payment_date)}` : `For ${monthLabel(query.month, query.year)}`}</span>
+                        </div>
+                      </td>
                       <td>
                         <div className="billing-row-actions payroll-row-actions">
                           <button
@@ -575,7 +612,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="10">No payroll candidates match the current filters.</td></tr>
+                  <tr><td colSpan="11">No payroll candidates match the current filters.</td></tr>
                 )}
               </tbody>
             </table>
@@ -624,6 +661,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
               <tr>
                 <th>Employee</th>
                 <th>Branch</th>
+                <th>Salary Month</th>
                 <th>Gross</th>
                 <th>Declared Salary</th>
                 <th>Allowance</th>
@@ -634,11 +672,12 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                 <th>Payment Method</th>
                 <th>Paid On</th>
                 <th>Notes</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan="12">Loading payroll history...</td></tr>
+                <tr><td colSpan="13">Loading payroll history...</td></tr>
               ) : (data?.history ?? []).length ? (
                 data.history.map((row) => (
                   <tr key={row.id}>
@@ -647,6 +686,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                       <span>{row.staff_id || 'No staff ID'}</span>
                     </td>
                     <td>{row.branch || 'Branch'}</td>
+                    <td>{monthLabel(row.pay_month, row.pay_year)}</td>
                     <td>{currency.format(Number(row.gross_salary ?? 0))}</td>
                     <td>{currency.format(Number(row.declared_salary ?? row.gross_salary ?? 0))}</td>
                     <td>{currency.format(Number(row.allowance_amount ?? 0))}</td>
@@ -657,10 +697,20 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                     <td>{titleize(row.payment_method)}</td>
                     <td>{formatDateTime(row.payment_date)}</td>
                     <td>{row.notes || 'No note'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        disabled={deletingHistoryId === row.id}
+                        onClick={() => deleteHistoryEntry(row)}
+                      >
+                        {deletingHistoryId === row.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="12">No payroll history exists for the selected month.</td></tr>
+                <tr><td colSpan="13">No payroll history exists for the selected month.</td></tr>
               )}
             </tbody>
           </table>

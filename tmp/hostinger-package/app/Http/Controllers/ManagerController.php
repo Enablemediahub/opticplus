@@ -31,17 +31,28 @@ class ManagerController extends Controller
 
         $activeStaffToday = (int) tap(DB::table('attendance')->whereDate('date', $today), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->distinct()->count('staff_id');
 
-        $monthlySales = (float) tap(DB::table('sales')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
+        $monthlySales = (float) tap(DB::table('sales')->where('payment_method', '!=', 'Insurance')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
+
+        $monthlyInsuranceSales = (float) tap(DB::table('insurance_claims')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
 
         $monthlyPatients = (int) tap(DB::table('patient_records')->whereBetween(DB::raw('DATE(created_at)'), [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count();
 
         $monthlyExpenses = (float) tap(DB::table('expenses')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount');
 
-        $previousSales = (float) tap(DB::table('sales')->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
+        $monthlyProfit = round($monthlySales - $monthlyExpenses, 2);
+        $monthlySalesWithInsurance = round($monthlySales + $monthlyInsuranceSales, 2);
+        $monthlyProfitWithInsurance = round($monthlySalesWithInsurance - $monthlyExpenses, 2);
+
+        $previousSales = (float) tap(DB::table('sales')->where('payment_method', '!=', 'Insurance')->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
+
+        $previousInsuranceSales = (float) tap(DB::table('insurance_claims')->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
 
         $previousPatients = (int) tap(DB::table('patient_records')->whereBetween(DB::raw('DATE(created_at)'), [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count();
 
         $previousExpenses = (float) tap(DB::table('expenses')->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount');
+
+        $previousProfit = round($previousSales - $previousExpenses, 2);
+        $previousProfitWithInsurance = round(($previousSales + $previousInsuranceSales) - $previousExpenses, 2);
 
         $pendingAppointments = (int) tap(DB::table('appointments')->where('status', 'pending'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count();
 
@@ -120,8 +131,12 @@ class ManagerController extends Controller
                 'today_expenses' => $todayExpenses,
                 'active_staff' => $activeStaffToday,
                 'monthly_sales' => $monthlySales,
+                'monthly_insurance_sales' => $monthlyInsuranceSales,
+                'monthly_sales_with_insurance' => $monthlySalesWithInsurance,
                 'monthly_patients' => $monthlyPatients,
                 'monthly_expenses' => $monthlyExpenses,
+                'monthly_profit' => $monthlyProfit,
+                'monthly_profit_with_insurance' => $monthlyProfitWithInsurance,
                 'pending_appointments' => $pendingAppointments,
                 'low_stock_count' => $lowStockCount,
             ],
@@ -129,6 +144,8 @@ class ManagerController extends Controller
                 'sales' => $this->percentageChange($monthlySales, $previousSales),
                 'patients' => $this->percentageChange($monthlyPatients, $previousPatients),
                 'expenses' => $this->percentageChange($monthlyExpenses, $previousExpenses),
+                'profit' => $this->percentageChange($monthlyProfit, $previousProfit),
+                'profit_with_insurance' => $this->percentageChange($monthlyProfitWithInsurance, $previousProfitWithInsurance),
             ],
             'today_attendance' => $todayAttendance,
             'recent_operations' => $recentOperations,
