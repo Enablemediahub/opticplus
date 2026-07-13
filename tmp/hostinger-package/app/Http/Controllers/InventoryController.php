@@ -935,7 +935,7 @@ class InventoryController extends Controller
         }
 
         $billing = $billingQuery
-            ->first(['id', 'branch_id', 'folder_id', 'patient_id', 'lens_price']);
+            ->first(['id', 'branch_id', 'folder_id', 'patient_id', 'name', 'lens_price']);
 
         if (! $billing) {
             return response()->json([
@@ -964,20 +964,24 @@ class InventoryController extends Controller
         $sellingPrice = round((float) ($validated['selling_price'] ?? $billing->lens_price), 2);
         $costPrice = round((float) $validated['cost_price'], 2);
 
-        DB::table('lens_costs')->updateOrInsert(
-            [
-                'billing_id' => $billing->id,
-                'branch_id' => $branchId,
-            ],
-            [
-                'folder_id' => $billing->folder_id,
-                'patient_id' => $billing->patient_id,
-                'selling_price' => $sellingPrice,
-                'cost_price' => $costPrice,
-                'entered_by' => $user?->id,
-                'entered_at' => now(),
-            ]
-        );
+        DB::transaction(function () use ($billing, $branchId, $sellingPrice, $costPrice, $user): void {
+            DB::table('lens_costs')->updateOrInsert(
+                [
+                    'billing_id' => $billing->id,
+                    'branch_id' => $branchId,
+                ],
+                [
+                    'folder_id' => $billing->folder_id,
+                    'patient_id' => $billing->patient_id,
+                    'selling_price' => $sellingPrice,
+                    'cost_price' => $costPrice,
+                    'entered_by' => $user?->id,
+                    'entered_at' => now(),
+                ]
+            );
+
+            $this->syncLensCostExpense($billing, $costPrice, $user?->id);
+        });
 
         return response()->json([
             'message' => $existingCost
@@ -1028,9 +1032,129 @@ class InventoryController extends Controller
             ], 404);
         }
 
+        $this->deleteLinkedLensCostExpense((int) $billing->id, $branchId);
+
         return response()->json([
             'message' => 'Lens cost entry deleted successfully.',
         ]);
+    }
+
+    private function syncLensCostExpense(object $billing, float $costPrice, ?int $userId): void
+    {
+        $this->ensureLensExpenseSchema();
+
+        if (! Schema::hasTable('expenses')) {
+            return;
+        }
+
+        $branchId = (int) $billing->branch_id;
+        $billingId = (int) $billing->id;
+
+        if ($costPrice <= 0) {
+            $this->deleteLinkedLensCostExpense($billingId, $branchId);
+            return;
+        }
+
+        $this->ensureExpenseCategory('Lens');
+
+        $patientName = trim((string) ($billing->name ?? ''));
+        $folderId = trim((string) ($billing->folder_id ?? ''));
+        $descriptionParts = ['Lens cost'];
+        if ($patientName !== '') {
+            $descriptionParts[] = $patientName;
+        }
+        if ($folderId !== '') {
+            $descriptionParts[] = 'Folder '.$folderId;
+        }
+
+        $payload = [
+            'description' => implode(' - ', $descriptionParts),
+            'amount' => $costPrice,
+            'date' => now()->toDateString(),
+            'category' => 'Lens',
+            'branch_id' => $branchId,
+            'created_by' => $userId,
+        ];
+
+        if (Schema::hasColumn('expenses', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        $existingExpense = DB::table('expenses')
+            ->where('branch_id', $branchId)
+            ->where('source_type', 'lens_cost')
+            ->where('source_id', $billingId)
+            ->first(['expense_id']);
+
+        if ($existingExpense) {
+            DB::table('expenses')
+                ->where('expense_id', $existingExpense->expense_id)
+                ->update($payload);
+            return;
+        }
+
+        if (Schema::hasColumn('expenses', 'created_at')) {
+            $payload['created_at'] = now();
+        }
+        $payload['source_type'] = 'lens_cost';
+        $payload['source_id'] = $billingId;
+
+        DB::table('expenses')->insert($payload);
+    }
+
+    private function deleteLinkedLensCostExpense(int $billingId, int $branchId): void
+    {
+        if (! Schema::hasTable('expenses') || ! Schema::hasColumn('expenses', 'source_type') || ! Schema::hasColumn('expenses', 'source_id')) {
+            return;
+        }
+
+        DB::table('expenses')
+            ->where('branch_id', $branchId)
+            ->where('source_type', 'lens_cost')
+            ->where('source_id', $billingId)
+            ->delete();
+    }
+
+    private function ensureLensExpenseSchema(): void
+    {
+        if (! Schema::hasTable('expenses')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('expenses', 'created_by')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unsignedBigInteger('created_by')->nullable()->index();
+            });
+        }
+
+        if (! Schema::hasColumn('expenses', 'source_type')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->string('source_type', 50)->nullable()->after('created_by')->index();
+            });
+        }
+
+        if (! Schema::hasColumn('expenses', 'source_id')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unsignedBigInteger('source_id')->nullable()->after('source_type')->index();
+            });
+        }
+    }
+
+    private function ensureExpenseCategory(string $name): void
+    {
+        if (! Schema::hasTable('expense_categories')) {
+            return;
+        }
+
+        $payload = ['is_active' => true];
+        if (Schema::hasColumn('expense_categories', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        DB::table('expense_categories')->updateOrInsert(
+            ['name' => $name],
+            $payload
+        );
     }
 
     private function resolveBranchId(Request $request): int

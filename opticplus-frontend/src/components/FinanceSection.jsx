@@ -70,30 +70,13 @@ export default function FinanceSection(props) {
 
   const pageHeader = headerByMode[pageMode] ?? headerByMode.default
   const expenseStats = props.financeExpenses?.stats ?? {}
-  const expenseRecordCount = Number(props.financeExpenses?.pagination?.total ?? 0)
-  const expenseCategoryCount = Number(props.financeExpenses?.category_breakdown?.length ?? 0)
-  const hasExpenseScopedFilters = Boolean(
-    props.financeExpenseFilters?.start_date ||
-    props.financeExpenseFilters?.end_date ||
-    props.financeExpenseFilters?.search ||
-    (props.financeExpenseFilters?.category && props.financeExpenseFilters.category !== 'all') ||
-    (props.financeExpenseFilters?.filter && props.financeExpenseFilters.filter !== 'all')
-  )
-  const filteredExpenseTotal = Number(expenseStats.total ?? 0)
-  const filteredExpenseAverage = expenseRecordCount > 0 ? filteredExpenseTotal / expenseRecordCount : 0
-  const expenseSummaryCards = hasExpenseScopedFilters
-    ? [
-        ['Filtered Total', filteredExpenseTotal, 'All expenses in the active filter scope', 'seen', 'alert'],
-        ['Records', expenseRecordCount, 'Expense entries included in the current filters', 'today', 'receipt', 'count'],
-        ['Average Expense', filteredExpenseAverage, 'Average spend across the filtered expense records', 'pending', 'finance'],
-        ['Categories', expenseCategoryCount, 'Expense categories represented in the active results', 'total', 'trend', 'count'],
-      ]
-    : [
-        ['Today', expenseStats.today ?? props.financeSummary?.stats.expenses_month, 'Expenses posted today', 'seen', 'alert'],
-        ['This Week', expenseStats.weekly, 'Weekly expense total', 'today', 'finance'],
-        ['This Month', expenseStats.monthly ?? props.financeSummary?.stats.expenses_month, 'Monthly expense pressure', 'pending', 'trend'],
-        ['This Year', expenseStats.yearly, 'Year-to-date spending', 'total', 'money'],
-      ]
+  const isReceptionistExpensesPage = pageMode === 'expenses' && props.session?.role === 'receptionist' && !props.readOnly
+  const expenseSummaryCards = [
+    ['Today', expenseStats.today ?? props.financeSummary?.stats.expenses_month, 'Expenses posted today', 'seen', 'alert'],
+    ['This Week', expenseStats.weekly, 'Weekly expense total', 'today', 'finance'],
+    ['This Month', expenseStats.monthly ?? props.financeSummary?.stats.expenses_month, 'Monthly expense pressure', 'pending', 'trend'],
+    ...(!isReceptionistExpensesPage ? [['This Year', expenseStats.yearly, 'Year-to-date spending', 'total', 'money']] : []),
+  ]
 
   const summaryCardsByMode = {
     default: [
@@ -1599,6 +1582,24 @@ function ExpensesTab(props) {
     category: '',
   })
   const categoryOptions = props.financeExpenses?.categories ?? []
+  const managementExpenseDefaults = {
+    filter: 'all',
+    start_date: '',
+    end_date: '',
+    category: 'all',
+    search: '',
+    page: 1,
+    per_page: 12,
+  }
+  const receptionistExpenseDefaults = {
+    filter: 'all',
+    ...currentMonthDateRange(),
+    category: 'all',
+    search: '',
+    page: 1,
+    per_page: 12,
+  }
+  const expenseFilterDefaults = isReceptionistExpenseView ? receptionistExpenseDefaults : managementExpenseDefaults
 
   function openExpenseModal(expense) {
     setSelectedExpense(expense)
@@ -1625,7 +1626,7 @@ function ExpensesTab(props) {
       ...current,
       description: '',
       amount: '',
-      date: '',
+      date: new Date().toISOString().slice(0, 10),
       category: categoryOptions[0] ?? current.category ?? '',
     }))
     setIsCreateExpenseModalOpen(true)
@@ -1659,13 +1660,12 @@ function ExpensesTab(props) {
           </div>
         ) : null}
 
-        {!isReceptionistExpenseView ? (
-          <article className={`panel panel-wide expense-filters-panel${usePremiumExpenseLayout ? ' expense-premium-panel' : ''}`}>
+        <article className={`panel panel-wide expense-filters-panel${usePremiumExpenseLayout ? ' expense-premium-panel' : ''}`}>
             <div className="panel-heading expense-filter-heading">
               <div className="expense-filter-heading-copy">
                 <p className="eyebrow">Search & Filters</p>
-                <h3>Find the right expense fast</h3>
-                <p className="muted-copy">Search by description, narrow by category, and trim the date range from one tidy filter bar.</p>
+                <h3>Find branch expenses fast</h3>
+                <p className="muted-copy">Search branch expense history by description, category, and date range.</p>
               </div>
               <span className="panel-tag">{props.financeExpenses?.pagination?.total ?? 0} records</span>
             </div>
@@ -1723,28 +1723,15 @@ function ExpensesTab(props) {
                   type="button"
                   className="ghost-button"
                   onClick={() => {
-                    const defaults = { filter: 'all', start_date: '', end_date: '', category: 'all', search: '', page: 1, per_page: 12 }
-                    props.setFinanceExpenseFilters(defaults)
-                    props.setFinanceExpenseQuery(defaults)
+                    props.setFinanceExpenseFilters(expenseFilterDefaults)
+                    props.setFinanceExpenseQuery(expenseFilterDefaults)
                   }}
                 >
                   Reset
                 </button>
               </div>
             </form>
-          </article>
-        ) : (
-          <article className="panel panel-wide expense-filters-panel expense-premium-panel">
-            <div className="panel-heading expense-filter-heading">
-              <div className="expense-filter-heading-copy">
-                <p className="eyebrow">Today Only</p>
-                <h3>Expenses recorded today</h3>
-                <p className="muted-copy">This receptionist view shows only today&apos;s expense entries without search or filter controls.</p>
-              </div>
-              <span className="panel-tag">{props.financeExpenses?.pagination?.total ?? 0} records</span>
-            </div>
-          </article>
-        )}
+        </article>
 
         <article className="panel panel-wide">
           <div className="panel-heading">
@@ -2299,6 +2286,23 @@ function ReceiptReprintsOnlyView(props) {
       </section>
     </section>
   )
+}
+
+function localDateIso(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function currentMonthDateRange() {
+  const now = new Date()
+
+  return {
+    start_date: localDateIso(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end_date: localDateIso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  }
 }
 
 function CeoExpenseReviewView(props) {

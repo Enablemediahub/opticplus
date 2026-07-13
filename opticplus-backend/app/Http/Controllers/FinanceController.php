@@ -26,6 +26,7 @@ class FinanceController extends Controller
     public function summary(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
+        $this->ensureLensCostExpensesSynced($branchId);
         $today = now();
         $todayDate = $today->toDateString();
         $weekStart = $today->copy()->startOfWeek()->toDateString();
@@ -116,6 +117,11 @@ class FinanceController extends Controller
         $month = $this->normalizeReportMonth($request->string('month')->toString());
         $comparisonMonth = $this->normalizeReportMonth($request->string('comparison_month')->toString() ?: $month);
 
+        $this->ensureLensCostExpensesSynced($primaryBranchId);
+        if ($comparisonBranchId !== null) {
+            $this->ensureLensCostExpensesSynced($comparisonBranchId);
+        }
+
         $primary = $this->buildMonthlyReportDataset($primaryBranchId, $month);
         $comparison = $comparisonBranchId === null
             ? null
@@ -131,6 +137,191 @@ class FinanceController extends Controller
             'monthly_overview' => $this->buildMonthlyOverview($primaryBranchId),
             'primary' => $primary,
             'comparison' => $comparison,
+        ]);
+    }
+
+    public function monitor(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if ($role !== 'manager' && ! ($user?->is_admin ?? false)) {
+            return response()->json([
+                'message' => 'Only the General Manager can access The Monitor.',
+            ], 403);
+        }
+
+        $branchId = $this->resolveReportBranchId($request, 'branch_id');
+        $this->ensureLensCostExpensesSynced($branchId);
+        [$startDate, $endDate, $periodLabel] = $this->monitorDateRange($request);
+
+        $billingBase = tap(
+            DB::table('billing')->whereBetween('date', [$startDate, $endDate]),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+        $salesBase = tap(
+            DB::table('sales')
+                ->whereBetween('date', [$startDate, $endDate])
+                ->where('payment_method', '!=', 'Insurance'),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+        $expenseBase = tap(
+            DB::table('expenses')->whereBetween('date', [$startDate, $endDate]),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+        $insuranceBase = tap(
+            DB::table('insurance_claims')->whereBetween('date', [$startDate, $endDate]),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+        $bsmiBase = tap(
+            DB::table('bsmi_transactions')->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+
+        $billing = (clone $billingBase)
+            ->selectRaw('
+                COUNT(*) as bills,
+                COALESCE(SUM(consultation_price), 0) as consultation_total,
+                COALESCE(SUM(frame_price), 0) as frame_total,
+                COALESCE(SUM(lens_price), 0) as lens_total,
+                COALESCE(SUM(total_amount), 0) as billed_total,
+                COALESCE(SUM(balance), 0) as outstanding_balance,
+                SUM(CASE WHEN COALESCE(frame_price, 0) > 0 THEN 1 ELSE 0 END) as frame_count,
+                SUM(CASE WHEN COALESCE(lens_price, 0) > 0 THEN 1 ELSE 0 END) as lens_count
+            ')
+            ->first();
+
+        $lensExpenseTotal = (float) (clone $expenseBase)
+            ->whereRaw('LOWER(category) = ?', ['lens'])
+            ->sum('amount');
+        $totalExpenses = (float) (clone $expenseBase)->sum('amount');
+        $frameProfit = (float) (clone $bsmiBase)->sum('surplus_for_bsmi');
+
+        $salesByMethod = (clone $salesBase)
+            ->select('payment_method', DB::raw('SUM(amount_paid) as total'))
+            ->groupBy('payment_method')
+            ->pluck('total', 'payment_method');
+
+        $collections = [
+            'cash' => 0.0,
+            'mobile_money' => 0.0,
+            'paystack' => 0.0,
+            'bank_transfer' => 0.0,
+            'other' => 0.0,
+        ];
+        foreach ($salesByMethod as $method => $amount) {
+            $bucket = $this->classifyPaymentMethod((string) $method);
+            $collections[$bucket] = ($collections[$bucket] ?? 0) + round((float) $amount, 2);
+        }
+
+        $insurancePaid = (float) (clone $insuranceBase)->where('status', 'paid')->sum('amount_paid');
+        $insuranceClaimed = (float) (clone $insuranceBase)->where('status', 'claimed')->sum('amount_paid');
+        $insurancePending = (float) (clone $insuranceBase)->where('status', 'pending')->sum('amount_paid');
+        $insuranceExpected = round($insuranceClaimed + $insurancePending, 2);
+        $collectedRevenue = round(array_sum($collections) + $insurancePaid, 2);
+        $lensRevenue = (float) ($billing->lens_total ?? 0);
+        $lensProfit = round($lensRevenue - $lensExpenseTotal, 2);
+        $grossProfit = round($lensProfit + $frameProfit + (float) ($billing->consultation_total ?? 0), 2);
+        $cashPosition = round($collectedRevenue - $totalExpenses, 2);
+
+        $expenseBreakdown = (clone $expenseBase)
+            ->select('category', DB::raw('SUM(amount) as total'))
+            ->groupBy('category')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get();
+
+        $billingDaily = (clone $billingBase)
+            ->selectRaw('date, COALESCE(SUM(consultation_price), 0) as consultation_total, COALESCE(SUM(frame_price), 0) as frame_total, COALESCE(SUM(lens_price), 0) as lens_total')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+        $salesDaily = (clone $salesBase)
+            ->selectRaw('date, SUM(amount_paid) as collected_total')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+        $insuranceDaily = (clone $insuranceBase)
+            ->selectRaw("
+                date,
+                SUM(CASE WHEN status = 'paid' THEN amount_paid ELSE 0 END) as insurance_paid,
+                SUM(CASE WHEN status IN ('pending', 'claimed') THEN amount_paid ELSE 0 END) as insurance_expected
+            ")
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+        $expenseDaily = (clone $expenseBase)
+            ->selectRaw('date, SUM(amount) as expense_total')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $dailyRows = collect()
+            ->merge($billingDaily->keys())
+            ->merge($salesDaily->keys())
+            ->merge($insuranceDaily->keys())
+            ->merge($expenseDaily->keys())
+            ->filter()
+            ->unique()
+            ->sortDesc()
+            ->take(31)
+            ->map(function ($date) use ($billingDaily, $salesDaily, $insuranceDaily, $expenseDaily) {
+                $billingRow = $billingDaily->get($date);
+                $salesRow = $salesDaily->get($date);
+                $insuranceRow = $insuranceDaily->get($date);
+                $expenseRow = $expenseDaily->get($date);
+                $collectedTotal = round((float) ($salesRow->collected_total ?? 0) + (float) ($insuranceRow->insurance_paid ?? 0), 2);
+                $expenseTotal = round((float) ($expenseRow->expense_total ?? 0), 2);
+
+                return [
+                    'date' => $date,
+                    'consultation_total' => round((float) ($billingRow->consultation_total ?? 0), 2),
+                    'frame_total' => round((float) ($billingRow->frame_total ?? 0), 2),
+                    'lens_total' => round((float) ($billingRow->lens_total ?? 0), 2),
+                    'collected_total' => $collectedTotal,
+                    'insurance_expected' => round((float) ($insuranceRow->insurance_expected ?? 0), 2),
+                    'expense_total' => $expenseTotal,
+                    'net_position' => round($collectedTotal - $expenseTotal, 2),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'filters' => [
+                'period' => $request->string('period')->toString() ?: 'monthly',
+                'date_from' => $startDate,
+                'date_to' => $endDate,
+                'label' => $periodLabel,
+            ],
+            'stats' => [
+                'collected_revenue' => $collectedRevenue,
+                'cash_position' => $cashPosition,
+                'gross_profit' => $grossProfit,
+                'total_expenses' => round($totalExpenses, 2),
+                'consultation_revenue' => round((float) ($billing->consultation_total ?? 0), 2),
+                'lens_revenue' => round($lensRevenue, 2),
+                'lens_cost' => round($lensExpenseTotal, 2),
+                'lens_profit' => $lensProfit,
+                'lens_count' => (int) ($billing->lens_count ?? 0),
+                'frame_revenue' => round((float) ($billing->frame_total ?? 0), 2),
+                'frame_profit' => round($frameProfit, 2),
+                'frame_count' => (int) ($billing->frame_count ?? 0),
+                'insurance_claimed' => round($insuranceClaimed, 2),
+                'insurance_pending' => round($insurancePending, 2),
+                'insurance_expected' => $insuranceExpected,
+                'outstanding_balance' => round((float) ($billing->outstanding_balance ?? 0), 2),
+                'bill_count' => (int) ($billing->bills ?? 0),
+            ],
+            'collections' => [
+                ...$collections,
+                'insurance_paid' => round($insurancePaid, 2),
+                'insurance_claimed' => round($insuranceClaimed, 2),
+                'insurance_pending' => round($insurancePending, 2),
+                'insurance_expected' => $insuranceExpected,
+            ],
+            'expense_breakdown' => $expenseBreakdown,
+            'daily_rows' => $dailyRows,
         ]);
     }
 
@@ -448,20 +639,25 @@ class FinanceController extends Controller
         $this->ensureExpenseRecorderSchema();
 
         $branchId = $this->resolveBranchId($request);
+        $this->ensureLensCostExpensesSynced($branchId);
         $today = now();
         $todayDate = $today->toDateString();
         $weekStart = $today->copy()->startOfWeek()->toDateString();
+        $weekEnd = $today->copy()->endOfWeek()->toDateString();
         $monthStart = $today->copy()->startOfMonth()->toDateString();
+        $monthEnd = $today->copy()->endOfMonth()->toDateString();
         $yearStart = $today->copy()->startOfYear()->toDateString();
+        $yearEnd = $today->copy()->endOfYear()->toDateString();
         $perPage = min(max((int) $request->integer('per_page', 12), 5), 50);
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
 
         $query = DB::table('expenses');
         $this->applyBranchScope($query, 'branch_id', $branchId);
-        $this->applyExpenseRecorderScope($query, $request);
         $this->applyExpenseFilters($query, $request);
         $filteredStatsQuery = clone $query;
+        $widgetStatsQuery = DB::table('expenses');
+        $this->applyBranchScope($widgetStatsQuery, 'branch_id', $branchId);
 
         $total = (clone $query)->count('expense_id');
 
@@ -520,19 +716,20 @@ class FinanceController extends Controller
                 'total_pages' => (int) ceil($total / $perPage),
             ],
             'stats' => [
-                'today' => (float) (clone $filteredStatsQuery)
+                'today' => (float) (clone $widgetStatsQuery)
                     ->whereDate('date', $todayDate)
                     ->sum('amount'),
-                'weekly' => (float) (clone $filteredStatsQuery)
-                    ->whereDate('date', '>=', $weekStart)
+                'weekly' => (float) (clone $widgetStatsQuery)
+                    ->whereBetween('date', [$weekStart, $weekEnd])
                     ->sum('amount'),
-                'monthly' => (float) (clone $filteredStatsQuery)
-                    ->whereDate('date', '>=', $monthStart)
+                'monthly' => (float) (clone $widgetStatsQuery)
+                    ->whereBetween('date', [$monthStart, $monthEnd])
                     ->sum('amount'),
-                'yearly' => (float) (clone $filteredStatsQuery)
-                    ->whereDate('date', '>=', $yearStart)
+                'yearly' => (float) (clone $widgetStatsQuery)
+                    ->whereBetween('date', [$yearStart, $yearEnd])
                     ->sum('amount'),
-                'total' => (float) (clone $filteredStatsQuery)
+                'total' => (float) (clone $widgetStatsQuery)
+                    ->whereBetween('date', [$yearStart, $yearEnd])
                     ->sum('amount'),
             ],
             'categories' => $categories,
@@ -576,14 +773,24 @@ class FinanceController extends Controller
 
         $userId = $request->user()?->id;
         $expenseId = DB::transaction(function () use ($request, $validated, $category, $branchId, $userId): int {
-            $expenseId = DB::table('expenses')->insertGetId([
+            $expenseData = [
                 'description' => $validated['description'],
                 'amount' => $validated['amount'],
                 'date' => $validated['date'],
                 'category' => $category,
                 'branch_id' => $branchId,
                 'created_by' => $userId,
-            ]);
+            ];
+
+            if (Schema::hasColumn('expenses', 'created_at')) {
+                $expenseData['created_at'] = now();
+            }
+
+            if (Schema::hasColumn('expenses', 'updated_at')) {
+                $expenseData['updated_at'] = now();
+            }
+
+            $expenseId = DB::table('expenses')->insertGetId($expenseData);
 
             AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
                 'description' => $validated['description'],
@@ -620,6 +827,12 @@ class FinanceController extends Controller
             return response()->json([
                 'message' => 'Expense record not found for this branch.',
             ], 404);
+        }
+
+        if ($this->isLinkedLensCostExpense($current)) {
+            return response()->json([
+                'message' => 'Lens cost expenses are controlled by Lens Tracker. Update the lens cost there instead.',
+            ], 422);
         }
 
         $validated = $request->validate([
@@ -671,16 +884,26 @@ class FinanceController extends Controller
         }
 
         $branchId = $this->resolveBranchId($request);
-        $deleted = tap(
+        $current = tap(
             DB::table('expenses')->where('expense_id', $expenseId),
             fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )->delete();
+        )->first();
 
-        if (! $deleted) {
+        if (! $current) {
             return response()->json([
                 'message' => 'Expense record not found for this branch.',
             ], 404);
         }
+
+        if ($this->isLinkedLensCostExpense($current)) {
+            return response()->json([
+                'message' => 'Lens cost expenses are controlled by Lens Tracker. Delete the lens cost there instead.',
+            ], 422);
+        }
+
+        DB::table('expenses')
+            ->where('expense_id', $expenseId)
+            ->delete();
 
         AuditLog::logManual($request, 'delete', 'expenses', 'expense_id: '.$expenseId, [
             'branch_id' => $branchId,
@@ -2058,6 +2281,192 @@ class FinanceController extends Controller
         }
     }
 
+    private function ensureLensCostExpensesSynced(int $branchId): void
+    {
+        if (! Schema::hasTable('expenses') || ! Schema::hasTable('lens_costs')) {
+            return;
+        }
+
+        $this->ensureExpenseCategoriesSchema();
+        $this->ensureExpenseRecorderSchema();
+        $this->ensureLensExpenseLinkSchema();
+        $this->ensureActiveSystemExpenseCategory('Lens');
+        $this->deleteStaleLensCostExpenses($branchId);
+
+        $query = DB::table('lens_costs as lc')
+            ->leftJoin('billing as b', function ($join): void {
+                $join->on('lc.billing_id', '=', 'b.id')
+                    ->on('lc.branch_id', '=', 'b.branch_id');
+            })
+            ->select([
+                'lc.id',
+                'lc.billing_id',
+                'lc.branch_id',
+                'lc.folder_id',
+                'lc.patient_id',
+                'lc.cost_price',
+                'lc.entered_by',
+                'lc.entered_at',
+                'b.name as billing_name',
+                'b.folder_id as billing_folder_id',
+            ])
+            ->where('lc.cost_price', '>', 0)
+            ->orderBy('lc.id');
+
+        $this->applyBranchScope($query, 'lc.branch_id', $branchId);
+
+        $query->chunk(200, function ($rows): void {
+            foreach ($rows as $row) {
+                $this->upsertLensCostExpenseRow($row);
+            }
+        });
+    }
+
+    private function ensureLensExpenseLinkSchema(): void
+    {
+        if (! Schema::hasTable('expenses')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('expenses', 'source_type')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->string('source_type', 50)->nullable()->after('created_by')->index();
+            });
+        }
+
+        if (! Schema::hasColumn('expenses', 'source_id')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unsignedBigInteger('source_id')->nullable()->after('source_type')->index();
+            });
+        }
+    }
+
+    private function upsertLensCostExpenseRow(object $row): void
+    {
+        $branchId = (int) $row->branch_id;
+        $billingId = (int) $row->billing_id;
+        $costPrice = round((float) $row->cost_price, 2);
+
+        if ($branchId <= 0 || $billingId <= 0 || $costPrice <= 0) {
+            return;
+        }
+
+        $patientName = trim((string) ($row->billing_name ?? $row->name ?? ''));
+        $folderId = trim((string) ($row->billing_folder_id ?? $row->folder_id ?? ''));
+        $descriptionParts = ['Lens cost'];
+        if ($patientName !== '') {
+            $descriptionParts[] = $patientName;
+        }
+        if ($folderId !== '') {
+            $descriptionParts[] = 'Folder '.$folderId;
+        }
+
+        $entryDate = trim((string) ($row->entered_at ?? ''));
+        $payload = [
+            'description' => implode(' - ', $descriptionParts),
+            'amount' => $costPrice,
+            'date' => $entryDate !== '' ? substr($entryDate, 0, 10) : now()->toDateString(),
+            'category' => 'Lens',
+            'branch_id' => $branchId,
+            'created_by' => $row->entered_by ?? null,
+        ];
+
+        if (Schema::hasColumn('expenses', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        $existingExpenseId = DB::table('expenses')
+            ->where('branch_id', $branchId)
+            ->where('source_type', 'lens_cost')
+            ->where('source_id', $billingId)
+            ->value('expense_id');
+
+        if ($existingExpenseId) {
+            DB::table('expenses')
+                ->where('expense_id', $existingExpenseId)
+                ->update($payload);
+            return;
+        }
+
+        if (Schema::hasColumn('expenses', 'created_at')) {
+            $payload['created_at'] = now();
+        }
+
+        $payload['source_type'] = 'lens_cost';
+        $payload['source_id'] = $billingId;
+
+        DB::table('expenses')->insert($payload);
+    }
+
+    private function deleteStaleLensCostExpenses(int $branchId): void
+    {
+        if (! Schema::hasColumn('expenses', 'source_type') || ! Schema::hasColumn('expenses', 'source_id')) {
+            return;
+        }
+
+        $staleQuery = DB::table('expenses as e')
+            ->leftJoin('lens_costs as lc', function ($join): void {
+                $join->on('e.source_id', '=', 'lc.billing_id')
+                    ->on('e.branch_id', '=', 'lc.branch_id');
+            })
+            ->where('e.source_type', 'lens_cost')
+            ->where(function ($inner): void {
+                $inner->whereNull('lc.id')
+                    ->orWhere('lc.cost_price', '<=', 0);
+            });
+
+        $this->applyBranchScope($staleQuery, 'e.branch_id', $branchId);
+
+        $staleIds = $staleQuery->pluck('e.expense_id');
+        if ($staleIds->isEmpty()) {
+            return;
+        }
+
+        DB::table('expenses')
+            ->whereIn('expense_id', $staleIds)
+            ->delete();
+    }
+
+    private function ensureActiveSystemExpenseCategory(string $name): void
+    {
+        if (! Schema::hasTable('expense_categories')) {
+            return;
+        }
+
+        $normalized = $this->normalizeExpenseCategoryName($name);
+        if ($normalized === '') {
+            return;
+        }
+
+        $existing = DB::table('expense_categories')
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($normalized)])
+            ->first(['id']);
+
+        $payload = ['name' => $normalized, 'is_active' => true];
+        if (Schema::hasColumn('expense_categories', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+
+        if ($existing) {
+            DB::table('expense_categories')
+                ->where('id', $existing->id)
+                ->update($payload);
+            return;
+        }
+
+        if (Schema::hasColumn('expense_categories', 'created_at')) {
+            $payload['created_at'] = now();
+        }
+
+        DB::table('expense_categories')->insert($payload);
+    }
+
+    private function isLinkedLensCostExpense(object $expense): bool
+    {
+        return Schema::hasColumn('expenses', 'source_type')
+            && (string) ($expense->source_type ?? '') === 'lens_cost';
+    }
+
     private function expenseCategoryOptions()
     {
         return DB::table('expense_categories')
@@ -2243,6 +2652,9 @@ class FinanceController extends Controller
         $netBilled = max($grossBilled - $discountTotal, 0);
         $totalCollections = round($cashTotal + $mobileMoneyTotal + $paystackTotal + $bankTransferTotal + $otherCollectionsTotal + $insurancePaid, 2);
         $totalExpenses = round((float) $expenseRows->sum('amount'), 2);
+        $lensExpenses = round((float) $expenseRows
+            ->filter(fn ($row) => strtolower((string) ($row['description'] ?? '')) === 'lens')
+            ->sum('amount'), 2);
         $netOperating = round($totalCollections - $totalExpenses, 2);
         $netBilledPosition = round($netBilled - $totalExpenses, 2);
 
@@ -2256,6 +2668,7 @@ class FinanceController extends Controller
                 'net_billed' => $netBilled,
                 'total_collections' => $totalCollections,
                 'total_expenses' => $totalExpenses,
+                'lens_expenses' => $lensExpenses,
                 'net_operating' => $netOperating,
                 'net_billed_position' => $netBilledPosition,
                 'outstanding_balance' => round((float) ($billing->outstanding_balance ?? 0), 2),
@@ -2416,6 +2829,46 @@ class FinanceController extends Controller
         }
 
         return now()->format('Y-m');
+    }
+
+    private function monitorDateRange(Request $request): array
+    {
+        $period = $request->string('period')->toString() ?: 'monthly';
+        $today = now();
+
+        if ($period === 'custom' && ($request->filled('date_from') || $request->filled('date_to'))) {
+            $startDate = $request->string('date_from')->toString() ?: $today->copy()->startOfMonth()->toDateString();
+            $endDate = $request->string('date_to')->toString() ?: $startDate;
+
+            if ($startDate > $endDate) {
+                [$startDate, $endDate] = [$endDate, $startDate];
+            }
+
+            return [$startDate, $endDate, $startDate === $endDate ? $startDate : $startDate.' to '.$endDate];
+        }
+
+        return match ($period) {
+            'daily' => [
+                $today->toDateString(),
+                $today->toDateString(),
+                'Today',
+            ],
+            'weekly' => [
+                $today->copy()->startOfWeek()->toDateString(),
+                $today->copy()->endOfWeek()->toDateString(),
+                'This Week',
+            ],
+            'yearly' => [
+                $today->copy()->startOfYear()->toDateString(),
+                $today->copy()->endOfYear()->toDateString(),
+                'This Year',
+            ],
+            default => [
+                $today->copy()->startOfMonth()->toDateString(),
+                $today->copy()->endOfMonth()->toDateString(),
+                'This Month',
+            ],
+        };
     }
 
     private function resolveReportBranchId(Request $request, string $parameter): int

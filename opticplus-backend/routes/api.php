@@ -64,6 +64,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::put('/billing/pricing', [BillingController::class, 'updatePricing']);
         Route::post('/billing', [BillingController::class, 'store']);
         Route::get('/finance/summary', [FinanceController::class, 'summary']);
+        Route::get('/finance/monitor', [FinanceController::class, 'monitor']);
         Route::get('/finance/monthly-report', [FinanceController::class, 'monthlyReport']);
         Route::get('/reports/workflow', [ExecutiveReportController::class, 'index']);
         Route::get('/reports/submissions/{reportId}', [ExecutiveReportController::class, 'show']);

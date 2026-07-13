@@ -418,6 +418,7 @@ function buildSummaryCards(primary, comparison, reportType, taxReviewSummary = n
     ['Gross Billed', primarySummary.gross_billed, `${primary?.branch_name ?? 'Branch'} | ${primary?.month_label ?? ''}`, 'total', 'receipt'],
     ['Revenue', primarySummary.total_collections, 'Cash, digital, bank, and paid insurance recovery', 'seen', 'money'],
     ['Expenses', primarySummary.total_expenses, 'Operating costs posted in the selected month', 'pending', 'alert'],
+    ['Lens Expenses', primarySummary.lens_expenses, 'Lens purchase costs from Lens Tracker', 'seen', 'alert'],
     ['Profit', primarySummary.net_operating, 'Revenue less operating expenses', 'today', 'finance'],
   ]
 }

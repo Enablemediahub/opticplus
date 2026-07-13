@@ -28,6 +28,7 @@ import PatientsSection, { defaultPatientFilters, patientFiltersForView, patientF
 import PayrollSection from './components/PayrollSection.jsx'
 import PortalIcon from './components/PortalIcon.jsx'
 import ReportsSection from './components/ReportsSection.jsx'
+import MonitorSection from './components/MonitorSection.jsx'
 import SettingsSection from './components/SettingsSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
@@ -84,6 +85,7 @@ const managerNavSections = [
   {
     title: 'Financial Management',
     items: [
+      { label: 'The Monitor', navLabel: 'The Monitor', icon: 'dashboard' },
       { label: 'Revenue Tracking', navLabel: 'Revenue Tracking', icon: 'finance' },
       { label: 'Sales', navLabel: 'Daily Sales', icon: 'money' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
@@ -275,6 +277,7 @@ const viewHashMap = {
   Finance: '#/finance',
   Sales: '#/sales',
   'Revenue Tracking': '#/revenue-tracking',
+  'The Monitor': '#/the-monitor',
   Expenses: '#/expenses',
   Insurance: '#/insurance',
   'Insurance Claims': '#/insurance-claims',
@@ -386,6 +389,11 @@ const defaultFinanceExpenseFilters = () => ({
   search: '',
   page: 1,
   per_page: 12,
+})
+
+const defaultReceptionistExpenseFilters = () => ({
+  ...defaultFinanceExpenseFilters(),
+  ...currentMonthDateRange(),
 })
 
 const defaultExpenseForm = (category = '') => ({
@@ -710,7 +718,7 @@ function App() {
   const canAccessSystemSettings = ['ceo', 'director', 'manager'].includes(session?.role)
   const isMergedView = session?.is_admin && selectedBranchId === 0
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
-  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
+  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
   const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
@@ -1750,21 +1758,19 @@ function App() {
       setFinanceError('')
       try {
         const branchId = session.is_admin ? selectedBranchId : session.branch_id
-        const receptionistTodayOnly = session.role === 'receptionist' && activeView === 'Expenses'
-        const today = new Date().toISOString().slice(0, 10)
         const params = new URLSearchParams({
           branch_id: String(branchId),
         })
-        const effectiveExpenseQuery = receptionistTodayOnly
-          ? {
-              ...financeExpenseQuery,
-              start_date: today,
-              end_date: today,
-              search: '',
-              category: 'all',
-              page: 1,
-            }
-          : financeExpenseQuery
+        const effectiveExpenseQuery =
+          session.role === 'receptionist'
+            ? {
+                ...defaultReceptionistExpenseFilters(),
+                ...financeExpenseQuery,
+                start_date: financeExpenseQuery.start_date || currentMonthDateRange().start_date,
+                end_date: financeExpenseQuery.end_date || currentMonthDateRange().end_date,
+              }
+            : financeExpenseQuery
+
         for (const [key, value] of Object.entries(effectiveExpenseQuery)) {
           if ((value === '' || value == null) || value === 'all') continue
           params.set(key, value)
@@ -3175,6 +3181,7 @@ function App() {
       await apiFetch('/finance/expenses', {
         method: 'POST',
         token,
+        freshIdempotencyKey: true,
         body: {
           ...expenseForm,
           branch_id: branchId,
@@ -3183,7 +3190,31 @@ function App() {
       })
       setFinanceSuccess('Expense saved successfully.')
       setExpenseForm(defaultExpenseForm(financeExpenses?.categories?.[0] ?? ''))
-      setFinanceExpenseQuery((current) => ({ ...current }))
+      const defaultExpenseQuery = session.role === 'receptionist'
+        ? defaultReceptionistExpenseFilters()
+        : defaultFinanceExpenseFilters()
+      const refreshedExpenseQuery = {
+        ...defaultExpenseQuery,
+        per_page: financeExpenseQuery.per_page || 12,
+        page: 1,
+      }
+      setFinanceExpenseFilters(refreshedExpenseQuery)
+      setFinanceExpenseQuery(refreshedExpenseQuery)
+      try {
+        const expenseParams = new URLSearchParams({
+          branch_id: String(branchId),
+          page: '1',
+          per_page: String(refreshedExpenseQuery.per_page),
+        })
+        for (const [key, value] of Object.entries(refreshedExpenseQuery)) {
+          if (['', null, undefined, 'all'].includes(value)) continue
+          expenseParams.set(key, String(value))
+        }
+        const expensesResponse = await apiFetch(`/finance/expenses?${expenseParams.toString()}`, { token })
+        setFinanceExpenses(expensesResponse)
+      } catch {
+        setFinanceSuccess('Expense saved successfully. The expense ledger will refresh shortly.')
+      }
       setFinancePaymentQuery((current) => ({ ...current }))
       try {
         const summary = await apiFetch(`/finance/summary?branch_id=${branchId}`, { token })
@@ -4511,6 +4542,15 @@ function App() {
               />
             ) : null}
 
+            {activeView === 'The Monitor' && isGeneralManager ? (
+              <MonitorSection
+                apiFetch={apiFetch}
+                token={token}
+                selectedBranchId={selectedBranchId}
+                session={session}
+              />
+            ) : null}
+
             {activeView === 'Finance' ? (
               <FinanceSection
                 pageMode={session?.role === 'receptionist' && paymentModalOriginView !== 'Billing' ? 'receipts' : 'default'}
@@ -5052,7 +5092,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>
@@ -5381,10 +5421,31 @@ function createRequestNonce() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function localDateIso(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function currentMonthDateRange() {
+  const now = new Date()
+
+  return {
+    start_date: localDateIso(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end_date: localDateIso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  }
+}
+
 function buildIdempotencyKey(path, options = {}) {
   const method = String(options.method ?? 'GET').toUpperCase()
   if (!isMutatingMethod(method) || typeof window === 'undefined' || !window.sessionStorage) {
     return null
+  }
+
+  if (options.freshIdempotencyKey) {
+    return createRequestNonce()
   }
 
   const signature = `${method}|${path}|${serializeRequestBody(options.body)}`
