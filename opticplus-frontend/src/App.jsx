@@ -1104,6 +1104,117 @@ function App() {
     return receiptWindow
   }
 
+  function showReceiptWindowError(receiptWindow, message) {
+    if (!receiptWindow || receiptWindow.closed) return
+
+    const safeMessage = String(message || 'Payment could not be saved. Please check the payment details and try again.')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+
+    receiptWindow.document.open()
+    receiptWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Payment not saved</title>
+          <style>
+            body {
+              margin: 0;
+              font-family: "Segoe UI", Arial, sans-serif;
+              background: #fff7ed;
+              color: #7c2d12;
+              display: grid;
+              place-items: center;
+              min-height: 100vh;
+            }
+            .shell {
+              width: min(340px, calc(100vw - 32px));
+              background: #fff;
+              border: 1px solid #fed7aa;
+              padding: 24px 20px;
+              text-align: center;
+              box-shadow: 0 16px 34px rgba(124, 45, 18, 0.12);
+            }
+            strong {
+              display: block;
+              margin-bottom: 8px;
+              font-size: 16px;
+            }
+            p {
+              margin: 0;
+              font-size: 13px;
+              color: #7c2d12;
+              font-weight: 700;
+              line-height: 1.5;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="shell">
+            <strong>Payment not saved</strong>
+            <p>${safeMessage}</p>
+          </div>
+        </body>
+      </html>
+    `)
+    receiptWindow.document.close()
+    receiptWindow.focus()
+  }
+
+  function isLegacySplitPaymentRejection(error) {
+    const message = String(error?.message || '').toLowerCase()
+    const errors = error?.errors && typeof error.errors === 'object' ? error.errors : {}
+    const errorKeys = Object.keys(errors).map((key) => key.toLowerCase())
+
+    return Number(error?.status) === 422 && (
+      message.includes('payment method field is required')
+      || message.includes('amount field is required')
+      || errorKeys.includes('payment_method')
+      || errorKeys.includes('amount')
+    )
+  }
+
+  async function recordSplitPaymentWithFallback(billingId, branchId, paymentsToRecord) {
+    try {
+      return await apiFetch(`/finance/payments/${billingId}`, {
+        method: 'POST',
+        token,
+        body: {
+          branch_id: branchId,
+          payments: paymentsToRecord,
+        },
+      })
+    } catch (error) {
+      if (!isLegacySplitPaymentRejection(error)) {
+        throw error
+      }
+
+      for (const [index, payment] of paymentsToRecord.entries()) {
+        try {
+          await apiFetch(`/finance/payments/${billingId}`, {
+            method: 'POST',
+            token,
+            freshIdempotencyKey: true,
+            body: {
+              ...payment,
+              branch_id: branchId,
+            },
+          })
+        } catch (fallbackError) {
+          throw new Error(
+            index === 0
+              ? fallbackError.message
+              : `First split line was saved, but line ${index + 1} failed: ${fallbackError.message}`,
+          )
+        }
+      }
+
+      return { message: 'Split payment recorded successfully.' }
+    }
+  }
+
   function findLatestReceiptEntry(detailResponse, paymentMethod, matcher = null) {
     return (detailResponse?.recent_transactions ?? []).find((transaction) => {
       if (paymentMethod === 'Insurance') {
@@ -3426,19 +3537,18 @@ function App() {
         }
       }
 
-      await apiFetch(`/finance/payments/${selectedPaymentRecordId}`, {
-        method: 'POST',
-        token,
-        body: isSplitPaymentEnabled
-          ? {
-              branch_id: branchId,
-              payments: paymentsToRecord,
-            }
-          : {
-              ...paymentsToRecord[0],
-              branch_id: branchId,
-            },
-      })
+      if (isSplitPaymentEnabled) {
+        await recordSplitPaymentWithFallback(selectedPaymentRecordId, branchId, paymentsToRecord)
+      } else {
+        await apiFetch(`/finance/payments/${selectedPaymentRecordId}`, {
+          method: 'POST',
+          token,
+          body: {
+            ...paymentsToRecord[0],
+            branch_id: branchId,
+          },
+        })
+      }
 
       const nextPrimaryMethod = isSplitPaymentEnabled
         ? paymentsToRecord[1]?.payment_method || 'Cash'
@@ -3475,9 +3585,7 @@ function App() {
         receiptWindow.close()
       }
     } catch (error) {
-      if (receiptWindow && !receiptWindow.closed) {
-        receiptWindow.close()
-      }
+      showReceiptWindowError(receiptWindow, error.message)
       setFinanceError(error.message)
     } finally {
       setIsSavingPayment(false)
@@ -5493,11 +5601,15 @@ export async function apiFetch(path, options = {}) {
   const firstValidationError = Object.values(data?.errors ?? {}).flat?.()?.[0]
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       data?.message ||
         firstValidationError ||
         'The request failed. Check the backend connection and try again.',
     )
+    error.status = response.status
+    error.data = data
+    error.errors = data?.errors ?? {}
+    throw error
   }
 
   return data

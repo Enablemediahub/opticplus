@@ -78,6 +78,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
   const [editingDraftId, setEditingDraftId] = useState(null)
   const [existingAttachments, setExistingAttachments] = useState([])
   const [existingSignatureUrl, setExistingSignatureUrl] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
   const composerRef = useRef(null)
 
   const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
@@ -87,7 +88,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
     canApprove
       ? [
           { value: 'workspace', label: 'Workspace' },
-          { value: 'approvals', label: 'Approvals' },
+          { value: 'approvals', label: 'Approvals (pending + decided)' },
           { value: 'mine', label: 'My memos' },
         ]
       : [
@@ -164,7 +165,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
     return () => {
       cancelled = true
     }
-  }, [apiFetch, branchId, query, session, token])
+  }, [apiFetch, branchId, query, refreshKey, session, token])
 
   useEffect(() => {
     if (!memoData?.memos?.length) {
@@ -205,7 +206,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
   }
 
   async function reloadListAndDetail(memoId = selectedMemoId) {
-    setQuery((current) => ({ ...current }))
+    setRefreshKey((current) => current + 1)
     if (memoId) {
       await loadDetail(memoId)
     }
@@ -326,6 +327,10 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
 
       setSuccess(response.message)
       setDecisionForm(defaultDecisionForm())
+      // Return to workspace register so the newly approved/rejected memo stays visible.
+      const nextFilters = { ...defaultFilters(), status: 'all', scope: 'workspace', page: 1 }
+      setFilters(nextFilters)
+      setQuery(nextFilters)
       await reloadListAndDetail(selectedMemoId)
     } catch (saveError) {
       setError(saveError.message)

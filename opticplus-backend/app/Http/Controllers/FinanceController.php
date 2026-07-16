@@ -2202,6 +2202,32 @@ class FinanceController extends Controller
                 $table->boolean('is_active')->default(true)->after('name');
             });
         }
+
+        if (Schema::hasTable('insurance_claims')) {
+            if (! Schema::hasColumn('insurance_claims', 'insurance_package')) {
+                Schema::table('insurance_claims', function (Blueprint $table): void {
+                    $table->string('insurance_package', 255)->default('');
+                });
+            }
+
+            if (! Schema::hasColumn('insurance_claims', 'patient_organization')) {
+                Schema::table('insurance_claims', function (Blueprint $table): void {
+                    $table->string('patient_organization', 255)->default('');
+                });
+            }
+
+            if (! Schema::hasColumn('insurance_claims', 'billing_id')) {
+                Schema::table('insurance_claims', function (Blueprint $table): void {
+                    $table->integer('billing_id')->nullable()->index();
+                });
+            }
+
+            if (! Schema::hasColumn('insurance_claims', 'branch_id')) {
+                Schema::table('insurance_claims', function (Blueprint $table): void {
+                    $table->integer('branch_id')->default(1)->index();
+                });
+            }
+        }
     }
 
     private function generateReceiptNumber(int $branchId): string

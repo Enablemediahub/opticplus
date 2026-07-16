@@ -46,7 +46,13 @@ class MemoController extends Controller
         if ($scope === 'mine') {
             $baseQuery->where('m.created_by_id', $user->id);
         } elseif ($scope === 'approvals') {
-            $baseQuery->where('m.requires_approval', 1)->where('m.approval_status', 'pending');
+            // Include decided items so GM-approved/rejected memos remain visible in the register.
+            $baseQuery->where('m.requires_approval', 1)
+                ->whereIn('m.approval_status', ['pending', 'approved', 'rejected'])
+                ->where('m.status', '!=', 'draft');
+        } elseif ($scope === 'workspace') {
+            // Memo register is for submitted/decided traffic, not unfinished drafts.
+            $baseQuery->where('m.status', '!=', 'draft');
         } elseif (! $user->isAdmin() && $user->normalized_role === 'accountant') {
             $baseQuery->where(function ($query) use ($user) {
                 $query->where('m.created_by_id', $user->id)
@@ -84,6 +90,7 @@ class MemoController extends Controller
                     ELSE 3
                 END
             ")
+            ->orderByDesc('m.updated_at')
             ->orderByDesc('m.created_at')
             ->limit($perPage)
             ->offset($offset)
