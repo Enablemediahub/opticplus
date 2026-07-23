@@ -4517,7 +4517,6 @@ function App() {
                   rowBusyId={rowBusyId}
                   markAsSeen={markAsSeen}
                   setActiveView={setActiveView}
-                  currency={currency}
                 />
               ) : (
                 <DashboardSection

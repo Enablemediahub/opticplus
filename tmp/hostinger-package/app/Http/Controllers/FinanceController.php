@@ -661,19 +661,43 @@ class FinanceController extends Controller
 
         $total = (clone $query)->count('expense_id');
 
+        $selectColumns = [
+            'expense_id',
+            'description',
+            'amount',
+            'date',
+            'category',
+            'branch_id',
+        ];
+        if (Schema::hasColumn('expenses', 'source_type')) {
+            $selectColumns[] = 'source_type';
+        }
+        if (Schema::hasColumn('expenses', 'source_id')) {
+            $selectColumns[] = 'source_id';
+        }
+
         $records = $query
             ->orderByDesc('expense_id')
             ->orderByDesc('date')
             ->limit($perPage)
             ->offset($offset)
-            ->get([
-                'expense_id',
-                'description',
-                'amount',
-                'date',
-                'category',
-                'branch_id',
-            ]);
+            ->get($selectColumns)
+            ->map(function ($expense) {
+                $isLensLinked = Schema::hasColumn('expenses', 'source_type')
+                    && (string) ($expense->source_type ?? '') === 'lens_cost';
+
+                return [
+                    'expense_id' => $expense->expense_id,
+                    'description' => $expense->description,
+                    'amount' => $expense->amount,
+                    'date' => $expense->date,
+                    'category' => $expense->category,
+                    'branch_id' => (int) $expense->branch_id,
+                    'source_type' => $expense->source_type ?? null,
+                    'source_id' => isset($expense->source_id) ? (int) $expense->source_id : null,
+                    'is_lens_linked' => $isLensLinked,
+                ];
+            });
 
         $categories = $this->expenseCategoryOptions();
         $categoryRecords = DB::table('expense_categories')
@@ -716,6 +740,7 @@ class FinanceController extends Controller
                 'total_pages' => (int) ceil($total / $perPage),
             ],
             'stats' => [
+                'filtered_total' => (float) (clone $filteredStatsQuery)->sum('amount'),
                 'today' => (float) (clone $widgetStatsQuery)
                     ->whereDate('date', $todayDate)
                     ->sum('amount'),
@@ -879,10 +904,6 @@ class FinanceController extends Controller
 
     public function deleteExpense(Request $request, int $expenseId): JsonResponse
     {
-        if ($response = $this->ensureExpenseWriteAccess($request)) {
-            return $response;
-        }
-
         $branchId = $this->resolveBranchId($request);
         $current = tap(
             DB::table('expenses')->where('expense_id', $expenseId),
@@ -896,9 +917,13 @@ class FinanceController extends Controller
         }
 
         if ($this->isLinkedLensCostExpense($current)) {
-            return response()->json([
-                'message' => 'Lens cost expenses are controlled by Lens Tracker. Delete the lens cost there instead.',
-            ], 422);
+            if (! $this->canDeleteLinkedLensCostExpense($request->user())) {
+                return response()->json([
+                    'message' => 'Lens cost expenses are controlled by Lens Tracker. Only the General Manager can remove duplicate lens expense rows here.',
+                ], 422);
+            }
+        } elseif ($response = $this->ensureExpenseWriteAccess($request)) {
+            return $response;
         }
 
         DB::table('expenses')
@@ -907,6 +932,8 @@ class FinanceController extends Controller
 
         AuditLog::logManual($request, 'delete', 'expenses', 'expense_id: '.$expenseId, [
             'branch_id' => $branchId,
+            'source_type' => $current->source_type ?? null,
+            'source_id' => $current->source_id ?? null,
         ]);
 
         return response()->json([
@@ -2317,6 +2344,7 @@ class FinanceController extends Controller
         $this->ensureExpenseRecorderSchema();
         $this->ensureLensExpenseLinkSchema();
         $this->ensureActiveSystemExpenseCategory('Lens');
+        $this->collapseDuplicateLensCostExpenses($branchId);
         $this->deleteStaleLensCostExpenses($branchId);
 
         $query = DB::table('lens_costs as lc')
@@ -2365,6 +2393,56 @@ class FinanceController extends Controller
                 $table->unsignedBigInteger('source_id')->nullable()->after('source_type')->index();
             });
         }
+
+        $this->collapseDuplicateLensCostExpenses(0);
+        $this->ensureLensCostExpenseUniqueIndex();
+    }
+
+    private function ensureLensCostExpenseUniqueIndex(): void
+    {
+        if (! Schema::hasColumn('expenses', 'source_type') || ! Schema::hasColumn('expenses', 'source_id')) {
+            return;
+        }
+
+        $indexExists = collect(DB::select('SHOW INDEX FROM expenses WHERE Key_name = ?', ['expenses_lens_source_unique']))
+            ->isNotEmpty();
+
+        if ($indexExists) {
+            return;
+        }
+
+        try {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unique(['branch_id', 'source_type', 'source_id'], 'expenses_lens_source_unique');
+            });
+        } catch (\Throwable) {
+            // Index creation can fail on legacy duplicate rows; collapse runs again on next sync.
+        }
+    }
+
+    private function collapseDuplicateLensCostExpenses(int $branchId): void
+    {
+        if (! Schema::hasColumn('expenses', 'source_type') || ! Schema::hasColumn('expenses', 'source_id')) {
+            return;
+        }
+
+        $groupsQuery = DB::table('expenses')
+            ->select('branch_id', 'source_id', DB::raw('MIN(expense_id) as keep_id'))
+            ->where('source_type', 'lens_cost')
+            ->whereNotNull('source_id')
+            ->groupBy('branch_id', 'source_id')
+            ->havingRaw('COUNT(*) > 1');
+
+        $this->applyBranchScope($groupsQuery, 'branch_id', $branchId);
+
+        foreach ($groupsQuery->get() as $group) {
+            DB::table('expenses')
+                ->where('branch_id', (int) $group->branch_id)
+                ->where('source_type', 'lens_cost')
+                ->where('source_id', (int) $group->source_id)
+                ->where('expense_id', '!=', (int) $group->keep_id)
+                ->delete();
+        }
     }
 
     private function upsertLensCostExpenseRow(object $row): void
@@ -2401,27 +2479,53 @@ class FinanceController extends Controller
             $payload['updated_at'] = now();
         }
 
-        $existingExpenseId = DB::table('expenses')
-            ->where('branch_id', $branchId)
-            ->where('source_type', 'lens_cost')
-            ->where('source_id', $billingId)
-            ->value('expense_id');
+        DB::transaction(function () use ($branchId, $billingId, $payload): void {
+            $existingIds = DB::table('expenses')
+                ->where('branch_id', $branchId)
+                ->where('source_type', 'lens_cost')
+                ->where('source_id', $billingId)
+                ->orderBy('expense_id')
+                ->lockForUpdate()
+                ->pluck('expense_id');
 
-        if ($existingExpenseId) {
-            DB::table('expenses')
-                ->where('expense_id', $existingExpenseId)
-                ->update($payload);
-            return;
-        }
+            if ($existingIds->isNotEmpty()) {
+                $keeperId = (int) $existingIds->first();
+                $extraIds = $existingIds->slice(1)->values()->all();
+                if ($extraIds !== []) {
+                    DB::table('expenses')->whereIn('expense_id', $extraIds)->delete();
+                }
 
-        if (Schema::hasColumn('expenses', 'created_at')) {
-            $payload['created_at'] = now();
-        }
+                DB::table('expenses')
+                    ->where('expense_id', $keeperId)
+                    ->update($payload);
 
-        $payload['source_type'] = 'lens_cost';
-        $payload['source_id'] = $billingId;
+                return;
+            }
 
-        DB::table('expenses')->insert($payload);
+            if (Schema::hasColumn('expenses', 'created_at')) {
+                $payload['created_at'] = now();
+            }
+
+            $payload['source_type'] = 'lens_cost';
+            $payload['source_id'] = $billingId;
+
+            try {
+                DB::table('expenses')->insert($payload);
+            } catch (\Throwable) {
+                $existingExpenseId = DB::table('expenses')
+                    ->where('branch_id', $branchId)
+                    ->where('source_type', 'lens_cost')
+                    ->where('source_id', $billingId)
+                    ->orderBy('expense_id')
+                    ->value('expense_id');
+
+                if ($existingExpenseId) {
+                    DB::table('expenses')
+                        ->where('expense_id', $existingExpenseId)
+                        ->update($payload);
+                }
+            }
+        });
     }
 
     private function deleteStaleLensCostExpenses(int $branchId): void
@@ -2491,6 +2595,25 @@ class FinanceController extends Controller
     {
         return Schema::hasColumn('expenses', 'source_type')
             && (string) ($expense->source_type ?? '') === 'lens_cost';
+    }
+
+    private function canDeleteLinkedLensCostExpense(?object $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return true;
+        }
+
+        if ((bool) ($user->is_admin ?? false)) {
+            return true;
+        }
+
+        $role = $user->normalized_role ?? $user->role ?? null;
+
+        return in_array($role, ['manager', 'ceo'], true);
     }
 
     private function expenseCategoryOptions()

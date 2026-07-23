@@ -176,7 +176,7 @@ function RevenueTrackingView(props) {
   const salesTotal = Number(salesStats.total_sales ?? 0)
   const insuranceValue = Number(salesStats.insurance_billed_value ?? summaryStats.insurance_billed_month ?? 0)
   const combinedRevenue = Number(salesStats.sales_with_insurance ?? salesTotal + insuranceValue)
-  const expenseTotal = Number(expenseStats.total ?? 0)
+  const expenseTotal = Number(expenseStats.filtered_total ?? expenseStats.total ?? 0)
   const grossProfit = combinedRevenue - expenseTotal
   const netCollected = salesTotal - expenseTotal
   const collectionRate = combinedRevenue > 0 ? (salesTotal / combinedRevenue) * 100 : 0
@@ -184,11 +184,56 @@ function RevenueTrackingView(props) {
   const paymentBreakdown = buildPaymentFamilyBreakdown(props.financeSales?.payment_methods ?? [])
   const topExpenseCategories = (props.financeExpenses?.category_breakdown ?? []).slice(0, 5)
 
+  useEffect(() => {
+    const liveUpdateDelay = props.financeSalesFilters.search || props.financeExpenseFilters.search ? 220 : 0
+    const timeoutId = window.setTimeout(() => {
+      props.setFinanceSalesQuery((current) => {
+        const next = {
+          ...current,
+          search: props.financeSalesFilters.search,
+          payment_method: props.financeSalesFilters.payment_method,
+          date_from: props.financeSalesFilters.date_from,
+          date_to: props.financeSalesFilters.date_to,
+          page: 1,
+        }
+
+        return ['search', 'payment_method', 'date_from', 'date_to', 'page']
+          .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
+          ? current
+          : next
+      })
+
+      props.setFinanceExpenseQuery((current) => {
+        const next = {
+          ...current,
+          filter: 'all',
+          start_date: props.financeExpenseFilters.start_date,
+          end_date: props.financeExpenseFilters.end_date,
+          category: props.financeExpenseFilters.category,
+          search: props.financeExpenseFilters.search,
+          page: 1,
+        }
+
+        return ['filter', 'start_date', 'end_date', 'category', 'search', 'page']
+          .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
+          ? current
+          : next
+      })
+    }, liveUpdateDelay)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [props.financeExpenseFilters, props.financeSalesFilters, props.setFinanceExpenseQuery, props.setFinanceSalesQuery])
+
   function applyRevenueFilters(event) {
     event.preventDefault()
     props.setFinanceSalesQuery((current) => ({
       ...current,
-      ...props.financeSalesFilters,
+      search: props.financeSalesFilters.search,
+      payment_method: props.financeSalesFilters.payment_method,
+      date_from: props.financeSalesFilters.date_from,
+      date_to: props.financeSalesFilters.date_to,
       page: 1,
     }))
     props.setFinanceExpenseQuery((current) => ({
@@ -198,6 +243,7 @@ function RevenueTrackingView(props) {
       end_date: props.financeExpenseFilters.end_date,
       category: props.financeExpenseFilters.category,
       search: props.financeExpenseFilters.search,
+      page: 1,
     }))
   }
 
@@ -1565,6 +1611,7 @@ function SalesTab(props) {
 function ExpensesTab(props) {
   const canManageExpenses = (['manager', 'accountant'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
   const canCreateExpenses = (['manager', 'accountant', 'receptionist'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
+  const canDeleteLinkedLensExpense = (['manager', 'ceo'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
   const isCategoryManager = canManageExpenses
   const isAccountantExpenseView = props.session?.role === 'accountant' && !props.readOnly
   const isReceptionistExpenseView = props.session?.role === 'receptionist' && !props.readOnly
@@ -1581,6 +1628,11 @@ function ExpensesTab(props) {
     date: '',
     category: '',
   })
+  const isSelectedLensLinked = Boolean(selectedExpense?.is_lens_linked)
+  const canEditSelectedExpense = canManageExpenses && !isSelectedLensLinked
+  const canDeleteSelectedExpense = isSelectedLensLinked
+    ? canDeleteLinkedLensExpense
+    : canManageExpenses
   const categoryOptions = props.financeExpenses?.categories ?? []
   const managementExpenseDefaults = {
     filter: 'all',
@@ -1949,16 +2001,19 @@ function ExpensesTab(props) {
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Expense Record</p>
-                <h3>{canManageExpenses ? 'Edit expense entry' : 'Expense details'}</h3>
+                <h3>{canEditSelectedExpense ? 'Edit expense entry' : 'Expense details'}</h3>
               </div>
               <div className="filter-actions-row">
-                {canManageExpenses ? (
+                {canDeleteSelectedExpense ? (
                   <button
                     type="button"
                     className="ghost-button danger-outline"
                     disabled={props.deletingExpenseRecordId === selectedExpense.expense_id}
                     onClick={async () => {
-                      if (!window.confirm('Delete this expense record?')) return
+                      const confirmMessage = selectedExpense.is_lens_linked
+                        ? 'Delete this Lens Tracker expense row? Use this for clearing duplicates. If the lens cost still exists in Lens Tracker, one expense entry may be recreated automatically.'
+                        : 'Delete this expense record?'
+                      if (!window.confirm(confirmMessage)) return
                       try {
                         await props.deleteExpenseRecord(selectedExpense.expense_id)
                         closeExpenseModal()
@@ -1973,10 +2028,18 @@ function ExpensesTab(props) {
               </div>
             </div>
 
+            {selectedExpense.is_lens_linked ? (
+              <div className="message-banner">
+                This expense was created from Lens Tracker. Amount and details are controlled there.
+                {canDeleteLinkedLensExpense ? ' You can delete duplicate rows from here.' : ''}
+              </div>
+            ) : null}
+
             <form
               className="patient-form-grid"
               onSubmit={async (event) => {
                 event.preventDefault()
+                if (!canEditSelectedExpense) return
                 try {
                   await props.updateExpenseRecord(selectedExpense.expense_id, expenseModalForm)
                   closeExpenseModal()
@@ -1990,7 +2053,7 @@ function ExpensesTab(props) {
                   rows="4"
                   value={expenseModalForm.description}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, description: event.target.value }))}
-                  readOnly={!canManageExpenses}
+                  readOnly={!canEditSelectedExpense}
                   required
                 />
               </label>
@@ -2002,7 +2065,7 @@ function ExpensesTab(props) {
                   step="0.01"
                   value={expenseModalForm.amount}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, amount: event.target.value }))}
-                  readOnly={!canManageExpenses}
+                  readOnly={!canEditSelectedExpense}
                   required
                 />
               </label>
@@ -2012,7 +2075,7 @@ function ExpensesTab(props) {
                   type="date"
                   value={expenseModalForm.date}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, date: event.target.value }))}
-                  readOnly={!canManageExpenses}
+                  readOnly={!canEditSelectedExpense}
                   required
                 />
               </label>
@@ -2021,7 +2084,7 @@ function ExpensesTab(props) {
                 <select
                   value={expenseModalForm.category}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, category: event.target.value }))}
-                  disabled={!canManageExpenses}
+                  disabled={!canEditSelectedExpense}
                 >
                   {categoryOptions.map((category) => (
                     <option key={category} value={category}>{category}</option>
@@ -2029,7 +2092,7 @@ function ExpensesTab(props) {
                 </select>
               </label>
 
-              {canManageExpenses ? (
+              {canEditSelectedExpense ? (
                 <div className="filter-actions-row full-span">
                   <button type="submit" className="primary-button" disabled={props.isUpdatingExpenseRecord}>
                     {props.isUpdatingExpenseRecord ? 'Saving changes...' : 'Save changes'}

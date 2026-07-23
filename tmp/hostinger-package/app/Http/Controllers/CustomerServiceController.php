@@ -58,7 +58,12 @@ class CustomerServiceController extends Controller
             });
         }
 
-        if ($status !== 'all') {
+        if ($status === 'all') {
+            $query->where(function ($inner): void {
+                $inner->whereNull('gp.status')
+                    ->orWhere('gp.status', '<>', 'picked_up');
+            });
+        } elseif ($status !== 'all') {
             if ($status === 'not_ready') {
                 $query->where(function ($inner): void {
                     $inner->whereNull('gp.status')

@@ -1080,26 +1080,52 @@ class InventoryController extends Controller
             $payload['updated_at'] = now();
         }
 
-        $existingExpense = DB::table('expenses')
-            ->where('branch_id', $branchId)
-            ->where('source_type', 'lens_cost')
-            ->where('source_id', $billingId)
-            ->first(['expense_id']);
+        DB::transaction(function () use ($branchId, $billingId, $payload): void {
+            $existingIds = DB::table('expenses')
+                ->where('branch_id', $branchId)
+                ->where('source_type', 'lens_cost')
+                ->where('source_id', $billingId)
+                ->orderBy('expense_id')
+                ->lockForUpdate()
+                ->pluck('expense_id');
 
-        if ($existingExpense) {
-            DB::table('expenses')
-                ->where('expense_id', $existingExpense->expense_id)
-                ->update($payload);
-            return;
-        }
+            if ($existingIds->isNotEmpty()) {
+                $keeperId = (int) $existingIds->first();
+                $extraIds = $existingIds->slice(1)->values()->all();
+                if ($extraIds !== []) {
+                    DB::table('expenses')->whereIn('expense_id', $extraIds)->delete();
+                }
 
-        if (Schema::hasColumn('expenses', 'created_at')) {
-            $payload['created_at'] = now();
-        }
-        $payload['source_type'] = 'lens_cost';
-        $payload['source_id'] = $billingId;
+                DB::table('expenses')
+                    ->where('expense_id', $keeperId)
+                    ->update($payload);
 
-        DB::table('expenses')->insert($payload);
+                return;
+            }
+
+            if (Schema::hasColumn('expenses', 'created_at')) {
+                $payload['created_at'] = now();
+            }
+            $payload['source_type'] = 'lens_cost';
+            $payload['source_id'] = $billingId;
+
+            try {
+                DB::table('expenses')->insert($payload);
+            } catch (\Throwable) {
+                $existingExpenseId = DB::table('expenses')
+                    ->where('branch_id', $branchId)
+                    ->where('source_type', 'lens_cost')
+                    ->where('source_id', $billingId)
+                    ->orderBy('expense_id')
+                    ->value('expense_id');
+
+                if ($existingExpenseId) {
+                    DB::table('expenses')
+                        ->where('expense_id', $existingExpenseId)
+                        ->update($payload);
+                }
+            }
+        });
     }
 
     private function deleteLinkedLensCostExpense(int $billingId, int $branchId): void
@@ -1137,6 +1163,55 @@ class InventoryController extends Controller
             Schema::table('expenses', function (Blueprint $table): void {
                 $table->unsignedBigInteger('source_id')->nullable()->after('source_type')->index();
             });
+        }
+
+        $this->collapseDuplicateLensCostExpenses();
+        $this->ensureLensCostExpenseUniqueIndex();
+    }
+
+    private function collapseDuplicateLensCostExpenses(): void
+    {
+        if (! Schema::hasColumn('expenses', 'source_type') || ! Schema::hasColumn('expenses', 'source_id')) {
+            return;
+        }
+
+        $groups = DB::table('expenses')
+            ->select('branch_id', 'source_id', DB::raw('MIN(expense_id) as keep_id'))
+            ->where('source_type', 'lens_cost')
+            ->whereNotNull('source_id')
+            ->groupBy('branch_id', 'source_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->get();
+
+        foreach ($groups as $group) {
+            DB::table('expenses')
+                ->where('branch_id', (int) $group->branch_id)
+                ->where('source_type', 'lens_cost')
+                ->where('source_id', (int) $group->source_id)
+                ->where('expense_id', '!=', (int) $group->keep_id)
+                ->delete();
+        }
+    }
+
+    private function ensureLensCostExpenseUniqueIndex(): void
+    {
+        if (! Schema::hasColumn('expenses', 'source_type') || ! Schema::hasColumn('expenses', 'source_id')) {
+            return;
+        }
+
+        $indexExists = collect(DB::select('SHOW INDEX FROM expenses WHERE Key_name = ?', ['expenses_lens_source_unique']))
+            ->isNotEmpty();
+
+        if ($indexExists) {
+            return;
+        }
+
+        try {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unique(['branch_id', 'source_type', 'source_id'], 'expenses_lens_source_unique');
+            });
+        } catch (\Throwable) {
+            // Leave without the index if legacy duplicates remain; next sync collapses them.
         }
     }
 

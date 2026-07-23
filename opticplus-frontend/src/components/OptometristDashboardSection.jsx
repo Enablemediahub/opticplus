@@ -9,7 +9,6 @@ export default function OptometristDashboardSection({
   rowBusyId,
   markAsSeen,
   setActiveView,
-  currency,
 }) {
   if (isLoadingDashboard && !dashboard) {
     return (
@@ -231,29 +230,6 @@ export default function OptometristDashboardSection({
           </div>
         </article>
 
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Clinical Snapshot</p>
-              <h3>Today at a glance</h3>
-            </div>
-          </div>
-
-          <div className="finance-grid">
-            <div>
-              <span>Appointments Today</span>
-              <strong>{dashboard?.stats?.appointments_today ?? 0}</strong>
-            </div>
-            <div>
-              <span>Pending Queue</span>
-              <strong>{patientData?.stats?.today_pending_count ?? 0}</strong>
-            </div>
-            <div>
-              <span>Revenue Today</span>
-              <strong>{currency.format(Number(dashboard?.stats?.revenue_today ?? 0))}</strong>
-            </div>
-          </div>
-        </article>
       </section>
     </section>
   )
