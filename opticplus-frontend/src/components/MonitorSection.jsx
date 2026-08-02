@@ -65,6 +65,15 @@ function dailySalesMonthlyTotals(data) {
   return totals
 }
 
+function dailySalesByMonth(data) {
+  const byMonth = Array.from({ length: 12 }, () => [])
+  ;(data.daily_sales || []).forEach((row) => {
+    const monthIndex = Number(String(row.date || '').slice(5, 7)) - 1
+    if (monthIndex >= 0 && monthIndex < 12) byMonth[monthIndex].push(row)
+  })
+  return byMonth
+}
+
 function categoryMonths(data, match) {
   return (data.expense_categories || []).filter((row) => row.label.toLowerCase().includes(match)).reduce((sum, row) => sum.map((amount, index) => amount + value(row.months[index])), Array(12).fill(0))
 }
@@ -89,6 +98,7 @@ function MatrixTable({ title, subtitle, columns = months, rows, totalColumn = tr
 function DailySalesSheet({ report, year }) {
   const rows = dailySalesMatrix(report || {})
   const monthlyTotals = dailySalesMonthlyTotals(report || {})
+  const salesByMonth = dailySalesByMonth(report || {})
   return <article className="monitor-sheet">
     <div className="monitor-sheet-heading"><div><span>{report?.branch_name || 'Branch'} • {year}</span><h3>Daily sales</h3></div><span className="monitor-live-dot">Live data</span></div>
     <div className="monitor-table-scroll daily-sales-scroll"><table className="daily-sales-horizontal"><thead>
@@ -97,6 +107,7 @@ function DailySalesSheet({ report, year }) {
     </thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cellIndex % 2 === 0 ? cell : cell ? money(cell) : ''}</td>)}</tr>)}
       {!report?.daily_sales?.length ? <tr><td colSpan="24" className="daily-sales-empty">No sales posted for this year.</td></tr> : null}
     </tbody><tfoot><tr>{monthlyTotals.flatMap((amount, monthIndex) => [<td key={`${monthIndex}-label`}>Total</td>, <td key={`${monthIndex}-value`}>{money(amount)}</td>])}</tr></tfoot></table></div>
+    <div className="monitor-print-daily-ledgers">{months.map((month, monthIndex) => <section className="monitor-print-daily-month" key={month}><h4>{month} {year}</h4><table><thead><tr><th>Date</th><th>Sales</th></tr></thead><tbody>{salesByMonth[monthIndex].map((row) => <tr key={row.date}><td>{formatDailyDate(row.date)}</td><td>{money(row.total)}</td></tr>)}{!salesByMonth[monthIndex].length ? <tr><td colSpan="2">No sales posted</td></tr> : null}</tbody><tfoot><tr><td>Total</td><td>{money(monthlyTotals[monthIndex])}</td></tr></tfoot></table></section>)}</div>
   </article>
 }
 

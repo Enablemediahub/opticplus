@@ -357,6 +357,7 @@ class FinanceController extends Controller
             ->selectRaw('MONTH(date) as month, category, SUM(amount) total')->groupByRaw('MONTH(date), category')->get();
 
         $collectionSources = [];
+        $loanCollections = array_fill(0, 12, 0.0);
         foreach ($salesRows as $sale) {
             $bucket = $this->classifyPaymentMethod((string) $sale->payment_method);
             $label = match ($bucket) {
@@ -367,13 +368,31 @@ class FinanceController extends Controller
             $collectionSources[$label][(int) $sale->month - 1] += (float) $sale->collected;
         }
         if (Schema::hasTable('debts')) {
-            $loanQuery = DB::table('debts')->whereBetween('start_date', [$start, $end])->where('debt_type', 'loan');
+            $loanQuery = DB::table('debts')
+                ->whereBetween('start_date', [$start, $end])
+                ->where('debt_type', 'loan');
             if (Schema::hasColumn('debts', 'branch_id')) {
                 $this->applyBranchScope($loanQuery, 'branch_id', $branchId);
             }
-            foreach ($loanQuery->selectRaw('MONTH(start_date) as month, SUM(principal_amount) total')->groupByRaw('MONTH(start_date)')->get() as $loan) {
-                $collectionSources['Loans taken'] ??= array_fill(0, 12, 0.0);
-                $collectionSources['Loans taken'][(int) $loan->month - 1] = (float) $loan->total;
+            foreach ($loanQuery
+                ->select([
+                    'debtor_name',
+                    'principal_amount',
+                    'start_date',
+                ])
+                ->orderBy('start_date')
+                ->orderBy('id')
+                ->get() as $loan) {
+                $monthIndex = (int) substr((string) $loan->start_date, 5, 2) - 1;
+                if ($monthIndex < 0 || $monthIndex > 11) {
+                    continue;
+                }
+
+                $label = 'Loan: '.trim((string) $loan->debtor_name);
+                $collectionSources[$label] ??= array_fill(0, 12, 0.0);
+                $amount = round((float) $loan->principal_amount, 2);
+                $collectionSources[$label][$monthIndex] += $amount;
+                $loanCollections[$monthIndex] += $amount;
             }
         }
 
@@ -392,7 +411,7 @@ class FinanceController extends Controller
             $sale = $sales->get($month);
             $claim = $insurance->get($month);
             $expenseTotal = array_sum(array_map(fn ($values) => (float) $values[$month - 1], $categoryRows));
-            $collected = (float) ($sale->collected ?? 0) + (float) ($claim->received ?? 0);
+            $collected = (float) ($sale->collected ?? 0) + (float) ($claim->received ?? 0) + (float) ($loanCollections[$month - 1] ?? 0);
             $runningCash += $collected - $expenseTotal;
             $months[] = [
                 'month' => $month,
