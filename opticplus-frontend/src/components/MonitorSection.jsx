@@ -1,273 +1,168 @@
 import { useEffect, useMemo, useState } from 'react'
-import StatWidget from './StatWidget.jsx'
 
-const currency = new Intl.NumberFormat('en-GH', {
-  style: 'currency',
-  currency: 'GHS',
-  maximumFractionDigits: 2,
-})
+const currency = new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 2 })
+const branchOptions = [{ id: 0, name: 'Merged company' }, { id: 1, name: 'Labadi' }, { id: 2, name: 'Madina' }]
+const tabs = ['Monthly returns', 'Daily sales', 'Insurance', 'Purchases', 'Working capital']
+const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
-const branchOptions = [
-  { id: 0, name: 'Merged' },
-  { id: 1, name: 'Labadi' },
-  { id: 2, name: 'Madina' },
-]
+const value = (number) => Number(number || 0)
+const total = (values) => values.reduce((sum, item) => sum + value(item), 0)
+const money = (number) => currency.format(value(number))
 
-const defaultFilters = () => ({
-  period: 'monthly',
-  date_from: '',
-  date_to: '',
-  branch_id: '1',
-})
+function saveFile(contents, name, type) {
+  const url = URL.createObjectURL(new Blob([contents], { type }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = name
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+function xml(valueToEscape) {
+  return String(valueToEscape ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function workbookXml(report) {
+  const data = report || { months: [], expense_categories: [], daily_sales: [] }
+  const reportRows = receiptRows(data)
+  const expenseRows = data.expense_categories || []
+  const receiptBase = total(reportRows.filter((row) => !row.isDetail).map((row) => total(row.values)))
+  const paymentBase = total(expenseRows.map((row) => total(row.months)))
+  const sheets = [
+    ['Monthly Returns', [['FINANCIAL DETAILS', `${data.branch_name || 'Branch'} | ${data.year || ''}`], ['RECEIPTS', '%', 'BUDGET', ...months, 'TOTAL'], ...reportRows.map((row) => [row.label, row.isDetail ? '' : (receiptBase ? (total(row.values) / receiptBase) * 100 : 0), value(data.budgets?.[row.key]), ...row.values.map(value), total(row.values)]), [], ['PAYMENTS', '%', 'BUDGET', ...months, 'TOTAL'], ...expenseRows.map((row) => [row.label, paymentBase ? (total(row.months) / paymentBase) * 100 : 0, value(data.budgets?.[`expense:${row.label}`]), ...row.months.map(value), total(row.months)])]],
+    ['Daily Sales', [['DAILY SALES', data.branch_name || 'Branch'], [...months.flatMap((month) => [month, ''])], [...months.flatMap(() => ['DATE', 'SALES'])], ...dailySalesMatrix(data), [...dailySalesMonthlyTotals(data).flatMap((amount) => ['TOTAL', amount])]]],
+    ['Insurance', [['MONTHLY INSURANCE CLAIMS', data.year || ''], ['DETAILS', ...months, 'TOTAL'], ['Insurance claims', ...data.months.map((row) => value(row.insurance_claimed)), total(data.months.map((row) => row.insurance_claimed))], ['Insurance received', ...data.months.map((row) => value(row.insurance_received)), total(data.months.map((row) => row.insurance_received))]]],
+    ['Purchases', [['MONTHLY PURCHASES ANALYSIS', data.year || ''], ['DETAILS', ...months, 'TOTAL'], ['Lens sold', ...data.months.map((row) => value(row.lenses)), total(data.months.map((row) => row.lenses))], ['Lens purchases', ...categoryMonths(data, 'lens'), total(categoryMonths(data, 'lens'))], ['Frame sold', ...data.months.map((row) => value(row.frames)), total(data.months.map((row) => row.frames))], ['Frame purchases', ...categoryMonths(data, 'frame'), total(categoryMonths(data, 'frame'))]]],
+    ['Working Capital', [['WORKING CAPITAL STATEMENT', `${data.branch_name || 'Branch'} | calculated operational view`], ['DETAILS', ...months], ['Cash collected less expenses', ...data.months.map((row) => value(row.operating_cash))], ['Trade debtors', ...data.months.map((row) => value(row.debtors))], ['Current working position', ...data.months.map((row) => value(row.operating_cash) + value(row.debtors))]]],
+  ]
+  const worksheet = ([name, rows]) => `<Worksheet ss:Name="${xml(name)}"><Table>${rows.map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="${typeof cell === 'number' ? 'Number' : 'String'}">${xml(cell)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`
+  return `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${sheets.map(worksheet).join('')}</Workbook>`
+}
+
+function formatDailyDate(date) {
+  const [year, month, day] = String(date || '').split('-')
+  return year && month && day ? `${day}/${month}/${year}` : String(date || '')
+}
+
+function dailySalesMatrix(data) {
+  const byMonth = Array.from({ length: 12 }, () => [])
+  ;(data.daily_sales || []).forEach((row) => {
+    const monthIndex = Number(String(row.date || '').slice(5, 7)) - 1
+    if (monthIndex >= 0 && monthIndex < 12) byMonth[monthIndex].push([formatDailyDate(row.date), value(row.total)])
+  })
+  const rowCount = Math.max(0, ...byMonth.map((items) => items.length))
+  return Array.from({ length: rowCount }, (_, rowIndex) => byMonth.flatMap((items) => items[rowIndex] || ['', '']))
+}
+
+function dailySalesMonthlyTotals(data) {
+  const totals = Array(12).fill(0)
+  ;(data.daily_sales || []).forEach((row) => {
+    const monthIndex = Number(String(row.date || '').slice(5, 7)) - 1
+    if (monthIndex >= 0 && monthIndex < 12) totals[monthIndex] += value(row.total)
+  })
+  return totals
+}
+
+function categoryMonths(data, match) {
+  return (data.expense_categories || []).filter((row) => row.label.toLowerCase().includes(match)).reduce((sum, row) => sum.map((amount, index) => amount + value(row.months[index])), Array(12).fill(0))
+}
+
+function receiptRows(data) {
+  const set = data.months || []
+  const revenueRows = [
+    ['Sales of frames', 'frames'], ['Sales of lenses', 'lenses'], ['Consultation', 'consultation'], ['Insurance received', 'insurance_received'], ['Sale of cases', 'cases'],
+  ].map(([label, key]) => ({ key: `receipt:${key}`, label, values: set.map((row) => value(row[key])) }))
+  const collectionDetails = (data.collection_sources || []).map((row) => ({ key: `collection:${row.label}`, label: `↳ ${row.label}`, values: row.months, isDetail: true }))
+  return [...revenueRows, ...collectionDetails]
+}
+
+function MatrixTable({ title, subtitle, columns = months, rows, totalColumn = true, planning = false, budgets = {}, onBudgetChange }) {
+  const percentageBase = total(rows.filter((row) => !row.isDetail).map((row) => total(row.values)))
+  return <article className="monitor-sheet">
+    <div className="monitor-sheet-heading"><div><span>{subtitle}</span><h3>{title}</h3></div><span className="monitor-live-dot">Live data</span></div>
+    <div className="monitor-table-scroll"><table className="monitor-table"><thead><tr><th>Details</th>{planning ? <><th>%</th><th>Budget</th></> : null}{columns.map((month) => <th key={month}>{month}</th>)}{totalColumn ? <th>Total</th> : null}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><td>{row.label}</td>{planning ? <><td>{row.isDetail ? '—' : `${percentageBase ? ((total(row.values) / percentageBase) * 100).toFixed(1) : '0.0'}%`}</td><td><input className="monitor-budget-input" type="number" min="0" step="0.01" value={budgets[row.key] ?? ''} placeholder="Set budget" aria-label={`${row.label} budget`} onChange={(event) => onBudgetChange(row.key, event.target.value)} onBlur={(event) => onBudgetChange(row.key, event.target.value, true)} /></td></> : null}{row.values.map((amount, index) => <td key={index}>{money(amount)}</td>)}{totalColumn ? <td className="monitor-total">{money(total(row.values))}</td> : null}</tr>)}</tbody></table></div>
+  </article>
+}
+
+function DailySalesSheet({ report, year }) {
+  const rows = dailySalesMatrix(report || {})
+  const monthlyTotals = dailySalesMonthlyTotals(report || {})
+  return <article className="monitor-sheet">
+    <div className="monitor-sheet-heading"><div><span>{report?.branch_name || 'Branch'} • {year}</span><h3>Daily sales</h3></div><span className="monitor-live-dot">Live data</span></div>
+    <div className="monitor-table-scroll daily-sales-scroll"><table className="daily-sales-horizontal"><thead>
+      <tr>{months.map((month) => <th key={month} colSpan="2">{month}</th>)}</tr>
+      <tr>{months.flatMap((month) => [<th key={`${month}-date`}>Date</th>, <th key={`${month}-sales`}>Sales</th>])}</tr>
+    </thead><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cellIndex % 2 === 0 ? cell : cell ? money(cell) : ''}</td>)}</tr>)}
+      {!report?.daily_sales?.length ? <tr><td colSpan="24" className="daily-sales-empty">No sales posted for this year.</td></tr> : null}
+    </tbody><tfoot><tr>{monthlyTotals.flatMap((amount, monthIndex) => [<td key={`${monthIndex}-label`}>Total</td>, <td key={`${monthIndex}-value`}>{money(amount)}</td>])}</tr></tfoot></table></div>
+  </article>
+}
 
 export default function MonitorSection({ apiFetch, token, selectedBranchId, session }) {
-  const [filters, setFilters] = useState(() => ({
-    ...defaultFilters(),
-    branch_id: String(selectedBranchId ?? 1),
-  }))
-  const [query, setQuery] = useState(() => ({
-    ...defaultFilters(),
-    branch_id: String(selectedBranchId ?? 1),
-  }))
-  const [data, setData] = useState(null)
+  const [branchId, setBranchId] = useState(String(selectedBranchId ?? 1))
+  const [year, setYear] = useState(String(new Date().getFullYear()))
+  const [report, setReport] = useState(null)
+  const [activeTab, setActiveTab] = useState('Monthly returns')
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [budgets, setBudgets] = useState({})
 
+  useEffect(() => setBranchId(String(selectedBranchId ?? 1)), [selectedBranchId])
   useEffect(() => {
-    setFilters((current) => ({ ...current, branch_id: String(selectedBranchId ?? 1) }))
-    setQuery((current) => ({ ...current, branch_id: String(selectedBranchId ?? 1) }))
-  }, [selectedBranchId])
-
-  useEffect(() => {
+    if (!token || session?.role !== 'manager') return
     let cancelled = false
+    setLoading(true); setError('')
+    apiFetch(`/finance/monitor-workbook?branch_id=${branchId}&year=${year}`, { token })
+      .then((payload) => { if (!cancelled) setReport(payload) })
+      .catch((requestError) => { if (!cancelled) setError(requestError.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [apiFetch, branchId, session?.role, token, year])
+  useEffect(() => setBudgets(report?.budgets || {}), [report])
 
-    async function loadMonitor() {
-      if (!token || session?.role !== 'manager') return
-      setIsLoading(true)
-      setError('')
-      try {
-        const params = new URLSearchParams()
-        for (const [key, value] of Object.entries(query)) {
-          if (value === '' || value == null) continue
-          params.set(key, String(value))
-        }
-        const response = await apiFetch(`/finance/monitor?${params.toString()}`, { token })
-        if (!cancelled) setData(response)
-      } catch (requestError) {
-        if (!cancelled) setError(requestError.message)
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
+  const receipt = useMemo(() => receiptRows(report || { months: [] }), [report])
+  const expenseRows = useMemo(() => (report?.expense_categories || []).map((row) => ({ key: `expense:${row.label}`, label: row.label, values: row.months })), [report])
+  const insuranceRows = useMemo(() => [
+    { label: 'Insurance claims', values: (report?.months || []).map((row) => row.insurance_claimed) },
+    { label: 'Insurance received', values: (report?.months || []).map((row) => row.insurance_received) },
+  ], [report])
+  const purchaseRows = useMemo(() => {
+    const set = report?.months || []
+    const lensCost = categoryMonths(report || {}, 'lens'); const frameCost = categoryMonths(report || {}, 'frame')
+    return [{ label: 'Lens sold', values: set.map((row) => row.lenses) }, { label: 'Lens purchases', values: lensCost }, { label: 'Lens margin', values: set.map((row, index) => value(row.lenses) - lensCost[index]) }, { label: 'Frames sold', values: set.map((row) => row.frames) }, { label: 'Frame purchases', values: frameCost }, { label: 'Frame margin', values: set.map((row, index) => value(row.frames) - frameCost[index]) }]
+  }, [report])
+  const capitalRows = useMemo(() => [{ label: 'Cash collected less expenses', values: (report?.months || []).map((row) => row.operating_cash) }, { label: 'Trade debtors', values: (report?.months || []).map((row) => row.debtors) }, { label: 'Current working position', values: (report?.months || []).map((row) => value(row.operating_cash) + value(row.debtors)) }], [report])
+  const ytdRevenue = total((report?.months || []).map((row) => row.collected))
+  const ytdExpenses = total((report?.months || []).map((row) => row.expenses))
 
-    loadMonitor()
-    return () => {
-      cancelled = true
-    }
-  }, [apiFetch, query, session?.role, token])
+  if (!['manager', 'accountant'].includes(session?.role)) return <section className="finance-section"><div className="message-banner error">Only the General Manager and Accountant can access The Monitor.</div></section>
 
-  const stats = data?.stats ?? {}
-  const collections = data?.collections ?? {}
-  const netTone = Number(stats.cash_position ?? 0) < 0 ? 'pending' : 'total'
-  const lensMargin = Number(stats.lens_revenue ?? 0) > 0
-    ? (Number(stats.lens_profit ?? 0) / Number(stats.lens_revenue ?? 0)) * 100
-    : 0
-  const frameMargin = Number(stats.frame_revenue ?? 0) > 0
-    ? (Number(stats.frame_profit ?? 0) / Number(stats.frame_revenue ?? 0)) * 100
-    : 0
-
-  const collectionRows = useMemo(() => ([
-    ['Cash', collections.cash],
-    ['MoMo', collections.mobile_money],
-    ['Paystack', collections.paystack],
-    ['Bank Transfer', collections.bank_transfer],
-    ['Insurance Paid', collections.insurance_paid],
-    ['Insurance Claimed', collections.insurance_claimed],
-    ['Insurance Pending', collections.insurance_pending],
-    ['Other', collections.other],
-  ]), [collections])
-
-  function applyFilters(event) {
-    event.preventDefault()
-    setQuery({ ...filters })
+  function printReport() { window.print() }
+  function exportExcel() { saveFile(workbookXml(report), `bealet-monitor-${report?.branch_name?.toLowerCase().replace(/\s+/g, '-') || 'report'}-${year}.xls`, 'application/vnd.ms-excel') }
+  async function updateBudget(lineKey, amount, save = false) {
+    setBudgets((current) => ({ ...current, [lineKey]: amount }))
+    if (!save) return
+    try {
+      const response = await apiFetch('/finance/monitor-budgets', { method: 'POST', token, body: { branch_id: Number(branchId), year: Number(year), line_key: lineKey, amount: Number(amount || 0) } })
+      setBudgets((current) => ({ ...current, [lineKey]: response.amount }))
+    } catch (requestError) { setError(requestError.message) }
   }
 
-  function resetFilters() {
-    const defaults = { ...defaultFilters(), branch_id: String(selectedBranchId ?? 1) }
-    setFilters(defaults)
-    setQuery(defaults)
-  }
-
-  if (session?.role !== 'manager') {
-    return (
-      <section className="finance-section">
-        <div className="message-banner error">Only the General Manager can access The Monitor.</div>
-      </section>
-    )
-  }
-
-  return (
-    <section className="finance-section">
-      <div className="patients-header">
-        <div>
-          <p className="eyebrow">The Monitor</p>
-          <h3>General Manager finance control room</h3>
-          <p className="header-copy">Track sales, consultation fees, lens and frame profit, spending pressure, and cash position across the selected scope.</p>
-        </div>
-        <span className="panel-tag">{data?.filters?.label ?? 'This Month'} | {data?.branch_name ?? 'Branch'}</span>
-      </div>
-
-      {error ? <div className="message-banner error">{error}</div> : null}
-
-      <article className="panel panel-wide expense-filters-panel">
-        <div className="panel-heading expense-filter-heading">
-          <div className="expense-filter-heading-copy">
-            <p className="eyebrow">Monitor Filters</p>
-            <h3>Choose the exact accountability window</h3>
-            <p className="muted-copy">Every widget, collection figure, expense total, and table row below responds to this scope.</p>
-          </div>
-          <span className="panel-tag">{isLoading ? 'Refreshing...' : `${data?.filters?.date_from ?? ''} - ${data?.filters?.date_to ?? ''}`}</span>
-        </div>
-
-        <form className="expense-page-stack expense-filter-grid-horizontal" onSubmit={applyFilters}>
-          <label>
-            Branch
-            <select value={filters.branch_id} onChange={(event) => setFilters((current) => ({ ...current, branch_id: event.target.value }))}>
-              {branchOptions.map((branch) => (
-                <option key={branch.id} value={branch.id}>{branch.name}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Period
-            <select value={filters.period} onChange={(event) => setFilters((current) => ({ ...current, period: event.target.value }))}>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="custom">Custom</option>
-            </select>
-          </label>
-          <label>
-            From
-            <input type="date" value={filters.date_from} onChange={(event) => setFilters((current) => ({ ...current, period: 'custom', date_from: event.target.value }))} />
-          </label>
-          <label>
-            To
-            <input type="date" value={filters.date_to} onChange={(event) => setFilters((current) => ({ ...current, period: 'custom', date_to: event.target.value }))} />
-          </label>
-          <div className="filter-actions-row full-span">
-            <button type="submit" className="primary-button">Apply monitor</button>
-            <button type="button" className="ghost-button" onClick={resetFilters}>Reset</button>
-          </div>
-        </form>
-      </article>
-
-      <section className="stats-grid patient-stats-grid">
-        <StatWidget label="Company Cash Position" value={isLoading && !data ? '...' : currency.format(Number(stats.cash_position ?? 0))} note="Cash, MoMo, digital, bank, and paid insurance less expenses" icon="money" className={netTone} />
-        <StatWidget label="Gross Profit Watch" value={currency.format(Number(stats.gross_profit ?? 0))} note="Lens profit plus frame surplus plus consultation fees" icon="trend" className="total" />
-        <StatWidget label="Total Spending" value={currency.format(Number(stats.total_expenses ?? 0))} note="All expenses posted in this filter window" icon="alert" className="pending" />
-        <StatWidget label="Consultation Fees" value={currency.format(Number(stats.consultation_revenue ?? 0))} note="Revenue made from consultation fees alone" icon="receipt" className="seen" />
-      </section>
-
-      <section className="stats-grid patient-stats-grid">
-        <StatWidget label="Lenses Sold" value={Number(stats.lens_count ?? 0)} note={`${currency.format(Number(stats.lens_revenue ?? 0))} lens revenue`} icon="glasses" className="seen" count />
-        <StatWidget label="Lens Profit" value={currency.format(Number(stats.lens_profit ?? 0))} note={`${currency.format(Number(stats.lens_cost ?? 0))} spent on lens cost | ${lensMargin.toFixed(1)}% margin`} icon="trend" className={Number(stats.lens_profit ?? 0) < 0 ? 'pending' : 'total'} />
-        <StatWidget label="Frames Sold" value={Number(stats.frame_count ?? 0)} note={`${currency.format(Number(stats.frame_revenue ?? 0))} frame revenue`} icon="inventory" className="today" count />
-        <StatWidget label="Frame Profit" value={currency.format(Number(stats.frame_profit ?? 0))} note={`BSMI surplus-based margin | ${frameMargin.toFixed(1)}%`} icon="finance" className="total" />
-      </section>
-
-      <section className="stats-grid patient-stats-grid">
-        <StatWidget label="Collected Revenue" value={currency.format(Number(stats.collected_revenue ?? 0))} note="Actual receipts inside the filter" icon="money" className="seen" />
-        <StatWidget label="Insurance Expected" value={currency.format(Number(stats.insurance_expected ?? 0))} note="Claimed plus pending insurance still being watched" icon="shield" className="pending" />
-        <StatWidget label="Outstanding Balance" value={currency.format(Number(stats.outstanding_balance ?? 0))} note="Customer balances on bills in this scope" icon="receipt" className="today" />
-        <StatWidget label="Bills Monitored" value={Number(stats.bill_count ?? 0)} note="Billing records inside the selected window" icon="reports" className="total" count />
-      </section>
-
-      <section className="finance-layout">
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Collection Mix</p>
-              <h3>Money expected and received</h3>
-            </div>
-            <span className="panel-tag">{currency.format(Number(stats.collected_revenue ?? 0))} collected</span>
-          </div>
-          <div className="stack-list">
-            {collectionRows.map(([label, value]) => (
-              <div key={label} className="stack-item">
-                <div>
-                  <strong>{label}</strong>
-                  <span>{label.includes('Pending') || label.includes('Claimed') ? 'Expected but not yet company cash' : 'Counted inside available company cash'}</span>
-                </div>
-                <strong>{currency.format(Number(value ?? 0))}</strong>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Expense Pressure</p>
-              <h3>Where money went</h3>
-            </div>
-            <span className="panel-tag">{currency.format(Number(stats.total_expenses ?? 0))}</span>
-          </div>
-          <div className="stack-list">
-            {(data?.expense_breakdown ?? []).map((item) => (
-              <div key={item.category || 'Expense'} className="stack-item">
-                <div>
-                  <strong>{item.category || 'Uncategorized'}</strong>
-                  <span>{item.category === 'Lens' ? 'Auto-synced from Lens Tracker' : 'Posted expense category'}</span>
-                </div>
-                <strong>{currency.format(Number(item.total ?? 0))}</strong>
-              </div>
-            ))}
-            {(data?.expense_breakdown ?? []).length === 0 ? <p className="muted-copy">No expenses in this scope.</p> : null}
-          </div>
-        </article>
-      </section>
-
-      <article className="panel panel-wide">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Daily Trail</p>
-            <h3>Revenue, spending, and net movement</h3>
-          </div>
-          <span className="panel-tag">{data?.daily_rows?.length ?? 0} days</span>
-        </div>
-        <div className="table-shell">
-          <table className="portal-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Consultation</th>
-                <th>Lens Sales</th>
-                <th>Frame Sales</th>
-                <th>Collected</th>
-                <th>Insurance Expected</th>
-                <th>Expenses</th>
-                <th>Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.daily_rows ?? []).map((row) => (
-                <tr key={row.date}>
-                  <td>{row.date}</td>
-                  <td>{currency.format(Number(row.consultation_total ?? 0))}</td>
-                  <td>{currency.format(Number(row.lens_total ?? 0))}</td>
-                  <td>{currency.format(Number(row.frame_total ?? 0))}</td>
-                  <td>{currency.format(Number(row.collected_total ?? 0))}</td>
-                  <td>{currency.format(Number(row.insurance_expected ?? 0))}</td>
-                  <td>{currency.format(Number(row.expense_total ?? 0))}</td>
-                  <td>{currency.format(Number(row.net_position ?? 0))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </section>
-  )
+  return <section className="finance-section monitor-workspace">
+    <header className="monitor-hero">
+      <div><p className="eyebrow">The Monitor</p><h3>Monthly management and audit workbook</h3><p>Live, export-ready reporting built from OpticPlus sales, collections, insurance and expense records.</p></div>
+      <div className="monitor-hero-actions"><button type="button" className="ghost-button" onClick={printReport} disabled={!report}>Print / Save PDF</button><button type="button" className="primary-button" onClick={exportExcel} disabled={!report}>Export Excel workbook</button></div>
+    </header>
+    {error ? <div className="message-banner error">{error}</div> : null}
+    <div className="monitor-controls"><label>Reporting branch<select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Financial year<input type="number" min="2020" max="2100" value={year} onChange={(event) => setYear(event.target.value)} /></label><span>{loading ? 'Refreshing workbook…' : `Updated ${report ? new Date(report.generated_at).toLocaleString() : '—'}`}</span></div>
+    <section className="monitor-kpis"><div><span>YTD collected</span><strong>{money(ytdRevenue)}</strong><small>Actual receipts including paid insurance</small></div><div><span>YTD expenses</span><strong>{money(ytdExpenses)}</strong><small>All posted expenses</small></div><div><span>Working position</span><strong>{money(value(report?.months?.[11]?.operating_cash) + value(report?.months?.[11]?.debtors))}</strong><small>Operating cash proxy plus trade debtors</small></div></section>
+    <nav className="monitor-tabs" aria-label="Workbook sheets">{tabs.map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'is-active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
+    {activeTab === 'Monthly returns' ? <div className="monitor-sheet-stack"><MatrixTable title="Receipts" subtitle={`${report?.branch_name || 'Branch'} • ${year} • Accountant budgets are saved on exit`} rows={receipt} planning budgets={budgets} onBudgetChange={updateBudget} /><MatrixTable title="Payments" subtitle="Expense categories posted in OpticPlus • Accountant budgets are saved on exit" rows={expenseRows} planning budgets={budgets} onBudgetChange={updateBudget} /></div> : null}
+    {activeTab === 'Daily sales' ? <DailySalesSheet report={report} year={year} /> : null}
+    {activeTab === 'Insurance' ? <MatrixTable title="Monthly insurance claims" subtitle="Expected claims and paid insurer receipts" rows={insuranceRows} /> : null}
+    {activeTab === 'Purchases' ? <MatrixTable title="Monthly purchases analysis" subtitle="Sales, purchases and calculated gross margins" rows={purchaseRows} /> : null}
+    {activeTab === 'Working capital' ? <><MatrixTable title="Working capital statement" subtitle="Calculated operational view — not a bank reconciliation" rows={capitalRows} totalColumn={false} /><p className="monitor-disclaimer">Cash is calculated from recorded customer and insurer collections less recorded expenses. Add bank and cash reconciliations separately before relying on it as a statutory balance-sheet figure.</p></> : null}
+  </section>
 }

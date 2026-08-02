@@ -144,9 +144,9 @@ class FinanceController extends Controller
     {
         $user = $request->user();
         $role = $user?->normalized_role ?? $user?->role;
-        if ($role !== 'manager' && ! ($user?->is_admin ?? false)) {
+        if (! in_array($role, ['manager', 'accountant'], true) && ! ($user?->is_admin ?? false)) {
             return response()->json([
-                'message' => 'Only the General Manager can access The Monitor.',
+                'message' => 'Only the General Manager and Accountant can access The Monitor.',
             ], 403);
         }
 
@@ -323,6 +323,125 @@ class FinanceController extends Controller
             'expense_breakdown' => $expenseBreakdown,
             'daily_rows' => $dailyRows,
         ]);
+    }
+
+    /**
+     * Annual data model for The Monitor's board/audit workbook.  This is kept
+     * separate from the operational monitor so a report remains a consistent
+     * twelve-month snapshot while the control room can refresh more often.
+     */
+    public function monitorWorkbook(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! in_array($role, ['manager', 'accountant'], true) && ! ($user?->is_admin ?? false)) {
+            return response()->json(['message' => 'Only the General Manager and Accountant can access The Monitor.'], 403);
+        }
+
+        $branchId = $this->resolveReportBranchId($request, 'branch_id');
+        $year = max(2020, min(2100, (int) $request->integer('year', (int) now()->format('Y'))));
+        $start = sprintf('%d-01-01', $year);
+        $end = sprintf('%d-12-31', $year);
+        $scope = fn ($query, string $column = 'branch_id') => $this->applyBranchScope($query, $column, $branchId);
+
+        $billing = tap(DB::table('billing')->whereBetween('date', [$start, $end]), $scope)
+            ->selectRaw('MONTH(date) as month, SUM(consultation_price) consultation, SUM(frame_price) frames, SUM(lens_price) lenses, SUM(case_price) cases, SUM(balance) debtors')
+            ->groupByRaw('MONTH(date)')->get()->keyBy('month');
+        $salesRows = tap(DB::table('sales')->whereBetween('date', [$start, $end])->where('payment_method', '!=', 'Insurance'), $scope)
+            ->selectRaw('MONTH(date) as month, payment_method, SUM(amount_paid) collected')->groupByRaw('MONTH(date), payment_method')->get();
+        $sales = $salesRows->groupBy('month')->map(fn ($rows) => (object) ['collected' => $rows->sum('collected')]);
+        $insurance = tap(DB::table('insurance_claims')->whereBetween('date', [$start, $end]), $scope)
+            ->selectRaw("MONTH(date) as month, SUM(CASE WHEN status IN ('pending', 'claimed') THEN amount_paid ELSE 0 END) claimed, SUM(CASE WHEN status = 'paid' THEN amount_paid ELSE 0 END) received")
+            ->groupByRaw('MONTH(date)')->get()->keyBy('month');
+        $expenses = tap(DB::table('expenses')->whereBetween('date', [$start, $end]), $scope)
+            ->selectRaw('MONTH(date) as month, category, SUM(amount) total')->groupByRaw('MONTH(date), category')->get();
+
+        $collectionSources = [];
+        foreach ($salesRows as $sale) {
+            $bucket = $this->classifyPaymentMethod((string) $sale->payment_method);
+            $label = match ($bucket) {
+                'mobile_money' => 'MoMo collections', 'bank_transfer' => 'Bank transfer collections',
+                'paystack' => 'Paystack collections', 'cash' => 'Cash collections', default => 'Other collections',
+            };
+            $collectionSources[$label] ??= array_fill(0, 12, 0.0);
+            $collectionSources[$label][(int) $sale->month - 1] += (float) $sale->collected;
+        }
+        if (Schema::hasTable('debts')) {
+            $loanQuery = DB::table('debts')->whereBetween('start_date', [$start, $end])->where('debt_type', 'loan');
+            if (Schema::hasColumn('debts', 'branch_id')) {
+                $this->applyBranchScope($loanQuery, 'branch_id', $branchId);
+            }
+            foreach ($loanQuery->selectRaw('MONTH(start_date) as month, SUM(principal_amount) total')->groupByRaw('MONTH(start_date)')->get() as $loan) {
+                $collectionSources['Loans taken'] ??= array_fill(0, 12, 0.0);
+                $collectionSources['Loans taken'][(int) $loan->month - 1] = (float) $loan->total;
+            }
+        }
+
+        $categoryRows = [];
+        foreach ($expenses as $expense) {
+            $label = $this->normalizeExpenseCategoryLabel((string) $expense->category) ?: 'Uncategorised';
+            $categoryRows[$label] ??= array_fill(0, 12, 0.0);
+            $categoryRows[$label][(int) $expense->month - 1] += (float) $expense->total;
+        }
+        ksort($categoryRows);
+
+        $months = [];
+        $runningCash = 0.0;
+        for ($month = 1; $month <= 12; $month++) {
+            $bill = $billing->get($month);
+            $sale = $sales->get($month);
+            $claim = $insurance->get($month);
+            $expenseTotal = array_sum(array_map(fn ($values) => (float) $values[$month - 1], $categoryRows));
+            $collected = (float) ($sale->collected ?? 0) + (float) ($claim->received ?? 0);
+            $runningCash += $collected - $expenseTotal;
+            $months[] = [
+                'month' => $month,
+                'label' => strtoupper(now()->setDate($year, $month, 1)->format('M')),
+                'frames' => round((float) ($bill->frames ?? 0), 2),
+                'lenses' => round((float) ($bill->lenses ?? 0), 2),
+                'consultation' => round((float) ($bill->consultation ?? 0), 2),
+                'cases' => round((float) ($bill->cases ?? 0), 2),
+                'collected' => round($collected, 2),
+                'insurance_claimed' => round((float) ($claim->claimed ?? 0), 2),
+                'insurance_received' => round((float) ($claim->received ?? 0), 2),
+                'expenses' => round($expenseTotal, 2),
+                'debtors' => round((float) ($bill->debtors ?? 0), 2),
+                'operating_cash' => round($runningCash, 2),
+            ];
+        }
+
+        $daily = tap(DB::table('sales')->whereBetween('date', [$start, $end])->where('payment_method', '!=', 'Insurance'), $scope)
+            ->selectRaw('date, SUM(amount_paid) total')->groupBy('date')->orderBy('date')->get();
+
+        return response()->json([
+            'year' => $year,
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'generated_at' => now()->toIso8601String(),
+            'months' => $months,
+            'expense_categories' => collect($categoryRows)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($value) => round($value, 2), $values)])->values(),
+            'collection_sources' => collect($collectionSources)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($amount) => round($amount, 2), $values)])->values(),
+            'budgets' => Schema::hasTable('monitor_budgets') ? DB::table('monitor_budgets')->where('branch_id', $branchId)->where('year', $year)->pluck('amount', 'line_key') : [],
+            'daily_sales' => $daily,
+        ]);
+    }
+
+    public function saveMonitorBudgets(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! in_array($role, ['manager', 'accountant'], true) && ! ($user?->is_admin ?? false)) {
+            return response()->json(['message' => 'Only the General Manager and Accountant can update Monitor budgets.'], 403);
+        }
+        $validated = $request->validate([
+            'branch_id' => ['required', 'integer', 'in:0,1,2'], 'year' => ['required', 'integer', 'between:2020,2100'],
+            'line_key' => ['required', 'string', 'max:100'], 'amount' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        DB::table('monitor_budgets')->updateOrInsert(
+            ['branch_id' => $validated['branch_id'], 'year' => $validated['year'], 'line_key' => $validated['line_key']],
+            ['amount' => $validated['amount'] ?? 0, 'updated_at' => now(), 'created_at' => now()]
+        );
+        return response()->json(['line_key' => $validated['line_key'], 'amount' => (float) ($validated['amount'] ?? 0)]);
     }
 
     public function sales(Request $request): JsonResponse

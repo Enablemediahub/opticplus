@@ -219,6 +219,7 @@ const accountantNavSections = [
       { label: 'Finance', navLabel: 'Finance Snapshot', icon: 'finance' },
       { label: 'Sales', navLabel: 'Sales', icon: 'money' },
       { label: 'Revenue Tracking', navLabel: 'Revenue Tracking', icon: 'trend' },
+      { label: 'The Monitor', navLabel: 'The Monitor', icon: 'dashboard' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
       { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
       { label: 'Reports', navLabel: 'Reports', icon: 'reports' },
@@ -4650,7 +4651,7 @@ function App() {
               />
             ) : null}
 
-            {activeView === 'The Monitor' && isGeneralManager ? (
+            {activeView === 'The Monitor' && (isGeneralManager || isAccountant) ? (
               <MonitorSection
                 apiFetch={apiFetch}
                 token={token}
