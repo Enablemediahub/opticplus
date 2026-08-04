@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 
 const currency = new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 2 })
 const branchOptions = [{ id: 0, name: 'Merged company' }, { id: 1, name: 'Labadi' }, { id: 2, name: 'Madina' }]
@@ -8,6 +8,63 @@ const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 const value = (number) => Number(number || 0)
 const total = (values) => values.reduce((sum, item) => sum + value(item), 0)
 const money = (number) => currency.format(value(number))
+const excelBorder = '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#7F7F7F"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#7F7F7F"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#7F7F7F"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#7F7F7F"/></Borders>'
+const excelStyles = `<?xml version="1.0" encoding="UTF-8"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="sText">
+      ${excelBorder}
+      <Alignment ss:Vertical="Center" ss:Horizontal="Left"/>
+    </Style>
+    <Style ss:ID="sNumber">
+      ${excelBorder}
+      <Alignment ss:Vertical="Center" ss:Horizontal="Right"/>
+    </Style>
+    <Style ss:ID="sHeader">
+      ${excelBorder}
+      <Font ss:Bold="1"/>
+      <Alignment ss:Vertical="Center" ss:Horizontal="Center"/>
+      <Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="sSection">
+      ${excelBorder}
+      <Font ss:Bold="1"/>
+      <Alignment ss:Vertical="Center" ss:Horizontal="Left"/>
+      <Interior ss:Color="#FFE699" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="sTotal">
+      ${excelBorder}
+      <Font ss:Bold="1"/>
+      <Alignment ss:Vertical="Center" ss:Horizontal="Right"/>
+      <Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="sTotalLabel">
+      ${excelBorder}
+      <Font ss:Bold="1"/>
+      <Alignment ss:Vertical="Center" ss:Horizontal="Left"/>
+      <Interior ss:Color="#FFF2CC" ss:Pattern="Solid"/>
+    </Style>
+  </Styles>`
+
+function excelType(cell) {
+  return typeof cell === 'number' && Number.isFinite(cell) ? 'Number' : 'String'
+}
+
+function excelStyle(cell, kind, index) {
+  if (kind === 'section') return 'sSection'
+  if (kind === 'header') return 'sHeader'
+  if (kind === 'total') return index === 0 ? 'sTotalLabel' : 'sTotal'
+  return typeof cell === 'number' && Number.isFinite(cell) ? 'sNumber' : 'sText'
+}
+
+function excelCell(cell, kind, index) {
+  const valueCell = cell ?? ''
+  return `<Cell ss:StyleID="${excelStyle(valueCell, kind, index)}"><Data ss:Type="${excelType(valueCell)}">${xml(valueCell)}</Data></Cell>`
+}
+
+function excelRow(cells, kind = 'data') {
+  return `<Row>${cells.map((cell, index) => excelCell(cell, kind, index)).join('')}</Row>`
+}
 
 function saveFile(contents, name, type) {
   const url = URL.createObjectURL(new Blob([contents], { type }))
@@ -24,21 +81,53 @@ function xml(valueToEscape) {
   return String(valueToEscape ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function workbookXml(report) {
+function workbookXml(report, budgetOverrides = {}) {
   const data = report || { months: [], expense_categories: [], daily_sales: [] }
+  const budgets = { ...(data.budgets || {}), ...(budgetOverrides || {}) }
   const reportRows = receiptRows(data)
   const expenseRows = data.expense_categories || []
-  const receiptBase = total(reportRows.filter((row) => !row.isDetail).map((row) => total(row.values)))
+  const monthlySet = data.months || []
+  const dailySalesTotals = dailySalesMonthlyTotals(data)
+  const receiptMonthlyTotals = monthlySet.map((_, monthIndex) => total(reportRows.map((row) => row.values[monthIndex])))
+  const expenseMonthlyTotals = monthlySet.map((_, monthIndex) => total(expenseRows.map((row) => row.months[monthIndex])))
+  const profitLossMonthlyTotals = receiptMonthlyTotals.map((amount, monthIndex) => amount - expenseMonthlyTotals[monthIndex])
+  const receiptBase = total(receiptMonthlyTotals)
   const paymentBase = total(expenseRows.map((row) => total(row.months)))
+  const profitLossBase = total(profitLossMonthlyTotals)
   const sheets = [
-    ['Monthly Returns', [['FINANCIAL DETAILS', `${data.branch_name || 'Branch'} | ${data.year || ''}`], ['RECEIPTS', '%', 'BUDGET', ...months, 'TOTAL'], ...reportRows.map((row) => [row.label, row.isDetail ? '' : (receiptBase ? (total(row.values) / receiptBase) * 100 : 0), value(data.budgets?.[row.key]), ...row.values.map(value), total(row.values)]), [], ['PAYMENTS', '%', 'BUDGET', ...months, 'TOTAL'], ...expenseRows.map((row) => [row.label, paymentBase ? (total(row.months) / paymentBase) * 100 : 0, value(data.budgets?.[`expense:${row.label}`]), ...row.months.map(value), total(row.months)])]],
-    ['Daily Sales', [['DAILY SALES', data.branch_name || 'Branch'], [...months.flatMap((month) => [month, ''])], [...months.flatMap(() => ['DATE', 'SALES'])], ...dailySalesMatrix(data), [...dailySalesMonthlyTotals(data).flatMap((amount) => ['TOTAL', amount])]]],
+    ['Monthly Returns', [
+      ['FINANCIAL DETAILS', `${data.branch_name || 'Branch'} | ${data.year || ''}`],
+      ['RECEIPTS', '%', 'BUDGET', ...months, 'TOTAL'],
+      ...reportRows.map((row) => [row.label, receiptBase ? `${((total(row.values) / receiptBase) * 100).toFixed(1)}%` : '0.0%', value(budgets[row.key]), ...row.values.map(value), total(row.values)]),
+      ['TOTAL RECEIPTS', '', '', ...receiptMonthlyTotals, receiptBase],
+      ['PAYMENTS', '%', 'BUDGET', ...months, 'TOTAL'],
+      ...expenseRows.map((row) => [row.label, paymentBase ? `${((total(row.months) / paymentBase) * 100).toFixed(1)}%` : '0.0%', value(budgets[`expense:${row.label}`]), ...row.months.map(value), total(row.months)]),
+      ['TOTAL PAYMENTS', '', '', ...expenseMonthlyTotals, paymentBase],
+      ['PROFIT / LOSS', '', '', ...profitLossMonthlyTotals, profitLossBase],
+    ]],
+    ['Profit and Loss', [
+      ['PROFIT AND LOSS', `${data.branch_name || 'Branch'} | ${data.year || ''}`],
+      ['DETAILS', ...months, 'TOTAL'],
+      ['Total receipts', ...receiptMonthlyTotals, receiptBase],
+      ['Total payments', ...expenseMonthlyTotals, paymentBase],
+      ['Profit / Loss', ...profitLossMonthlyTotals, profitLossBase],
+    ]],
+    ['Daily Sales', [['DAILY SALES', data.branch_name || 'Branch'], [...months.flatMap((month) => [month, ''])], [...months.flatMap(() => ['DATE', 'SALES'])], ...dailySalesMatrix(data), [...months.flatMap((_, monthIndex) => ['TOTAL', dailySalesTotals[monthIndex]])]]],
     ['Insurance', [['MONTHLY INSURANCE CLAIMS', data.year || ''], ['DETAILS', ...months, 'TOTAL'], ['Insurance claims', ...data.months.map((row) => value(row.insurance_claimed)), total(data.months.map((row) => row.insurance_claimed))], ['Insurance received', ...data.months.map((row) => value(row.insurance_received)), total(data.months.map((row) => row.insurance_received))]]],
     ['Purchases', [['MONTHLY PURCHASES ANALYSIS', data.year || ''], ['DETAILS', ...months, 'TOTAL'], ['Lens sold', ...data.months.map((row) => value(row.lenses)), total(data.months.map((row) => row.lenses))], ['Lens purchases', ...categoryMonths(data, 'lens'), total(categoryMonths(data, 'lens'))], ['Frame sold', ...data.months.map((row) => value(row.frames)), total(data.months.map((row) => row.frames))], ['Frame purchases', ...categoryMonths(data, 'frame'), total(categoryMonths(data, 'frame'))]]],
     ['Working Capital', [['WORKING CAPITAL STATEMENT', `${data.branch_name || 'Branch'} | calculated operational view`], ['DETAILS', ...months], ['Cash collected less expenses', ...data.months.map((row) => value(row.operating_cash))], ['Trade debtors', ...data.months.map((row) => value(row.debtors))], ['Current working position', ...data.months.map((row) => value(row.operating_cash) + value(row.debtors))]]],
   ]
-  const worksheet = ([name, rows]) => `<Worksheet ss:Name="${xml(name)}"><Table>${rows.map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="${typeof cell === 'number' ? 'Number' : 'String'}">${xml(cell)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`
-  return `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${sheets.map(worksheet).join('')}</Workbook>`
+  const worksheet = ([name, rows]) => `<Worksheet ss:Name="${xml(name)}"><Table>${rows.map((row) => {
+    const titleRows = new Set(['FINANCIAL DETAILS', 'DAILY SALES', 'PROFIT AND LOSS', 'MONTHLY INSURANCE CLAIMS', 'MONTHLY PURCHASES ANALYSIS', 'WORKING CAPITAL STATEMENT'])
+    const headerRows = new Set(['RECEIPTS', 'PAYMENTS', 'DETAILS'])
+    const totalRows = new Set(['TOTAL RECEIPTS', 'TOTAL PAYMENTS', 'PROFIT / LOSS', 'Total receipts', 'Total payments', 'Profit / Loss'])
+    const kind = Array.isArray(row) && titleRows.has(row[0]) ? 'section'
+      : Array.isArray(row) && headerRows.has(row[0]) ? 'header'
+        : Array.isArray(row) && totalRows.has(row[0]) ? 'total'
+          : 'data'
+    return excelRow(row, kind)
+  }).join('')}</Table></Worksheet>`
+  return `${excelStyles}${sheets.map(worksheet).join('')}</Workbook>`
 }
 
 function formatDailyDate(date) {
@@ -81,17 +170,22 @@ function categoryMonths(data, match) {
 function receiptRows(data) {
   const set = data.months || []
   const revenueRows = [
-    ['Sales of frames', 'frames'], ['Sales of lenses', 'lenses'], ['Consultation', 'consultation'], ['Insurance received', 'insurance_received'], ['Sale of cases', 'cases'],
+    ['Sales of frames', 'frames'], ['Sales of lenses', 'lenses'], ['Consultation', 'consultation'], ['Sale of cases', 'cases'],
   ].map(([label, key]) => ({ key: `receipt:${key}`, label, values: set.map((row) => value(row[key])) }))
-  const collectionDetails = (data.collection_sources || []).map((row) => ({ key: `collection:${row.label}`, label: `↳ ${row.label}`, values: row.months, isDetail: true }))
-  return [...revenueRows, ...collectionDetails]
+  const reconciliationRow = {
+    key: 'receipt:sales_reconciliation',
+    label: 'Sales reconciliation balance',
+    values: set.map((row) => value(row.sales_reconciliation)),
+  }
+  const collectionDetails = (data.collection_sources || []).map((row) => ({ key: `collection:${row.label}`, label: row.label, values: row.months }))
+  return [...revenueRows, reconciliationRow, ...collectionDetails]
 }
 
-function MatrixTable({ title, subtitle, columns = months, rows, totalColumn = true, planning = false, budgets = {}, onBudgetChange }) {
+function MatrixTable({ title, subtitle, columns = months, rows, totalColumn = true, planning = false, budgets = {}, onBudgetChange, summaryRow = null }) {
   const percentageBase = total(rows.filter((row) => !row.isDetail).map((row) => total(row.values)))
   return <article className="monitor-sheet">
     <div className="monitor-sheet-heading"><div><span>{subtitle}</span><h3>{title}</h3></div><span className="monitor-live-dot">Live data</span></div>
-    <div className="monitor-table-scroll"><table className="monitor-table"><thead><tr><th>Details</th>{planning ? <><th>%</th><th>Budget</th></> : null}{columns.map((month) => <th key={month}>{month}</th>)}{totalColumn ? <th>Total</th> : null}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><td>{row.label}</td>{planning ? <><td>{row.isDetail ? '—' : `${percentageBase ? ((total(row.values) / percentageBase) * 100).toFixed(1) : '0.0'}%`}</td><td><input className="monitor-budget-input" type="number" min="0" step="0.01" value={budgets[row.key] ?? ''} placeholder="Set budget" aria-label={`${row.label} budget`} onChange={(event) => onBudgetChange(row.key, event.target.value)} onBlur={(event) => onBudgetChange(row.key, event.target.value, true)} /></td></> : null}{row.values.map((amount, index) => <td key={index}>{money(amount)}</td>)}{totalColumn ? <td className="monitor-total">{money(total(row.values))}</td> : null}</tr>)}</tbody></table></div>
+    <div className="monitor-table-scroll"><table className="monitor-table"><thead><tr><th>Details</th>{planning ? <><th>%</th><th>Budget</th><th>Action</th></> : null}{columns.map((month) => <th key={month}>{month}</th>)}{totalColumn ? <th>Total</th> : null}</tr></thead><tbody>{rows.map((row) => <tr key={row.label}><td>{row.label}</td>{planning ? <><td>{row.isDetail ? '—' : `${percentageBase ? ((total(row.values) / percentageBase) * 100).toFixed(1) : '0.0'}%`}</td><td><input className="monitor-budget-input" type="number" min="0" step="0.01" value={budgets[row.key] ?? ''} placeholder="Set budget" aria-label={`${row.label} budget`} onChange={(event) => onBudgetChange(row.key, event.target.value)} onBlur={(event) => onBudgetChange(row.key, event.target.value, true)} /></td><td><button type="button" className="mini-action" onClick={() => onBudgetChange(row.key, budgets[row.key] ?? '', true)}>Save</button></td></> : null}{row.values.map((amount, index) => <td key={index}>{money(amount)}</td>)}{totalColumn ? <td className="monitor-total">{money(total(row.values))}</td> : null}</tr>)}{summaryRow ? <tr className="monitor-summary-row"><td className="monitor-summary-label" colSpan={planning ? 4 : 1}>{summaryRow.label}</td>{summaryRow.values.map((amount, index) => <td key={index} className="monitor-summary-total">{money(amount)}</td>)}{totalColumn ? <td className="monitor-total">{money(total(summaryRow.values))}</td> : null}</tr> : null}</tbody></table></div>
   </article>
 }
 
@@ -100,7 +194,7 @@ function DailySalesSheet({ report, year }) {
   const monthlyTotals = dailySalesMonthlyTotals(report || {})
   const salesByMonth = dailySalesByMonth(report || {})
   return <article className="monitor-sheet">
-    <div className="monitor-sheet-heading"><div><span>{report?.branch_name || 'Branch'} • {year}</span><h3>Daily sales</h3></div><span className="monitor-live-dot">Live data</span></div>
+    <div className="monitor-sheet-heading"><div><span>{report?.branch_name || 'Branch'} â€¢ {year}</span><h3>Daily sales</h3></div><span className="monitor-live-dot">Live data</span></div>
     <div className="monitor-table-scroll daily-sales-scroll"><table className="daily-sales-horizontal"><thead>
       <tr>{months.map((month) => <th key={month} colSpan="2">{month}</th>)}</tr>
       <tr>{months.flatMap((month) => [<th key={`${month}-date`}>Date</th>, <th key={`${month}-sales`}>Sales</th>])}</tr>
@@ -119,10 +213,12 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [budgets, setBudgets] = useState({})
+  const [budgetMessage, setBudgetMessage] = useState('')
+  const [savingBudgetKey, setSavingBudgetKey] = useState('')
 
   useEffect(() => setBranchId(String(selectedBranchId ?? 1)), [selectedBranchId])
   useEffect(() => {
-    if (!token || session?.role !== 'manager') return
+    if (!token || !['manager', 'accountant'].includes(session?.role)) return
     let cancelled = false
     setLoading(true); setError('')
     apiFetch(`/finance/monitor-workbook?branch_id=${branchId}&year=${year}`, { token })
@@ -147,18 +243,25 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
   const capitalRows = useMemo(() => [{ label: 'Cash collected less expenses', values: (report?.months || []).map((row) => row.operating_cash) }, { label: 'Trade debtors', values: (report?.months || []).map((row) => row.debtors) }, { label: 'Current working position', values: (report?.months || []).map((row) => value(row.operating_cash) + value(row.debtors)) }], [report])
   const ytdRevenue = total((report?.months || []).map((row) => row.collected))
   const ytdExpenses = total((report?.months || []).map((row) => row.expenses))
+  const receiptMonthlyTotals = (report?.months || []).map((_, monthIndex) => total(receipt.map((row) => row.values[monthIndex])))
+  const expenseMonthlyTotals = (report?.months || []).map((_, monthIndex) => total(expenseRows.map((row) => row.values[monthIndex])))
+  const profitLossMonthlyTotals = receiptMonthlyTotals.map((amount, monthIndex) => amount - expenseMonthlyTotals[monthIndex])
 
   if (!['manager', 'accountant'].includes(session?.role)) return <section className="finance-section"><div className="message-banner error">Only the General Manager and Accountant can access The Monitor.</div></section>
 
   function printReport() { window.print() }
-  function exportExcel() { saveFile(workbookXml(report), `bealet-monitor-${report?.branch_name?.toLowerCase().replace(/\s+/g, '-') || 'report'}-${year}.xls`, 'application/vnd.ms-excel') }
+  function exportExcel() { saveFile(workbookXml(report, budgets), `bealet-monitor-${report?.branch_name?.toLowerCase().replace(/\s+/g, '-') || 'report'}-${year}.xls`, 'application/vnd.ms-excel') }
   async function updateBudget(lineKey, amount, save = false) {
     setBudgets((current) => ({ ...current, [lineKey]: amount }))
     if (!save) return
     try {
+      setSavingBudgetKey(lineKey)
+      setBudgetMessage('')
       const response = await apiFetch('/finance/monitor-budgets', { method: 'POST', token, body: { branch_id: Number(branchId), year: Number(year), line_key: lineKey, amount: Number(amount || 0) } })
       setBudgets((current) => ({ ...current, [lineKey]: response.amount }))
+      setBudgetMessage(`Saved ${lineKey.replace(/^receipt:/, '').replace(/^expense:/, '').replace(/^collection:/, '')}`)
     } catch (requestError) { setError(requestError.message) }
+    finally { setSavingBudgetKey('') }
   }
 
   return <section className="finance-section monitor-workspace">
@@ -167,13 +270,14 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
       <div className="monitor-hero-actions"><button type="button" className="ghost-button" onClick={printReport} disabled={!report}>Print / Save PDF</button><button type="button" className="primary-button" onClick={exportExcel} disabled={!report}>Export Excel workbook</button></div>
     </header>
     {error ? <div className="message-banner error">{error}</div> : null}
-    <div className="monitor-controls"><label>Reporting branch<select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Financial year<input type="number" min="2020" max="2100" value={year} onChange={(event) => setYear(event.target.value)} /></label><span>{loading ? 'Refreshing workbook…' : `Updated ${report ? new Date(report.generated_at).toLocaleString() : '—'}`}</span></div>
+    {budgetMessage ? <div className="message-banner success">{budgetMessage}</div> : null}
+    <div className="monitor-controls"><label>Reporting branch<select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Financial year<input type="number" min="2020" max="2100" value={year} onChange={(event) => setYear(event.target.value)} /></label><span>{loading ? 'Refreshing workbookâ€¦' : `Updated ${report ? new Date(report.generated_at).toLocaleString() : 'â€”'}`}</span></div>
     <section className="monitor-kpis"><div><span>YTD collected</span><strong>{money(ytdRevenue)}</strong><small>Actual receipts including paid insurance</small></div><div><span>YTD expenses</span><strong>{money(ytdExpenses)}</strong><small>All posted expenses</small></div><div><span>Working position</span><strong>{money(value(report?.months?.[11]?.operating_cash) + value(report?.months?.[11]?.debtors))}</strong><small>Operating cash proxy plus trade debtors</small></div></section>
     <nav className="monitor-tabs" aria-label="Workbook sheets">{tabs.map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'is-active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
-    {activeTab === 'Monthly returns' ? <div className="monitor-sheet-stack"><MatrixTable title="Receipts" subtitle={`${report?.branch_name || 'Branch'} • ${year} • Accountant budgets are saved on exit`} rows={receipt} planning budgets={budgets} onBudgetChange={updateBudget} /><MatrixTable title="Payments" subtitle="Expense categories posted in OpticPlus • Accountant budgets are saved on exit" rows={expenseRows} planning budgets={budgets} onBudgetChange={updateBudget} /></div> : null}
+    {activeTab === 'Monthly returns' ? <div className="monitor-sheet-stack"><MatrixTable title="Receipts" subtitle={`${report?.branch_name || 'Branch'} • ${year} • Accountant budgets are saved on exit`} rows={receipt} planning budgets={budgets} onBudgetChange={updateBudget} summaryRow={{ label: 'TOTAL RECEIPTS', values: receiptMonthlyTotals }} /><MatrixTable title="Payments" subtitle="Expense categories posted in OpticPlus • Accountant budgets are saved on exit" rows={expenseRows} planning budgets={budgets} onBudgetChange={updateBudget} summaryRow={{ label: 'TOTAL PAYMENTS', values: expenseMonthlyTotals }} /><MatrixTable title="Profit and loss" subtitle="Monthly receipts less monthly payments" rows={[{ label: 'Profit / Loss', values: profitLossMonthlyTotals }]} totalColumn={true} /></div> : null}
     {activeTab === 'Daily sales' ? <DailySalesSheet report={report} year={year} /> : null}
     {activeTab === 'Insurance' ? <MatrixTable title="Monthly insurance claims" subtitle="Expected claims and paid insurer receipts" rows={insuranceRows} /> : null}
     {activeTab === 'Purchases' ? <MatrixTable title="Monthly purchases analysis" subtitle="Sales, purchases and calculated gross margins" rows={purchaseRows} /> : null}
-    {activeTab === 'Working capital' ? <><MatrixTable title="Working capital statement" subtitle="Calculated operational view — not a bank reconciliation" rows={capitalRows} totalColumn={false} /><p className="monitor-disclaimer">Cash is calculated from recorded customer and insurer collections less recorded expenses. Add bank and cash reconciliations separately before relying on it as a statutory balance-sheet figure.</p></> : null}
+    {activeTab === 'Working capital' ? <><MatrixTable title="Working capital statement" subtitle="Calculated operational view â€” not a bank reconciliation" rows={capitalRows} totalColumn={false} /><p className="monitor-disclaimer">Cash is calculated from recorded customer and insurer collections less recorded expenses. Add bank and cash reconciliations separately before relying on it as a statutory balance-sheet figure.</p></> : null}
   </section>
 }

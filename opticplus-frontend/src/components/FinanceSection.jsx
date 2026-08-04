@@ -24,6 +24,18 @@ const defaultTabByMode = {
 }
 
 const splitPaymentMethodOptions = ['Insurance', 'Cash', 'Mobile Money']
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+function monthRange(monthValue) {
+  if (!/^\d{4}-\d{2}$/.test(monthValue)) return { date_from: '', date_to: '' }
+
+  const [year, month] = monthValue.split('-').map(Number)
+  const lastDay = new Date(year, month, 0).getDate()
+  return {
+    date_from: `${year}-${String(month).padStart(2, '0')}-01`,
+    date_to: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+  }
+}
 
 export default function FinanceSection(props) {
   const pageMode = props.pageMode ?? 'default'
@@ -547,6 +559,13 @@ function RevenueTrackingView(props) {
 function AccountantSalesView(props) {
   const salesStats = props.financeSales?.stats ?? {}
   const dailyBreakdown = props.financeSales?.daily_breakdown ?? []
+  const monthYear = Number(props.financeSalesFilters.date_from?.slice(0, 4)) || new Date().getFullYear()
+  const selectedMonth = (() => {
+    const range = monthRange(props.financeSalesFilters.date_from?.slice(0, 7) ?? '')
+    return range.date_from === props.financeSalesFilters.date_from && range.date_to === props.financeSalesFilters.date_to
+      ? props.financeSalesFilters.date_from.slice(0, 7)
+      : ''
+  })()
 
   function applySalesFilters(event) {
     event.preventDefault()
@@ -569,6 +588,12 @@ function AccountantSalesView(props) {
 
     props.setFinanceSalesFilters(defaults)
     props.setFinanceSalesQuery(defaults)
+  }
+
+  function selectSalesMonth(event) {
+    const range = monthRange(event.target.value)
+    props.setFinanceSalesFilters((current) => ({ ...current, ...range, page: 1 }))
+    props.setFinanceSalesQuery((current) => ({ ...current, ...range, page: 1 }))
   }
 
   function exportSalesCsv() {
@@ -662,6 +687,16 @@ function AccountantSalesView(props) {
                 {(props.financeSummary?.payment_methods ?? []).map((method) => (
                   <option key={method.payment_method} value={method.payment_method}>{method.payment_method}</option>
                 ))}
+              </select>
+            </label>
+            <label>
+              Select month
+              <select value={selectedMonth} onChange={selectSalesMonth}>
+                <option value="">Custom date range</option>
+                {monthNames.map((month, index) => {
+                  const value = `${monthYear}-${String(index + 1).padStart(2, '0')}`
+                  return <option key={value} value={value}>{month} {monthYear}</option>
+                })}
               </select>
             </label>
             <label>

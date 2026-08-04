@@ -340,6 +340,7 @@ class FinanceController extends Controller
 
         $branchId = $this->resolveReportBranchId($request, 'branch_id');
         $year = max(2020, min(2100, (int) $request->integer('year', (int) now()->format('Y'))));
+        $this->ensureMonitorBudgetsSchema();
         $start = sprintf('%d-01-01', $year);
         $end = sprintf('%d-12-31', $year);
         $scope = fn ($query, string $column = 'branch_id') => $this->applyBranchScope($query, $column, $branchId);
@@ -347,6 +348,21 @@ class FinanceController extends Controller
         $billing = tap(DB::table('billing')->whereBetween('date', [$start, $end]), $scope)
             ->selectRaw('MONTH(date) as month, SUM(consultation_price) consultation, SUM(frame_price) frames, SUM(lens_price) lenses, SUM(case_price) cases, SUM(balance) debtors')
             ->groupByRaw('MONTH(date)')->get()->keyBy('month');
+        // Match the Sales page exactly: use the recorded non-insurance sale rows,
+        // not every invoice's catalogue value. This also preserves the selected
+        // branch and excludes insurance claims which are not cash sales yet.
+        $salesBreakdown = tap(
+            DB::table('sales as s')
+                ->leftJoin('billing as b', function ($join): void {
+                    $join->on('s.billing_id', '=', 'b.id')
+                        ->on('s.branch_id', '=', 'b.branch_id');
+                })
+                ->whereBetween('s.date', [$start, $end])
+                ->where('s.payment_method', '!=', 'Insurance'),
+            fn ($query) => $this->applyBranchScope($query, 's.branch_id', $branchId)
+        )
+            ->selectRaw('MONTH(s.date) as month, SUM(COALESCE(b.consultation_price, 0)) consultation, SUM(COALESCE(b.frame_price, 0)) frames, SUM(COALESCE(b.lens_price, 0)) lenses, SUM(COALESCE(b.case_price, 0)) cases')
+            ->groupByRaw('MONTH(s.date)')->get()->keyBy('month');
         $salesRows = tap(DB::table('sales')->whereBetween('date', [$start, $end])->where('payment_method', '!=', 'Insurance'), $scope)
             ->selectRaw('MONTH(date) as month, payment_method, SUM(amount_paid) collected')->groupByRaw('MONTH(date), payment_method')->get();
         $sales = $salesRows->groupBy('month')->map(fn ($rows) => (object) ['collected' => $rows->sum('collected')]);
@@ -358,14 +374,26 @@ class FinanceController extends Controller
 
         $collectionSources = [];
         $loanCollections = array_fill(0, 12, 0.0);
-        foreach ($salesRows as $sale) {
-            $bucket = $this->classifyPaymentMethod((string) $sale->payment_method);
-            $label = match ($bucket) {
-                'mobile_money' => 'MoMo collections', 'bank_transfer' => 'Bank transfer collections',
-                'paystack' => 'Paystack collections', 'cash' => 'Cash collections', default => 'Other collections',
-            };
+        $bankTransferRows = tap(DB::table('sales')->whereBetween('date', [$start, $end])->whereRaw('LOWER(COALESCE(payment_method, "")) = ?', ['bank_transfer']), $scope)
+            ->select([
+                DB::raw('MONTH(date) as month'),
+                'amount_paid',
+                'description',
+                'reference',
+            ])
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get();
+        foreach ($bankTransferRows as $transfer) {
+            $monthIndex = (int) $transfer->month - 1;
+            if ($monthIndex < 0 || $monthIndex > 11) {
+                continue;
+            }
+
+            $detail = trim((string) ($transfer->description ?: $transfer->reference ?: 'Bank transfer'));
+            $label = 'Bank transfer: '.$detail;
             $collectionSources[$label] ??= array_fill(0, 12, 0.0);
-            $collectionSources[$label][(int) $sale->month - 1] += (float) $sale->collected;
+            $collectionSources[$label][$monthIndex] += (float) $transfer->amount_paid;
         }
         if (Schema::hasTable('debts')) {
             $loanQuery = DB::table('debts')
@@ -408,18 +436,28 @@ class FinanceController extends Controller
         $runningCash = 0.0;
         for ($month = 1; $month <= 12; $month++) {
             $bill = $billing->get($month);
+            $salesBreakdownRow = $salesBreakdown->get($month);
             $sale = $sales->get($month);
             $claim = $insurance->get($month);
             $expenseTotal = array_sum(array_map(fn ($values) => (float) $values[$month - 1], $categoryRows));
             $collected = (float) ($sale->collected ?? 0) + (float) ($claim->received ?? 0) + (float) ($loanCollections[$month - 1] ?? 0);
+            $itemSalesValue = (float) ($salesBreakdownRow->frames ?? 0)
+                + (float) ($salesBreakdownRow->lenses ?? 0)
+                + (float) ($salesBreakdownRow->consultation ?? 0)
+                + (float) ($salesBreakdownRow->cases ?? 0);
+            // This reconciles product rows to the Sales-page payment total. It
+            // captures linked payments whose invoice items do not equal the
+            // payment, plus legacy payments with no matching billing row.
+            $salesReconciliation = (float) ($sale->collected ?? 0) - $itemSalesValue;
             $runningCash += $collected - $expenseTotal;
             $months[] = [
                 'month' => $month,
                 'label' => strtoupper(now()->setDate($year, $month, 1)->format('M')),
-                'frames' => round((float) ($bill->frames ?? 0), 2),
-                'lenses' => round((float) ($bill->lenses ?? 0), 2),
-                'consultation' => round((float) ($bill->consultation ?? 0), 2),
-                'cases' => round((float) ($bill->cases ?? 0), 2),
+                'frames' => round((float) ($salesBreakdownRow->frames ?? 0), 2),
+                'lenses' => round((float) ($salesBreakdownRow->lenses ?? 0), 2),
+                'consultation' => round((float) ($salesBreakdownRow->consultation ?? 0), 2),
+                'cases' => round((float) ($salesBreakdownRow->cases ?? 0), 2),
+                'sales_reconciliation' => round($salesReconciliation, 2),
                 'collected' => round($collected, 2),
                 'insurance_claimed' => round((float) ($claim->claimed ?? 0), 2),
                 'insurance_received' => round((float) ($claim->received ?? 0), 2),
@@ -452,6 +490,7 @@ class FinanceController extends Controller
         if (! in_array($role, ['manager', 'accountant'], true) && ! ($user?->is_admin ?? false)) {
             return response()->json(['message' => 'Only the General Manager and Accountant can update Monitor budgets.'], 403);
         }
+        $this->ensureMonitorBudgetsSchema();
         $validated = $request->validate([
             'branch_id' => ['required', 'integer', 'in:0,1,2'], 'year' => ['required', 'integer', 'between:2020,2100'],
             'line_key' => ['required', 'string', 'max:100'], 'amount' => ['nullable', 'numeric', 'min:0'],
@@ -461,6 +500,21 @@ class FinanceController extends Controller
             ['amount' => $validated['amount'] ?? 0, 'updated_at' => now(), 'created_at' => now()]
         );
         return response()->json(['line_key' => $validated['line_key'], 'amount' => (float) ($validated['amount'] ?? 0)]);
+    }
+
+    private function ensureMonitorBudgetsSchema(): void
+    {
+        if (! Schema::hasTable('monitor_budgets')) {
+            Schema::create('monitor_budgets', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedInteger('branch_id');
+                $table->unsignedSmallInteger('year');
+                $table->string('line_key', 100);
+                $table->decimal('amount', 15, 2)->default(0);
+                $table->timestamps();
+                $table->unique(['branch_id', 'year', 'line_key']);
+            });
+        }
     }
 
     public function sales(Request $request): JsonResponse
