@@ -2140,6 +2140,15 @@
   min-width: 980px;
 }
 
+.workbook-financial-table {
+  min-width: 1600px;
+}
+
+.workbook-financial-table th,
+.workbook-financial-table td {
+  white-space: nowrap;
+}
+
 .workbook-title-row th,
 .report-section-row th {
   background: var(--accent-soft);
@@ -2164,6 +2173,24 @@
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.workbook-financial-table td {
+  vertical-align: top;
+}
+
+.report-budget-control {
+  display: grid;
+  gap: 6px;
+  min-width: 132px;
+}
+
+.report-budget-control .monitor-budget-input {
+  width: 100%;
+}
+
+.report-budget-control .mini-action {
+  justify-self: start;
 }
 
 .workbook-daily-scroll {

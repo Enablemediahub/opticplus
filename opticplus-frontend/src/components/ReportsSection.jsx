@@ -130,70 +130,158 @@ function sumMonthColumn(rows, index) {
   return rows.reduce((total, row) => total + toNumber(row?.months?.[index]), 0)
 }
 
+function roundMoney(value) {
+  return Math.round(toNumber(value) * 100) / 100
+}
+
+function formatPercentRatio(value) {
+  return `${(toNumber(value) * 100).toFixed(1)}%`
+}
+
+function buildFinancialBudgetMetrics(actualTotal, budgetTotal, selectedMonthCount) {
+  const actual = roundMoney(actualTotal)
+  const budget = roundMoney(budgetTotal)
+  const balance = roundMoney(budget - actual)
+  const monthlyBudget = selectedMonthCount > 0 ? roundMoney(budget / selectedMonthCount) : 0
+  const achieved = budget > 0 ? actual / budget : 0
+
+  return {
+    actual,
+    budget,
+    balance,
+    monthlyBudget,
+    achieved,
+  }
+}
+
+function financialLineKey(prefix, label) {
+  return `${prefix}:${slugify(label)}`
+}
+
 function buildFinancialSheet(report, selectedMonths, branchLabel) {
   const months = buildSelectedMonths(report, selectedMonths)
   const monthsWide = months.map((item) => item.short)
-  const columnCount = 2 + monthsWide.length + 1
+  const budgets = report?.budgets ?? {}
+  const columnCount = 2 + 5 + monthsWide.length + 1
+  const monthsCount = monthsWide.length
   const title = `${String(branchLabel).toUpperCase()} REC & PAYMENT`
   const subtitle = `FINANCIAL DETAILS FOR THE PERIOD ${months[0]?.long ?? 'JANUARY'} TO ${months[months.length - 1]?.long ?? 'DECEMBER'} ${report?.year ?? currentYear()}`
   const monthRows = months.map((item) => item.data)
-  const collectionSources = (report?.collection_sources ?? []).map((row) => ({
-    label: row.label,
+  const receiptRows = [
+    { sn: '1.1', label: 'SALES OF FRAMES - NORMAL', key: 'receipt:frames-normal', months: monthRows.map((row) => toNumber(row.frames)) },
+    { sn: '1.2', label: 'SALE OF FRAMES - BY THE SIDE', key: 'receipt:frames-side', months: monthRows.map(() => 0) },
+    { sn: '1.3', label: 'SALE OF LENSES - NORMAL', key: 'receipt:lenses-normal', months: monthRows.map((row) => toNumber(row.lenses)) },
+    { sn: '1.4', label: 'SALE OF LENSES - BY THE SIDE', key: 'receipt:lenses-side', months: monthRows.map(() => 0) },
+    { sn: '1.5', label: 'CONSULTATION - NORMAL', key: 'receipt:consultation-normal', months: monthRows.map((row) => toNumber(row.consultation)) },
+    { sn: '1.6', label: 'INSURANCE RECEIVED', key: 'receipt:insurance-received', months: monthRows.map((row) => toNumber(row.insurance_received)) },
+    { sn: '1.7', label: 'SALE OF CASES', key: 'receipt:cases', months: monthRows.map((row) => toNumber(row.cases)) },
+    { sn: '1.8', label: 'SALES RECONCILIATION BALANCE', key: 'receipt:sales-reconciliation', months: monthRows.map((row) => toNumber(row.sales_reconciliation)) },
+    ...(report?.collection_sources ?? [])
+      .map((row, index) => ({
+        sn: `1.${9 + index}`,
+        label: String(row.label ?? '').toUpperCase(),
+        key: financialLineKey('collection', row.label),
+        months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+      }))
+      .filter((row) => row.months.some((amount) => amount !== 0)),
+  ]
+
+  const salaryRows = (report?.salary_rows ?? []).map((row) => ({
+    label: `SALARY - ${String(row.label ?? row.name ?? '').toUpperCase()}`,
+    key: financialLineKey('salary', row.employee_id ?? row.label ?? row.name),
     months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
   }))
   const expenseRows = (report?.expense_categories ?? []).map((row) => ({
-    label: row.label,
+    label: row.label.toUpperCase(),
+    key: financialLineKey('expense', row.label),
     months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
   }))
+  const paymentRowsSource = [...salaryRows, ...expenseRows]
+  const paymentRows = paymentRowsSource.map((row, index) => ({
+    ...row,
+    sn: `2.${index + 1}`,
+  }))
 
-  const receiptRows = [
-    { sn: '1.1', label: 'SALES OF FRAMES - NORMAL', months: monthRows.map((row) => toNumber(row.frames)) },
-    { sn: '1.2', label: 'SALE OF FRAMES - BY THE SIDE', months: monthRows.map(() => 0) },
-    { sn: '1.3', label: 'SALE OF LENSES - NORMAL', months: monthRows.map((row) => toNumber(row.lenses)) },
-    { sn: '1.4', label: 'SALE OF LENSES - BY THE SIDE', months: monthRows.map(() => 0) },
-    { sn: '1.5', label: 'CONSULTATION - NORMAL', months: monthRows.map((row) => toNumber(row.consultation)) },
-    { sn: '1.6', label: 'INSURANCE RECEIVED', months: monthRows.map((row) => toNumber(row.insurance_received)) },
-    { sn: '1.7', label: 'SALE OF CASES', months: monthRows.map((row) => toNumber(row.cases)) },
-    { sn: '1.8', label: 'SALES RECONCILIATION BALANCE', months: monthRows.map((row) => toNumber(row.sales_reconciliation)) },
-    ...collectionSources
-      .filter((row) => row.months.some((amount) => amount !== 0))
-      .map((row, index) => ({
-        sn: `1.${9 + index}`,
-        label: row.label.toUpperCase(),
-        months: row.months,
-      })),
-  ]
-
+  const receiptSectionTotal = sumArray(receiptRows.map((row) => sumArray(row.months)))
+  const paymentSectionTotal = sumArray(paymentRows.map((row) => sumArray(row.months)))
+  const receiptBudgetTotal = sumArray(receiptRows.map((row) => toNumber(budgets[row.key] ?? 0)))
+  const paymentBudgetTotal = sumArray(paymentRows.map((row) => toNumber(budgets[row.key] ?? 0)))
   const receiptTotals = selectedMonths.map((_, index) => sumMonthColumn(receiptRows, index))
-  const paymentTotals = selectedMonths.map((_, index) => sumMonthColumn(expenseRows, index))
+  const paymentTotals = selectedMonths.map((_, index) => sumMonthColumn(paymentRowsSource, index))
   const profitTotals = selectedMonths.map((_, index) => receiptTotals[index] - paymentTotals[index])
+
+  function buildPlannedRow(row, sectionTotal) {
+    const actual = sumArray(row.months)
+    const budget = roundMoney(budgets[row.key] ?? 0)
+    const metrics = buildFinancialBudgetMetrics(actual, budget, selectedMonths.length)
+    const sectionShare = sectionTotal > 0 ? actual / sectionTotal : 0
+
+    return {
+      kind: 'data',
+      key: row.key,
+      budgetKey: row.key,
+      sectionShare,
+      actual,
+      budget: metrics.budget,
+      balance: metrics.balance,
+      monthlyBudget: metrics.monthlyBudget,
+      achieved: metrics.achieved,
+      cells: [
+        row.sn ?? '',
+        row.label,
+        sectionShare,
+        metrics.budget,
+        ...row.months,
+        actual,
+        metrics.balance,
+        metrics.monthlyBudget,
+        metrics.achieved,
+      ],
+    }
+  }
+
+  function buildSectionTotalRow(label, totalValues, actualTotal, budgetTotal) {
+    const metrics = buildFinancialBudgetMetrics(actualTotal, budgetTotal, selectedMonths.length)
+    return {
+      kind: 'total',
+      cells: [
+        '',
+        label,
+        1,
+        metrics.budget,
+        ...totalValues,
+        metrics.actual,
+        metrics.balance,
+        metrics.monthlyBudget,
+        metrics.achieved,
+      ],
+    }
+  }
 
   const rows = [
     { kind: 'title', cells: ['BEALET OPTICALS'] },
     { kind: 'title', cells: [subtitle] },
-    { kind: 'title', cells: ['MONTHLY RETURNS - SAMPLE'] },
-    { kind: 'header', cells: ['SN', 'DETAILS', ...monthsWide, 'TOTAL'] },
+    { kind: 'title', cells: ['MONTHLY RETURNS'] },
+    { kind: 'header', cells: ['SN', 'DETAILS', '%', 'BUDGET', ...monthsWide, 'TOTAL', 'BALANCE', 'MONTHLY BUDGET', '% ACHIEVED'] },
     { kind: 'section', cells: ['RECEIPTS'] },
-    ...receiptRows.map((row) => ({
-      kind: 'data',
-      cells: [row.sn, row.label, ...row.months, sumArray(row.months)],
-    })),
-    { kind: 'total', cells: ['', 'TOTAL RECEIPTS', ...receiptTotals, sumArray(receiptTotals)] },
+    ...receiptRows.map((row) => buildPlannedRow(row, receiptSectionTotal)),
+    buildSectionTotalRow('TOTAL RECEIPTS', receiptTotals, receiptSectionTotal, receiptBudgetTotal),
     { kind: 'section', cells: ['PAYMENTS'] },
-    ...expenseRows.map((row, index) => ({
-      kind: 'data',
-      cells: [`2.${index + 1}`, row.label.toUpperCase(), ...row.months, sumArray(row.months)],
-    })),
-    { kind: 'total', cells: ['', 'TOTAL PAYMENTS', ...paymentTotals, sumArray(paymentTotals)] },
-    { kind: 'total', cells: ['', 'PROFIT / LOSS', ...profitTotals, sumArray(profitTotals)] },
+    ...paymentRows.map((row) => buildPlannedRow(row, paymentSectionTotal)),
+    buildSectionTotalRow('TOTAL PAYMENTS', paymentTotals, paymentSectionTotal, paymentBudgetTotal),
+    { kind: 'total', cells: ['', 'PROFIT / LOSS', '', '', ...profitTotals, sumArray(profitTotals), '', '', ''] },
   ]
 
   return {
     key: `financial-${slugify(branchLabel)}`,
+    branchId: report?.branch_id,
+    kind: 'financial',
     title,
     subtitle,
     columnCount,
+    monthsCount,
     rows,
+    budgets,
     monthlyTotals: {
       receipts: receiptTotals,
       payments: paymentTotals,
@@ -389,6 +477,109 @@ function buildWorkbookSheets({ primaryReport, comparisonReport, mergedReport, se
   return sheets
 }
 
+function FinancialWorkbookPreview({ sheet, budgets = {}, onBudgetChange = () => {}, savingBudgetKey = '' }) {
+  const columnCount = sheet.columnCount ?? Math.max(...sheet.rows.map((row) => row.cells.length))
+  const monthsCount = sheet.monthsCount ?? Math.max(0, columnCount - 8)
+  const totalIndex = 4 + monthsCount
+  const balanceIndex = totalIndex + 1
+  const monthlyBudgetIndex = totalIndex + 2
+  const achievedIndex = totalIndex + 3
+
+  return (
+    <div className="workbook-daily-scroll">
+      <table className="portal-table report-table workbook-preview-table workbook-financial-table">
+        <tbody>
+          {sheet.rows.map((row, rowIndex) => {
+            if (row.kind === 'title' || row.kind === 'section') {
+              return (
+                <tr key={`${sheet.key}-${rowIndex}`} className={row.kind === 'section' ? 'report-section-row' : 'workbook-title-row'}>
+                  <th colSpan={columnCount}>{row.cells[0]}</th>
+                </tr>
+              )
+            }
+
+            if (row.kind === 'header') {
+              return (
+                <tr key={`${sheet.key}-${rowIndex}`} className="workbook-header-row">
+                  {row.cells.map((cell, cellIndex) => (
+                    <th key={`${sheet.key}-${rowIndex}-${cellIndex}`}>{cell}</th>
+                  ))}
+                </tr>
+              )
+            }
+
+            return (
+              <tr key={`${sheet.key}-${rowIndex}`} className={row.kind === 'total' ? 'workbook-total-row' : ''}>
+                {row.cells.map((cell, cellIndex) => {
+                  if (cellIndex === 3 && row.kind === 'data' && row.budgetKey) {
+                    const budgetValue = budgets[row.budgetKey] ?? row.budget ?? ''
+                    const isSaving = savingBudgetKey === row.budgetKey
+                    return (
+                      <td key={`${sheet.key}-${rowIndex}-${cellIndex}`}>
+                        <div className="report-budget-control">
+                          <input
+                            className="monitor-budget-input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={budgetValue}
+                            placeholder="Set budget"
+                            aria-label={`${row.cells[1]} budget`}
+                            onChange={(event) => onBudgetChange(row.budgetKey, event.target.value)}
+                            onBlur={(event) => onBudgetChange(row.budgetKey, event.target.value, true)}
+                          />
+                          <button
+                            type="button"
+                            className="mini-action"
+                            disabled={isSaving}
+                            onClick={() => onBudgetChange(row.budgetKey, budgetValue, true)}
+                          >
+                            {isSaving ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      </td>
+                    )
+                  }
+
+                  if (cellIndex === 2 || cellIndex === achievedIndex) {
+                    return (
+                      <td key={`${sheet.key}-${rowIndex}-${cellIndex}`} className="workbook-money-cell">
+                        {typeof cell === 'number' ? formatPercentRatio(cell) : cell}
+                      </td>
+                    )
+                  }
+
+                  if (cellIndex === totalIndex || cellIndex === balanceIndex || cellIndex === monthlyBudgetIndex) {
+                    return (
+                      <td key={`${sheet.key}-${rowIndex}-${cellIndex}`} className="workbook-money-cell">
+                        {typeof cell === 'number' ? formatMoney(cell) : cell}
+                      </td>
+                    )
+                  }
+
+                  if (typeof cell === 'number') {
+                    return (
+                      <td key={`${sheet.key}-${rowIndex}-${cellIndex}`} className="workbook-money-cell">
+                        {formatMoney(cell)}
+                      </td>
+                    )
+                  }
+
+                  return (
+                    <td key={`${sheet.key}-${rowIndex}-${cellIndex}`}>
+                      {cell}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function WorkbookPreviewTable({ sheet }) {
   const columnCount = sheet.columnCount ?? Math.max(...sheet.rows.map((row) => row.cells.length))
 
@@ -553,6 +744,12 @@ const XLSX_STYLES = {
     numFmt: '#,##0.00',
     border: XLSX_BORDER,
   },
+  percent: {
+    font: { name: 'Calibri', sz: 11, color: { rgb: '0F172A' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '0.0%',
+    border: XLSX_BORDER,
+  },
   total: {
     font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
     fill: { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } },
@@ -617,17 +814,40 @@ function buildWorkbookSheet(sheet) {
   const aoa = buildSheetToAoa(sheet)
   const worksheet = XLSX.utils.aoa_to_sheet(aoa)
   const columnCount = Math.max(...aoa.map((row) => row.length))
+  const monthsCount = sheet.monthsCount ?? Math.max(0, columnCount - 8)
+  const totalIndex = 4 + monthsCount
+  const balanceIndex = totalIndex + 1
+  const monthlyBudgetIndex = totalIndex + 2
+  const achievedIndex = totalIndex + 3
   worksheet['!merges'] = buildSheetMerges(sheet)
   worksheet['!cols'] = Array.from({ length: columnCount }, (_, index) => ({
     wch: sheet.key === 'daily'
       ? (index % 2 === 0 ? 14 : 12)
-      : index === 0
-        ? 12
-        : index === 1
-          ? 36
-          : index === columnCount - 1
-            ? 16
-            : 14,
+      : sheet.key.startsWith('financial-')
+        ? (index === 0
+          ? 10
+          : index === 1
+            ? 34
+            : index === 2
+              ? 12
+              : index === 3
+                ? 14
+                : index === totalIndex
+                  ? 16
+                  : index === balanceIndex
+                    ? 14
+                    : index === monthlyBudgetIndex
+                      ? 16
+                      : index === achievedIndex
+                        ? 12
+                        : 13)
+        : index === 0
+          ? 12
+          : index === 1
+            ? 36
+            : index === columnCount - 1
+              ? 16
+              : 14,
   }))
   worksheet['!rows'] = aoa.map((_, index) => ({
     hpt: index < 3 ? 22 : index === 3 ? 20 : 18,
@@ -642,6 +862,10 @@ function buildWorkbookSheet(sheet) {
       const isNumeric = typeof value === 'number' && Number.isFinite(value)
       const isFirstColumn = columnIndex === 0
       const isDetailColumn = columnIndex === 1
+      const isPercentColumn = sheet.key.startsWith('financial-') && (columnIndex === 2 || columnIndex === achievedIndex)
+      const isMoneyColumn = sheet.key.startsWith('financial-')
+        ? (columnIndex === totalIndex || columnIndex === balanceIndex || columnIndex === monthlyBudgetIndex || (columnIndex >= 4 && columnIndex < totalIndex))
+        : isNumeric
       const style = rowKind === 'title'
         ? rowIndex === 0
           ? XLSX_STYLES.title
@@ -655,14 +879,18 @@ function buildWorkbookSheet(sheet) {
             : rowKind === 'total'
               ? isFirstColumn
                 ? XLSX_STYLES.totalLabel
-                : XLSX_STYLES.total
+                : isPercentColumn
+                  ? XLSX_STYLES.percent
+                  : XLSX_STYLES.total
               : isNumeric
-                ? XLSX_STYLES.dataNumber
+                ? (isPercentColumn ? XLSX_STYLES.percent : isMoneyColumn ? XLSX_STYLES.dataNumber : XLSX_STYLES.dataNumber)
                 : isFirstColumn
                   ? XLSX_STYLES.dataText
                   : isDetailColumn
                     ? XLSX_STYLES.dataText
-                    : XLSX_STYLES.dataNumber
+                    : isPercentColumn
+                      ? XLSX_STYLES.percent
+                      : XLSX_STYLES.dataNumber
 
       setCellStyle(worksheet, rowIndex, columnIndex, style, value)
     }
@@ -685,7 +913,6 @@ function resolveWorkbookRowKind(sheet, rowIndex) {
 
 function applyWorkbookFormulas(worksheet, sheet, aoa) {
   if (sheet.key.startsWith('financial-')) {
-    applyFinancialSheetFormulas(worksheet, sheet, aoa)
     return
   }
 
@@ -895,7 +1122,9 @@ function exportWorkbook(sheets, primaryReport, selectedMonths) {
     const worksheet = buildWorkbookSheet(sheet)
     worksheet['!freeze'] = sheet.key === 'daily'
       ? { xSplit: 2, ySplit: 5, topLeftCell: 'C6', activePane: 'bottomRight', state: 'frozen' }
-      : { xSplit: 2, ySplit: 4, topLeftCell: 'C5', activePane: 'bottomRight', state: 'frozen' }
+      : sheet.key.startsWith('financial-')
+        ? { xSplit: 7, ySplit: 4, topLeftCell: 'H5', activePane: 'bottomRight', state: 'frozen' }
+        : { xSplit: 2, ySplit: 4, topLeftCell: 'C5', activePane: 'bottomRight', state: 'frozen' }
     worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: Math.max(3, buildSheetToAoa(sheet).length - 1), c: Math.max(1, buildSheetToAoa(sheet)[3]?.length - 1 ?? 1) } }) }
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetSafeName(sheet.title))
   }
@@ -935,6 +1164,8 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
   const [reportsByBranch, setReportsByBranch] = useState({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [budgetMessage, setBudgetMessage] = useState('')
+  const [savingBudgetKey, setSavingBudgetKey] = useState('')
   const [activeSheet, setActiveSheet] = useState('primary')
 
   useEffect(() => {
@@ -964,6 +1195,7 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     async function loadWorkbook() {
       setIsLoading(true)
       setError('')
+      setBudgetMessage('')
       try {
         const branchIds = [0, Number(filters.primary_branch_id)]
         if (filters.comparison_branch_id) {
@@ -1018,6 +1250,7 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     selectedMonths,
   }), [comparisonReport, mergedReport, primaryReport, selectedMonths])
   const activeSheetModel = sheets.find((sheet) => sheet.key === activeSheet) ?? sheets[0] ?? null
+  const activeFinancialBudgets = activeSheetModel?.budgets ?? {}
   const summaryCards = useMemo(() => buildSummaryCards(primaryReport, mergedReport, selectedMonths), [mergedReport, primaryReport, selectedMonths])
   const availableYears = useMemo(() => {
     const now = currentYear()
@@ -1030,6 +1263,46 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
       setActiveSheet(sheets[0].key)
     }
   }, [activeSheetModel, sheets])
+
+  function updateReportBudget(branchId, lineKey, amount) {
+    setReportsByBranch((current) => {
+      const report = current[String(branchId)]
+      if (!report) return current
+      return {
+        ...current,
+        [String(branchId)]: {
+          ...report,
+          budgets: {
+            ...(report.budgets ?? {}),
+            [lineKey]: amount,
+          },
+        },
+      }
+    })
+  }
+
+  async function saveReportBudget(branchId, lineKey, amount) {
+    try {
+      setSavingBudgetKey(lineKey)
+      setBudgetMessage('')
+      const response = await apiFetch('/finance/monitor-budgets', {
+        method: 'POST',
+        token,
+        body: {
+          branch_id: Number(branchId),
+          year: Number(filters.year),
+          line_key: lineKey,
+          amount: Number(amount || 0),
+        },
+      })
+      updateReportBudget(branchId, lineKey, response.amount)
+      setBudgetMessage(`Saved budget for ${lineKey.replace(/^financial:/, '').replace(/:/g, ' / ').replace(/-/g, ' ')}`)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSavingBudgetKey('')
+    }
+  }
 
   if (isExecutive) {
     return (
@@ -1067,6 +1340,7 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
       </header>
 
       {error ? <div className="message-banner error">{error}</div> : null}
+      {budgetMessage ? <div className="message-banner success">{budgetMessage}</div> : null}
       {isLoading ? <div className="message-banner">Refreshing workbook data for the selected year and branches...</div> : null}
 
       <section className="report-toolbar-grid report-workbook-toolbar">
@@ -1148,9 +1422,23 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
         {!primaryReport ? (
           <div className="message-banner">Loading workbook data...</div>
         ) : activeSheetModel ? (
-          activeSheetModel.key.startsWith('daily-')
-            ? <DailySalesPreview sheet={activeSheetModel} />
-            : <WorkbookPreviewTable sheet={activeSheetModel} />
+          activeSheetModel.kind === 'financial'
+            ? (
+              <FinancialWorkbookPreview
+                sheet={activeSheetModel}
+                budgets={activeFinancialBudgets}
+                onBudgetChange={(lineKey, amount, save = false) => {
+                  updateReportBudget(activeSheetModel.branchId ?? filters.primary_branch_id, lineKey, amount)
+                  if (save) {
+                    saveReportBudget(activeSheetModel.branchId ?? filters.primary_branch_id, lineKey, amount)
+                  }
+                }}
+                savingBudgetKey={savingBudgetKey}
+              />
+            )
+            : activeSheetModel.key.startsWith('daily-')
+              ? <DailySalesPreview sheet={activeSheetModel} />
+              : <WorkbookPreviewTable sheet={activeSheetModel} />
         ) : (
           <div className="message-banner">No workbook sheet is available for the current selection.</div>
         )}

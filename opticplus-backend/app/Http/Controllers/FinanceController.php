@@ -432,6 +432,86 @@ class FinanceController extends Controller
         }
         ksort($categoryRows);
 
+        $salaryRows = [];
+        $salaryRowIndex = [];
+        if (Schema::hasTable('employees_comprehensive')) {
+            $employeesQuery = DB::table('employees_comprehensive as ec')
+                ->where('ec.status', 'active');
+            $this->applyBranchScope($employeesQuery, 'ec.branch_id', $branchId);
+
+            $employees = $employeesQuery
+                ->orderBy('ec.branch')
+                ->orderBy('ec.ghana_card_name')
+                ->orderBy('ec.staff_id')
+                ->get([
+                    'ec.id',
+                    'ec.ghana_card_name',
+                    'ec.staff_id',
+                ]);
+
+            foreach ($employees as $employee) {
+                $employeeId = (int) $employee->id;
+                $salaryRowIndex[$employeeId] = $employeeId;
+                $salaryRows[$employeeId] = [
+                    'employee_id' => $employeeId,
+                    'name' => trim((string) $employee->ghana_card_name),
+                    'staff_id' => trim((string) $employee->staff_id),
+                    'label' => $this->formatPayrollReportLabel((string) $employee->ghana_card_name, $employee->staff_id),
+                    'months' => array_fill(0, 12, 0.0),
+                ];
+            }
+        }
+
+        if (Schema::hasTable('payroll_history')) {
+            $salaryQuery = DB::table('payroll_history as ph')
+                ->where('ph.pay_year', $year);
+            if (Schema::hasColumn('payroll_history', 'branch_id')) {
+                $this->applyBranchScope($salaryQuery, 'ph.branch_id', $branchId);
+            } elseif (Schema::hasTable('employees_comprehensive')) {
+                $salaryQuery->leftJoin('employees_comprehensive as ec', 'ph.employee_id', '=', 'ec.id');
+                $this->applyBranchScope($salaryQuery, 'ec.branch_id', $branchId);
+            }
+
+            $salaryPayments = $salaryQuery
+                ->selectRaw('ph.employee_id, ph.employee_name, ph.pay_month, SUM(COALESCE(ph.declared_paid, 0) + COALESCE(ph.allowance_paid, 0)) as total')
+                ->groupBy('ph.employee_id', 'ph.employee_name', 'ph.pay_month')
+                ->orderBy('ph.employee_id')
+                ->orderBy('ph.employee_name')
+                ->orderBy('ph.pay_month')
+                ->get();
+
+            foreach ($salaryPayments as $payment) {
+                $monthIndex = (int) $payment->pay_month - 1;
+                if ($monthIndex < 0 || $monthIndex > 11) {
+                    continue;
+                }
+
+                $employeeId = (int) ($payment->employee_id ?? 0);
+                if ($employeeId > 0 && isset($salaryRowIndex[$employeeId])) {
+                    $salaryRows[$employeeId]['months'][$monthIndex] += (float) $payment->total;
+                    continue;
+                }
+
+                $employeeName = trim((string) $payment->employee_name);
+                if ($employeeName === '') {
+                    continue;
+                }
+
+                $fallbackKey = 'history:'.Str::slug($employeeName);
+                if (! isset($salaryRows[$fallbackKey])) {
+                    $salaryRows[$fallbackKey] = [
+                        'employee_id' => null,
+                        'name' => $employeeName,
+                        'staff_id' => null,
+                        'label' => $this->formatPayrollReportLabel($employeeName, null),
+                        'months' => array_fill(0, 12, 0.0),
+                    ];
+                }
+
+                $salaryRows[$fallbackKey]['months'][$monthIndex] += (float) $payment->total;
+            }
+        }
+
         $months = [];
         $runningCash = 0.0;
         for ($month = 1; $month <= 12; $month++) {
@@ -477,6 +557,13 @@ class FinanceController extends Controller
             'generated_at' => now()->toIso8601String(),
             'months' => $months,
             'expense_categories' => collect($categoryRows)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($value) => round($value, 2), $values)])->values(),
+            'salary_rows' => collect($salaryRows)->map(fn ($row) => [
+                'employee_id' => $row['employee_id'],
+                'name' => $row['name'],
+                'staff_id' => $row['staff_id'],
+                'label' => $row['label'],
+                'months' => array_map(fn ($value) => round($value, 2), $row['months']),
+            ])->values(),
             'collection_sources' => collect($collectionSources)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($amount) => round($amount, 2), $values)])->values(),
             'budgets' => Schema::hasTable('monitor_budgets') ? DB::table('monitor_budgets')->where('branch_id', $branchId)->where('year', $year)->pluck('amount', 'line_key') : [],
             'daily_sales' => $daily,
@@ -3252,6 +3339,18 @@ class FinanceController extends Controller
             'stationery', 'stationery ' => 'Stationery',
             default => ucwords($key),
         };
+    }
+
+    private function formatPayrollReportLabel(string $name, ?string $staffId): string
+    {
+        $trimmedName = trim($name);
+        $trimmedStaffId = trim((string) $staffId);
+
+        if ($trimmedStaffId === '') {
+            return $trimmedName;
+        }
+
+        return $trimmedName.' ('.$trimmedStaffId.')';
     }
 
     private function resolveBranchId(Request $request): int
