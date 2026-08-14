@@ -9,6 +9,35 @@ function profileInitials(name) {
     .join('')
 }
 
+function DashboardHeroImageControl({ title, description, imageUrl, fileName, positionX, positionY, onFileChange, onPositionChange }) {
+  return <div className="settings-avatar-block full-span settings-wallpaper-block">
+    <div className="settings-wallpaper-preview">
+      {imageUrl ? (
+        <img src={imageUrl} alt={`${title} preview`} className="settings-wallpaper-image" style={{ objectPosition: `${Number(positionX ?? 50)}% ${Number(positionY ?? 50)}%` }} />
+      ) : (
+        <div className="settings-wallpaper-fallback"><strong>{title}</strong><span>Upload a separate image for this dashboard header.</span></div>
+      )}
+    </div>
+    <div className="settings-avatar-copy">
+      <strong>{title}</strong>
+      <span>{description}</span>
+      <div className="memo-upload-field settings-upload-field">
+        <span className="memo-upload-label">Hero image</span>
+        <label className="memo-upload-trigger">
+          <input className="hidden-file-input" type="file" accept="image/*" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} />
+          <strong>Upload {title.toLowerCase()}</strong>
+          <span>Use a wide image; it will be cropped to fit the header.</span>
+        </label>
+        {fileName ? <div className="memo-file-pill-list"><span className="memo-file-pill">{fileName}</span></div> : <p className="muted-copy">No new image selected yet.</p>}
+      </div>
+      <div className="settings-hero-position-controls">
+        <label>Horizontal position: {Number(positionX ?? 50)}%<input type="range" min="0" max="100" value={positionX ?? 50} onChange={(event) => onPositionChange('x', event.target.value)} /></label>
+        <label>Vertical position: {Number(positionY ?? 50)}%<input type="range" min="0" max="100" value={positionY ?? 50} onChange={(event) => onPositionChange('y', event.target.value)} /></label>
+      </div>
+    </div>
+  </div>
+}
+
 export default function SettingsSection({
   session,
   settingsProfileForm,
@@ -320,6 +349,37 @@ export default function SettingsSection({
                   </div>
                 </div>
               </div>
+
+              <DashboardHeroImageControl
+                title="Merged-company dashboard hero"
+                description="Fallback for the merged-company view when a branch-specific image is not selected. It does not affect the login wallpaper."
+                imageUrl={companyProfileForm.dashboardHeroImagePreview || companyProfileForm.dashboard_hero_image_url || ''}
+                fileName={companyProfileForm.dashboardHeroImageFile?.name || ''}
+                positionX={companyProfileForm.dashboard_hero_position_x}
+                positionY={companyProfileForm.dashboard_hero_position_y}
+                onFileChange={(file) => setCompanyProfileForm((current) => ({ ...current, dashboardHeroImageFile: file, dashboardHeroImagePreview: file ? URL.createObjectURL(file) : current.dashboard_hero_image_url || '' }))}
+                onPositionChange={(axis, value) => setCompanyProfileForm((current) => ({ ...current, [axis === 'x' ? 'dashboard_hero_position_x' : 'dashboard_hero_position_y']: value }))}
+              />
+              <DashboardHeroImageControl
+                title="Labadi dashboard hero"
+                description="Shown on all dashboard headers while Labadi is the active branch."
+                imageUrl={companyProfileForm.labadiDashboardHeroImagePreview || companyProfileForm.labadi_dashboard_hero_image_url || ''}
+                fileName={companyProfileForm.labadiDashboardHeroImageFile?.name || ''}
+                positionX={companyProfileForm.labadi_dashboard_hero_position_x}
+                positionY={companyProfileForm.labadi_dashboard_hero_position_y}
+                onFileChange={(file) => setCompanyProfileForm((current) => ({ ...current, labadiDashboardHeroImageFile: file, labadiDashboardHeroImagePreview: file ? URL.createObjectURL(file) : current.labadi_dashboard_hero_image_url || '' }))}
+                onPositionChange={(axis, value) => setCompanyProfileForm((current) => ({ ...current, [axis === 'x' ? 'labadi_dashboard_hero_position_x' : 'labadi_dashboard_hero_position_y']: value }))}
+              />
+              <DashboardHeroImageControl
+                title="Madina dashboard hero"
+                description="Shown on all dashboard headers while Madina is the active branch."
+                imageUrl={companyProfileForm.madinaDashboardHeroImagePreview || companyProfileForm.madina_dashboard_hero_image_url || ''}
+                fileName={companyProfileForm.madinaDashboardHeroImageFile?.name || ''}
+                positionX={companyProfileForm.madina_dashboard_hero_position_x}
+                positionY={companyProfileForm.madina_dashboard_hero_position_y}
+                onFileChange={(file) => setCompanyProfileForm((current) => ({ ...current, madinaDashboardHeroImageFile: file, madinaDashboardHeroImagePreview: file ? URL.createObjectURL(file) : current.madina_dashboard_hero_image_url || '' }))}
+                onPositionChange={(axis, value) => setCompanyProfileForm((current) => ({ ...current, [axis === 'x' ? 'madina_dashboard_hero_position_x' : 'madina_dashboard_hero_position_y']: value }))}
+              />
 
               <label className="full-span">
                 Labadi branch address

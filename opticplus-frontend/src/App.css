@@ -181,7 +181,7 @@
     linear-gradient(102deg, rgba(2, 8, 18, 0.48), rgba(2, 8, 18, 0.2)),
     var(--login-wallpaper, radial-gradient(circle at top right, rgba(14, 165, 233, 0.24), transparent 24%), linear-gradient(135deg, #031525, #0f172a 54%, #164e63));
   background-size: cover;
-  background-position: center;
+  background-position: var(--portal-hero-position, center);
   gap: 0;
   padding: clamp(18px, 2vw, 28px);
 }
@@ -2061,6 +2061,125 @@
 .report-negative {
   color: #f87171;
   font-weight: 700;
+}
+
+.report-workbook-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.report-workbook-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1px solid var(--border-soft);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
+    var(--surface-soft);
+}
+
+.report-workbook-hero h3 {
+  margin-top: 4px;
+}
+
+.report-workbook-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.report-workbook-toolbar {
+  margin-top: 2px;
+}
+
+.report-tab-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.report-tab-button {
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.report-tab-button:hover {
+  transform: translateY(-1px);
+  color: var(--text-primary);
+}
+
+.report-tab-button.is-active {
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
+
+.workbook-sheet-panel {
+  gap: 16px;
+}
+
+.workbook-preview-table,
+.workbook-daily-table {
+  min-width: 980px;
+}
+
+.workbook-title-row th,
+.report-section-row th {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.workbook-header-row th {
+  background: var(--surface-elevated);
+  font-weight: 700;
+}
+
+.workbook-total-row td {
+  background: rgba(59, 130, 246, 0.08);
+  font-weight: 800;
+}
+
+.workbook-money-cell {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.workbook-daily-scroll {
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.workbook-daily-table th,
+.workbook-daily-table td {
+  white-space: nowrap;
+}
+
+.report-summary-strip .patient-insight-card {
+  min-height: 100%;
 }
 
 .memo-list-card {
@@ -7549,6 +7668,26 @@
   display: block;
 }
 
+.settings-hero-position-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.settings-hero-position-controls label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-hero-position-controls input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .settings-wallpaper-fallback {
   min-height: 180px;
   display: grid;
@@ -9047,6 +9186,10 @@ td.billing-balance-due,
 
   .settings-wallpaper-preview {
     width: 100%;
+  }
+
+  .settings-hero-position-controls {
+    grid-template-columns: 1fr;
   }
 
   .password-field {

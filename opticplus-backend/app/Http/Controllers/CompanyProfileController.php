@@ -33,6 +33,15 @@ class CompanyProfileController extends Controller
             'madina_address' => ['required', 'string', 'max:255'],
             'tagline' => ['nullable', 'string', 'max:255'],
             'login_wallpaper' => ['nullable', 'image', 'max:6144'],
+            'dashboard_hero_image' => ['nullable', 'image', 'max:6144'],
+            'dashboard_hero_position_x' => ['nullable', 'numeric', 'between:0,100'],
+            'dashboard_hero_position_y' => ['nullable', 'numeric', 'between:0,100'],
+            'labadi_dashboard_hero_image' => ['nullable', 'image', 'max:6144'],
+            'labadi_dashboard_hero_position_x' => ['nullable', 'numeric', 'between:0,100'],
+            'labadi_dashboard_hero_position_y' => ['nullable', 'numeric', 'between:0,100'],
+            'madina_dashboard_hero_image' => ['nullable', 'image', 'max:6144'],
+            'madina_dashboard_hero_position_x' => ['nullable', 'numeric', 'between:0,100'],
+            'madina_dashboard_hero_position_y' => ['nullable', 'numeric', 'between:0,100'],
         ]);
 
         $existingProfile = $this->readProfile();
@@ -46,6 +55,15 @@ class CompanyProfileController extends Controller
             'madina_address' => $validated['madina_address'],
             'tagline' => $validated['tagline'] ?? 'Professional Eye Care and Optical Services',
             'login_wallpaper' => $existingProfile['login_wallpaper'] ?? null,
+            'dashboard_hero_image' => $existingProfile['dashboard_hero_image'] ?? null,
+            'dashboard_hero_position_x' => (float) ($validated['dashboard_hero_position_x'] ?? $existingProfile['dashboard_hero_position_x'] ?? 50),
+            'dashboard_hero_position_y' => (float) ($validated['dashboard_hero_position_y'] ?? $existingProfile['dashboard_hero_position_y'] ?? 50),
+            'labadi_dashboard_hero_image' => $existingProfile['labadi_dashboard_hero_image'] ?? null,
+            'labadi_dashboard_hero_position_x' => (float) ($validated['labadi_dashboard_hero_position_x'] ?? $existingProfile['labadi_dashboard_hero_position_x'] ?? 50),
+            'labadi_dashboard_hero_position_y' => (float) ($validated['labadi_dashboard_hero_position_y'] ?? $existingProfile['labadi_dashboard_hero_position_y'] ?? 50),
+            'madina_dashboard_hero_image' => $existingProfile['madina_dashboard_hero_image'] ?? null,
+            'madina_dashboard_hero_position_x' => (float) ($validated['madina_dashboard_hero_position_x'] ?? $existingProfile['madina_dashboard_hero_position_x'] ?? 50),
+            'madina_dashboard_hero_position_y' => (float) ($validated['madina_dashboard_hero_position_y'] ?? $existingProfile['madina_dashboard_hero_position_y'] ?? 50),
             'updated_at' => now()->toDateTimeString(),
         ];
 
@@ -58,6 +76,33 @@ class CompanyProfileController extends Controller
             }
 
             $profile['login_wallpaper'] = $this->storeLoginWallpaper($request);
+        }
+
+        if ($request->hasFile('dashboard_hero_image')) {
+            if (! empty($existingProfile['dashboard_hero_image']) && str_starts_with($existingProfile['dashboard_hero_image'], 'uploads/company-profile/')) {
+                $existing = $this->publicAssetPath($existingProfile['dashboard_hero_image']);
+                if (is_file($existing)) {
+                    @unlink($existing);
+                }
+            }
+
+            $profile['dashboard_hero_image'] = $this->storeDashboardHeroImage($request);
+        }
+
+        foreach (['labadi', 'madina'] as $branch) {
+            $field = $branch.'_dashboard_hero_image';
+            if (! $request->hasFile($field)) {
+                continue;
+            }
+
+            if (! empty($existingProfile[$field]) && str_starts_with($existingProfile[$field], 'uploads/company-profile/')) {
+                $existing = $this->publicAssetPath($existingProfile[$field]);
+                if (is_file($existing)) {
+                    @unlink($existing);
+                }
+            }
+
+            $profile[$field] = $this->storeDashboardHeroImage($request, $field, $branch);
         }
 
         file_put_contents($this->profilePath(), json_encode($profile, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -102,6 +147,15 @@ class CompanyProfileController extends Controller
             'madina_address' => 'FireStone Madina Road, Opp Cal Bank',
             'tagline' => 'Professional Eye Care and Optical Services',
             'login_wallpaper' => null,
+            'dashboard_hero_image' => null,
+            'dashboard_hero_position_x' => 50,
+            'dashboard_hero_position_y' => 50,
+            'labadi_dashboard_hero_image' => null,
+            'labadi_dashboard_hero_position_x' => 50,
+            'labadi_dashboard_hero_position_y' => 50,
+            'madina_dashboard_hero_image' => null,
+            'madina_dashboard_hero_position_x' => 50,
+            'madina_dashboard_hero_position_y' => 50,
             'updated_at' => null,
         ];
     }
@@ -109,14 +163,29 @@ class CompanyProfileController extends Controller
     private function serializeProfile(array $profile): array
     {
         $wallpaperPath = $profile['login_wallpaper'] ?? null;
+        $dashboardHeroPath = $profile['dashboard_hero_image'] ?? null;
+        $labadiDashboardHeroPath = $profile['labadi_dashboard_hero_image'] ?? null;
+        $madinaDashboardHeroPath = $profile['madina_dashboard_hero_image'] ?? null;
 
         if ($wallpaperPath) {
             $this->ensurePublicAssetAvailable($wallpaperPath);
+        }
+        if ($dashboardHeroPath) {
+            $this->ensurePublicAssetAvailable($dashboardHeroPath);
+        }
+        if ($labadiDashboardHeroPath) {
+            $this->ensurePublicAssetAvailable($labadiDashboardHeroPath);
+        }
+        if ($madinaDashboardHeroPath) {
+            $this->ensurePublicAssetAvailable($madinaDashboardHeroPath);
         }
 
         return [
             ...$profile,
             'login_wallpaper_url' => $this->buildPublicAssetUrl($wallpaperPath),
+            'dashboard_hero_image_url' => $this->buildPublicAssetUrl($dashboardHeroPath),
+            'labadi_dashboard_hero_image_url' => $this->buildPublicAssetUrl($labadiDashboardHeroPath),
+            'madina_dashboard_hero_image_url' => $this->buildPublicAssetUrl($madinaDashboardHeroPath),
         ];
     }
 
@@ -130,6 +199,21 @@ class CompanyProfileController extends Controller
         }
 
         $filename = 'login_wallpaper_'.time().'_'.Str::random(8).'.'.$file->getClientOriginalExtension();
+        $file->move($directory, $filename);
+
+        return 'uploads/company-profile/'.$filename;
+    }
+
+    private function storeDashboardHeroImage(Request $request, string $field = 'dashboard_hero_image', string $prefix = 'dashboard_hero'): string
+    {
+        $file = $request->file($field);
+        $directory = $this->publicAssetPath('uploads/company-profile');
+
+        if (! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $filename = $prefix.'_dashboard_hero_'.time().'_'.Str::random(8).'.'.$file->getClientOriginalExtension();
         $file->move($directory, $filename);
 
         return 'uploads/company-profile/'.$filename;

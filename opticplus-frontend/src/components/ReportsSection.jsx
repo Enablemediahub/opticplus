@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx-js-style'
 import StatWidget from './StatWidget.jsx'
 import ReportWorkflowSection from './ReportWorkflowSection.jsx'
 
@@ -8,56 +9,72 @@ const currency = new Intl.NumberFormat('en-GH', {
   maximumFractionDigits: 2,
 })
 
-const TAX_REVIEW_STORAGE_KEY = 'opticplus-tax-review-decisions'
-const REPORT_ROW_NOTES_STORAGE_KEY = 'opticplus-report-row-notes'
-const REPORT_ROW_OVERRIDES_STORAGE_KEY = 'opticplus-report-row-overrides'
-
-const reportTypeOptions = [
-  {
-    value: 'standalone',
-    label: 'Standalone',
-    title: 'Single selected-month report',
-    copy: 'Build one report for the selected branch and month without comparison columns.',
-  },
-  {
-    value: 'comparison',
-    label: 'Compared',
-    title: 'Primary versus comparison report',
-    copy: 'Compare one branch or month directly against another and export the variance.',
-  },
-  {
-    value: 'insurance',
-    label: 'Insurance',
-    title: 'Insurance-focused report',
-    copy: 'Focus on insurance paid, claimed, pending, and outstanding customer exposure.',
-  },
-  {
-    value: 'all',
-    label: 'All',
-    title: 'Full report pack',
-    copy: 'Include monthly overview, detailed statement, and comparison where selected.',
-  },
-  {
-    value: 'tax_review',
-    label: 'Tax Review',
-    title: 'Tax classification extract',
-    copy: 'Export the current revenue and expense tax treatment with audit-pack inclusion notes.',
-  },
+const MONTHS = [
+  { value: '01', short: 'JAN', long: 'JANUARY' },
+  { value: '02', short: 'FEB', long: 'FEBRUARY' },
+  { value: '03', short: 'MAR', long: 'MARCH' },
+  { value: '04', short: 'APR', long: 'APRIL' },
+  { value: '05', short: 'MAY', long: 'MAY' },
+  { value: '06', short: 'JUN', long: 'JUNE' },
+  { value: '07', short: 'JUL', long: 'JULY' },
+  { value: '08', short: 'AUG', long: 'AUGUST' },
+  { value: '09', short: 'SEP', long: 'SEPTEMBER' },
+  { value: '10', short: 'OCT', long: 'OCTOBER' },
+  { value: '11', short: 'NOV', long: 'NOVEMBER' },
+  { value: '12', short: 'DEC', long: 'DECEMBER' },
 ]
 
-const insuranceKeys = new Set([
-  'gross_billed_total',
-  'insurance_paid',
-  'insurance_claimed',
-  'insurance_pending',
-  'outstanding_balance',
-  'total_collections',
-  'net_operating_position',
-  'net_position_collections',
-])
+const BRANCHES = [
+  { id: 0, name: 'Merged Branches' },
+  { id: 1, name: 'Labadi' },
+  { id: 2, name: 'Madina' },
+]
 
-function currentMonth() {
-  return new Date().toISOString().slice(0, 7)
+function currentYear() {
+  return new Date().getFullYear()
+}
+
+function monthName(value, short = false) {
+  return MONTHS.find((month) => month.value === String(value).padStart(2, '0'))?.[short ? 'short' : 'long'] ?? ''
+}
+
+function monthNumber(value) {
+  return String(value).padStart(2, '0')
+}
+
+function monthRange(startMonth, endMonth) {
+  const start = Math.min(Number(startMonth || '1'), Number(endMonth || '12'))
+  const end = Math.max(Number(startMonth || '1'), Number(endMonth || '12'))
+  const range = []
+
+  for (let month = start; month <= end; month += 1) {
+    range.push(String(month).padStart(2, '0'))
+  }
+
+  return range
+}
+
+function toNumber(value) {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+function formatMoney(value) {
+  return currency.format(toNumber(value))
+}
+
+function formatDate(value) {
+  if (!value) return ''
+  const text = String(value)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const [year, month, day] = text.split('-')
+    return `${day}/${month}/${year}`
+  }
+
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return text
+
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' })
 }
 
 function slugify(value) {
@@ -67,842 +84,952 @@ function slugify(value) {
     .replace(/^-+|-+$/g, '') || 'report'
 }
 
-function formatMoney(value) {
-  return currency.format(Number(value ?? 0))
+function sheetSafeName(value) {
+  return String(value ?? 'Report')
+    .replace(/[\\/?*\[\]:]/g, ' ')
+    .trim()
+    .slice(0, 31) || 'Report'
 }
 
-function formatSignedMoney(value) {
-  const amount = Number(value ?? 0)
-  if (amount === 0) return formatMoney(0)
-
-  return `${amount > 0 ? '+' : '-'}${formatMoney(Math.abs(amount))}`
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-}
-
-function flattenSections(report) {
-  let sn = 1
-
-  return (report?.sections ?? []).flatMap((section) => ([
-    { type: 'section', key: section.key, title: section.title },
-    ...(section.rows ?? []).map((row) => ({
-      type: 'row',
-      section: section.title,
-      sn: sn++,
-      key: row.key,
-      description: row.description,
-      amount: Number(row.amount ?? 0),
-      note: '',
-      systemNote: row.note ?? '',
-    })),
-  ]))
-}
-
-function readTaxReviewDecisions() {
-  if (typeof window === 'undefined') return {}
-
-  try {
-    return JSON.parse(window.localStorage.getItem(TAX_REVIEW_STORAGE_KEY) ?? '{}')
-  } catch {
-    return {}
+function buildMonthMap(report) {
+  const map = new Map()
+  for (const row of report?.months ?? []) {
+    map.set(monthNumber(row.month), row)
   }
+  return map
 }
 
-function readReportRowNotes() {
-  if (typeof window === 'undefined') return {}
-
-  try {
-    return JSON.parse(window.localStorage.getItem(REPORT_ROW_NOTES_STORAGE_KEY) ?? '{}')
-  } catch {
-    return {}
-  }
+function buildSelectedMonths(report, selectedMonths) {
+  const monthMap = buildMonthMap(report)
+  return selectedMonths.map((month) => ({
+    month,
+    short: monthName(month, true),
+    long: monthName(month, false),
+    data: monthMap.get(month) ?? {
+      month: Number(month),
+      frames: 0,
+      lenses: 0,
+      consultation: 0,
+      cases: 0,
+      sales_reconciliation: 0,
+      collected: 0,
+      insurance_claimed: 0,
+      insurance_received: 0,
+      expenses: 0,
+      debtors: 0,
+      operating_cash: 0,
+    },
+  }))
 }
 
-function writeReportRowNotes(notes) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(REPORT_ROW_NOTES_STORAGE_KEY, JSON.stringify(notes))
+function sumArray(values) {
+  return (values ?? []).reduce((total, value) => total + toNumber(value), 0)
 }
 
-function readReportRowOverrides() {
-  if (typeof window === 'undefined') return {}
-
-  try {
-    return JSON.parse(window.localStorage.getItem(REPORT_ROW_OVERRIDES_STORAGE_KEY) ?? '{}')
-  } catch {
-    return {}
-  }
+function sumMonthColumn(rows, index) {
+  return rows.reduce((total, row) => total + toNumber(row?.months?.[index]), 0)
 }
 
-function writeReportRowOverrides(overrides) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(REPORT_ROW_OVERRIDES_STORAGE_KEY, JSON.stringify(overrides))
-}
+function buildFinancialSheet(report, selectedMonths, branchLabel) {
+  const months = buildSelectedMonths(report, selectedMonths)
+  const monthsWide = months.map((item) => item.short)
+  const columnCount = 2 + monthsWide.length + 1
+  const title = `${String(branchLabel).toUpperCase()} REC & PAYMENT`
+  const subtitle = `FINANCIAL DETAILS FOR THE PERIOD ${months[0]?.long ?? 'JANUARY'} TO ${months[months.length - 1]?.long ?? 'DECEMBER'} ${report?.year ?? currentYear()}`
+  const monthRows = months.map((item) => item.data)
+  const collectionSources = (report?.collection_sources ?? []).map((row) => ({
+    label: row.label,
+    months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+  }))
+  const expenseRows = (report?.expense_categories ?? []).map((row) => ({
+    label: row.label,
+    months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+  }))
 
-function formatStatusLabel(value) {
-  return String(value ?? '')
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-function buildTaxReviewPayload(financeSales, financeExpenses) {
-  const decisions = readTaxReviewDecisions()
-  const salesRows = (financeSales?.records ?? []).map((record, index) => {
-    const decision = {
-      classification: 'taxable',
-      includeInAudit: true,
-      reason: '',
-      accountantNote: '',
-      ...(decisions[`sales-${record.id}`] ?? {}),
-    }
-
-    return {
-      type: 'row',
-      section: 'Revenue Classification',
-      sn: index + 1,
-      key: `sales-${record.id}`,
-      description: `${record.name || record.folder_id || 'Revenue entry'} | ${record.payment_method || 'Payment'} | ${record.receipt_number || record.folder_id || `Sales #${record.id}`}`,
-      amount: Number(record.amount_paid ?? 0),
-      note: decision.accountantNote ?? '',
-      systemNote: `${formatStatusLabel(decision.classification)} | ${decision.includeInAudit ? 'Audit included' : 'Internal only'}${decision.reason ? ` | ${decision.reason}` : ''}`,
-      classification: decision.classification,
-      includeInAudit: decision.includeInAudit,
-    }
-  })
-
-  const expenseRows = (financeExpenses?.records ?? []).map((expense, index) => {
-    const decision = {
-      classification: 'deductible',
-      includeInAudit: true,
-      reason: '',
-      accountantNote: '',
-      ...(decisions[`expense-${expense.expense_id}`] ?? {}),
-    }
-
-    return {
-      type: 'row',
-      section: 'Expense Classification',
-      sn: salesRows.length + index + 1,
-      key: `expense-${expense.expense_id}`,
-      description: `${expense.description || `Expense #${expense.expense_id}`} | ${expense.category || 'Expense'} | ${expense.expense_id}`,
-      amount: Number(expense.amount ?? 0),
-      note: decision.accountantNote ?? '',
-      systemNote: `${formatStatusLabel(decision.classification)} | ${decision.includeInAudit ? 'Audit included' : 'Internal only'}${decision.reason ? ` | ${decision.reason}` : ''}`,
-      classification: decision.classification,
-      includeInAudit: decision.includeInAudit,
-    }
-  })
-
-  const rows = [
-    { type: 'section', key: 'tax-revenue', title: 'Revenue Classification' },
-    ...salesRows,
-    { type: 'section', key: 'tax-expenses', title: 'Expense Classification' },
-    ...expenseRows,
+  const receiptRows = [
+    { sn: '1.1', label: 'SALES OF FRAMES - NORMAL', months: monthRows.map((row) => toNumber(row.frames)) },
+    { sn: '1.2', label: 'SALE OF FRAMES - BY THE SIDE', months: monthRows.map(() => 0) },
+    { sn: '1.3', label: 'SALE OF LENSES - NORMAL', months: monthRows.map((row) => toNumber(row.lenses)) },
+    { sn: '1.4', label: 'SALE OF LENSES - BY THE SIDE', months: monthRows.map(() => 0) },
+    { sn: '1.5', label: 'CONSULTATION - NORMAL', months: monthRows.map((row) => toNumber(row.consultation)) },
+    { sn: '1.6', label: 'INSURANCE RECEIVED', months: monthRows.map((row) => toNumber(row.insurance_received)) },
+    { sn: '1.7', label: 'SALE OF CASES', months: monthRows.map((row) => toNumber(row.cases)) },
+    { sn: '1.8', label: 'SALES RECONCILIATION BALANCE', months: monthRows.map((row) => toNumber(row.sales_reconciliation)) },
+    ...collectionSources
+      .filter((row) => row.months.some((amount) => amount !== 0))
+      .map((row, index) => ({
+        sn: `1.${9 + index}`,
+        label: row.label.toUpperCase(),
+        months: row.months,
+      })),
   ]
 
-  const taxableRevenue = salesRows
-    .filter((row) => row.classification === 'taxable')
-    .reduce((total, row) => total + row.amount, 0)
-  const nonTaxableRevenue = salesRows
-    .filter((row) => row.classification === 'non_taxable')
-    .reduce((total, row) => total + row.amount, 0)
-  const deductibleExpenses = expenseRows
-    .filter((row) => row.classification === 'deductible')
-    .reduce((total, row) => total + row.amount, 0)
-  const nonDeductibleExpenses = expenseRows
-    .filter((row) => row.classification === 'non_deductible')
-    .reduce((total, row) => total + row.amount, 0)
-  const reviewCount = [...salesRows, ...expenseRows].filter((row) => row.classification === 'review').length
-  const auditIncludedTotal = [...salesRows, ...expenseRows]
-    .filter((row) => row.includeInAudit)
-    .reduce((total, row) => total + row.amount, 0)
+  const receiptTotals = selectedMonths.map((_, index) => sumMonthColumn(receiptRows, index))
+  const paymentTotals = selectedMonths.map((_, index) => sumMonthColumn(expenseRows, index))
+  const profitTotals = selectedMonths.map((_, index) => receiptTotals[index] - paymentTotals[index])
+
+  const rows = [
+    { kind: 'title', cells: ['BEALET OPTICALS'] },
+    { kind: 'title', cells: [subtitle] },
+    { kind: 'title', cells: ['MONTHLY RETURNS - SAMPLE'] },
+    { kind: 'header', cells: ['SN', 'DETAILS', ...monthsWide, 'TOTAL'] },
+    { kind: 'section', cells: ['RECEIPTS'] },
+    ...receiptRows.map((row) => ({
+      kind: 'data',
+      cells: [row.sn, row.label, ...row.months, sumArray(row.months)],
+    })),
+    { kind: 'total', cells: ['', 'TOTAL RECEIPTS', ...receiptTotals, sumArray(receiptTotals)] },
+    { kind: 'section', cells: ['PAYMENTS'] },
+    ...expenseRows.map((row, index) => ({
+      kind: 'data',
+      cells: [`2.${index + 1}`, row.label.toUpperCase(), ...row.months, sumArray(row.months)],
+    })),
+    { kind: 'total', cells: ['', 'TOTAL PAYMENTS', ...paymentTotals, sumArray(paymentTotals)] },
+    { kind: 'total', cells: ['', 'PROFIT / LOSS', ...profitTotals, sumArray(profitTotals)] },
+  ]
 
   return {
+    key: `financial-${slugify(branchLabel)}`,
+    title,
+    subtitle,
+    columnCount,
     rows,
-    summary: {
-      taxableRevenue,
-      nonTaxableRevenue,
-      deductibleExpenses,
-      nonDeductibleExpenses,
-      reviewCount,
-      auditIncludedTotal,
-      revenueCount: salesRows.length,
-      expenseCount: expenseRows.length,
+    monthlyTotals: {
+      receipts: receiptTotals,
+      payments: paymentTotals,
+      profit: profitTotals,
     },
   }
 }
 
-function mergeRows(primary, comparison) {
-  const primaryRows = flattenSections(primary)
-  const comparisonMap = new Map(
-    flattenSections(comparison)
-      .filter((item) => item.type === 'row')
-      .map((row) => [row.key, row]),
-  )
-
-  return primaryRows.map((item) => {
-    if (item.type !== 'row') return item
-    const comparisonRow = comparisonMap.get(item.key)
+function buildDailySalesSheet(report, selectedMonths, branchLabel) {
+  const monthGroups = selectedMonths.map((month) => {
+    const rows = (report?.daily_sales ?? [])
+      .filter((entry) => String(entry?.date ?? '').slice(5, 7) === month)
+      .sort((left, right) => String(left.date).localeCompare(String(right.date)))
+      .map((entry) => ({ date: formatDate(entry.date), total: toNumber(entry.total) }))
 
     return {
-      ...item,
-      comparisonAmount: Number(comparisonRow?.amount ?? 0),
-      variance: Number(item.amount ?? 0) - Number(comparisonRow?.amount ?? 0),
+      month,
+      label: monthName(month, false),
+      rows,
+      total: rows.reduce((total, row) => total + row.total, 0),
     }
   })
-}
 
-function buildMonthlyRows(reportData) {
-  return (reportData?.monthly_overview ?? []).map((row) => ({
-    ...row,
-    revenue: Number(row.revenue ?? 0),
-    expenses: Number(row.expenses ?? 0),
-    profit: Number(row.profit ?? 0),
-    outstanding_balance: Number(row.outstanding_balance ?? 0),
-  }))
-}
-
-function filterRowsByType(rows, reportType) {
-  if (reportType !== 'insurance') return rows
-
-  const result = []
-  let pendingSection = null
-
-  rows.forEach((item) => {
-    if (item.type === 'section') {
-      pendingSection = item
-      return
-    }
-
-    const shouldKeep = insuranceKeys.has(item.key) || item.description.toLowerCase().includes('insurance')
-    if (!shouldKeep) return
-
-    if (pendingSection) {
-      result.push(pendingSection)
-      pendingSection = null
-    }
-
-    result.push(item)
-  })
-
-  return result
-}
-
-function filterRowsBySections(rows, includedSections) {
-  if (!includedSections?.length) return rows.filter((item) => item.type !== 'section')
-
-  const result = []
-  let activeSection = null
-
-  rows.forEach((item) => {
-    if (item.type === 'section') {
-      activeSection = includedSections.includes(item.key) ? item : null
-      if (activeSection) result.push(item)
-      return
-    }
-
-    if (activeSection) result.push(item)
-  })
-
-  return result
-}
-
-function applyPresentationOverrides(rows, overrides, notes) {
-  const nextRows = []
-  let pendingSection = null
-
-  rows.forEach((item) => {
-    if (item.type === 'section') {
-      pendingSection = item
-      return
-    }
-
-    const override = overrides[item.key] ?? {}
-    if (override.include === false) return
-
-    if (pendingSection) {
-      nextRows.push(pendingSection)
-      pendingSection = null
-    }
-
-    nextRows.push({
-      ...item,
-      description: override.description?.trim() ? override.description : item.description,
-      amount: override.amount === '' || override.amount == null ? item.amount : Number(override.amount),
-      note: notes[item.key] ?? item.note ?? '',
+  const maxRows = Math.max(0, ...monthGroups.map((group) => group.rows.length))
+  const matrixRows = Array.from({ length: maxRows }, (_, rowIndex) => (
+    monthGroups.flatMap((group) => {
+      const row = group.rows[rowIndex]
+      return [row?.date ?? '', row?.total ?? '']
     })
+  ))
+
+  const totalsRow = monthGroups.flatMap((group) => ['Total', group.total])
+  const totalColumns = monthGroups.length * 2
+  const merges = selectedMonths.map((_, index) => ({
+    s: { r: 3, c: index * 2 },
+    e: { r: 3, c: index * 2 + 1 },
+  }))
+
+  const rows = [
+    { kind: 'title', cells: ['BEALET OPTICALS'] },
+    { kind: 'title', cells: [`DAILY SALES - ${String(branchLabel).toUpperCase()}`] },
+    { kind: 'title', cells: ['MONTHLY DAILY SALES MATRIX'] },
+    { kind: 'header', cells: monthGroups.flatMap((group) => [group.label, '']) },
+    { kind: 'header', cells: monthGroups.flatMap(() => ['DATE', 'SALES']) },
+    ...matrixRows.map((cells) => ({ kind: 'data', cells })),
+    { kind: 'total', cells: totalsRow },
+  ]
+
+  return {
+    key: `daily-${slugify(branchLabel)}`,
+    title: `DAILY SALES - ${branchLabel}`,
+    subtitle: `Daily receipts by month for ${selectedMonths.map((month) => monthName(month, false)).join(', ')}`,
+    totalColumns,
+    rows,
+    merges,
+    monthGroups,
+  }
+}
+
+function buildInsuranceSheet(primaryReport, comparisonReport, selectedMonths) {
+  const monthRowsPrimary = buildSelectedMonths(primaryReport, selectedMonths)
+  const monthRowsComparison = comparisonReport ? buildSelectedMonths(comparisonReport, selectedMonths) : monthRowsPrimary.map((item) => ({ ...item, data: null }))
+  const labels = selectedMonths.map((month) => monthName(month, true))
+  const title = 'INSURANCE'
+  const subtitle = 'MONTHLY INSURANCE CLAIMS'
+
+  const claimsPrimary = monthRowsPrimary.map((item) => toNumber(item.data.insurance_claimed))
+  const claimsComparison = monthRowsComparison.map((item) => toNumber(item.data?.insurance_claimed))
+  const receivedPrimary = monthRowsPrimary.map((item) => toNumber(item.data.insurance_received))
+  const receivedComparison = monthRowsComparison.map((item) => toNumber(item.data?.insurance_received))
+  const claimsTotal = claimsPrimary.map((amount, index) => amount + claimsComparison[index])
+  const receivedTotal = receivedPrimary.map((amount, index) => amount + receivedComparison[index])
+
+  const rows = [
+    { kind: 'title', cells: ['BEALET OPTICALS'] },
+    { kind: 'title', cells: [subtitle] },
+    { kind: 'title', cells: ['MONTHLY INSURANCE CLAIMS'] },
+    { kind: 'header', cells: ['SN', 'DETAILS', ...labels, 'TOTAL'] },
+    { kind: 'data', cells: ['1.1', `INSURANCE CLAIMS - ${primaryReport?.branch_name ?? 'PRIMARY'}`.toUpperCase(), ...claimsPrimary, sumArray(claimsPrimary)] },
+    { kind: 'data', cells: ['1.2', `INSURANCE CLAIMS - ${comparisonReport?.branch_name ?? 'COMPARISON'}`.toUpperCase(), ...claimsComparison, sumArray(claimsComparison)] },
+    { kind: 'total', cells: ['', 'TOTAL', ...claimsTotal, sumArray(claimsTotal)] },
+    { kind: 'data', cells: ['2.1', `INSURANCE RECEIVED - ${primaryReport?.branch_name ?? 'PRIMARY'}`.toUpperCase(), ...receivedPrimary, sumArray(receivedPrimary)] },
+    { kind: 'data', cells: ['2.2', `INSURANCE RECEIVED - ${comparisonReport?.branch_name ?? 'COMPARISON'}`.toUpperCase(), ...receivedComparison, sumArray(receivedComparison)] },
+    { kind: 'total', cells: ['', 'TOTAL', ...receivedTotal, sumArray(receivedTotal)] },
+  ]
+
+  return {
+    key: 'insurance',
+    title,
+    subtitle,
+    columnCount: 2 + labels.length + 1,
+    rows,
+  }
+}
+
+function buildPurchasesSheet(primaryReport, mergedReport, selectedMonths) {
+  const labels = selectedMonths.map((month) => monthName(month, true))
+  const primaryMonths = buildSelectedMonths(primaryReport, selectedMonths)
+  const mergedExpenseRows = (mergedReport?.expense_categories ?? []).map((row) => ({
+    label: row.label,
+    months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+  }))
+
+  const lensPurchases = mergedExpenseRows
+    .filter((row) => String(row.label).toLowerCase().includes('lens'))
+    .reduce((totals, row) => totals.map((amount, index) => amount + toNumber(row.months[index])), Array(selectedMonths.length).fill(0))
+  const framePurchases = mergedExpenseRows
+    .filter((row) => String(row.label).toLowerCase().includes('frame'))
+    .reduce((totals, row) => totals.map((amount, index) => amount + toNumber(row.months[index])), Array(selectedMonths.length).fill(0))
+
+  const lensSold = primaryMonths.map((item) => toNumber(item.data.lenses))
+  const frameSold = primaryMonths.map((item) => toNumber(item.data.frames))
+  const lensProfit = lensSold.map((amount, index) => amount - lensPurchases[index])
+  const frameProfit = frameSold.map((amount, index) => amount - framePurchases[index])
+
+  const rows = [
+    { kind: 'title', cells: ['BEALET OPTICALS'] },
+    { kind: 'title', cells: ['MONTHLY PURCHASES ANALYSIS SHEET'] },
+    { kind: 'title', cells: ['SAMPLE'] },
+    { kind: 'header', cells: ['SN', 'DETAILS', ...labels, 'TOTAL'] },
+    { kind: 'section', cells: ['LENSES'] },
+    { kind: 'data', cells: ['1', 'LENS (SOLD)', ...lensSold, sumArray(lensSold)] },
+    { kind: 'data', cells: ['1.1', 'LENS PURCHASES', ...lensPurchases, sumArray(lensPurchases)] },
+    { kind: 'total', cells: ['', 'PROFIT', ...lensProfit, sumArray(lensProfit)] },
+    { kind: 'section', cells: ['FRAMES'] },
+    { kind: 'data', cells: ['1.2', 'FRAMES SOLD', ...frameSold, sumArray(frameSold)] },
+    { kind: 'data', cells: ['1.3', 'FRAMES PURCHASED', ...framePurchases, sumArray(framePurchases)] },
+    { kind: 'total', cells: ['', 'PROFIT', ...frameProfit, sumArray(frameProfit)] },
+  ]
+
+  return {
+    key: 'purchases',
+    title: 'PURCHASES',
+    subtitle: 'Monthly purchases analysis',
+    columnCount: 2 + labels.length + 1,
+    rows,
+  }
+}
+
+function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
+  const labels = selectedMonths.map((month) => monthName(month, false))
+  const selected = buildSelectedMonths(mergedReport, selectedMonths)
+  const cashProxy = selected.map((item) => toNumber(item.data.operating_cash))
+  const debtors = selected.map((item) => toNumber(item.data.debtors))
+  const expenses = selected.map((item) => toNumber(item.data.expenses))
+  const collections = selected.map((item) => toNumber(item.data.collected))
+  const supportTotals = (mergedReport?.collection_sources ?? [])
+    .filter((row) => /loan|support/i.test(String(row.label)))
+    .reduce((totals, row) => totals.map((amount, index) => amount + toNumber(row.months?.[Number(selectedMonths[index]) - 1])), Array(selectedMonths.length).fill(0))
+  const totalAssets = cashProxy.map((amount, index) => amount + debtors[index])
+  const totalLiabilities = expenses.map((amount, index) => amount + supportTotals[index])
+  const workingCapital = totalAssets.map((amount, index) => amount - totalLiabilities[index])
+
+  const rows = [
+    { kind: 'title', cells: ['BEALET OPTICALS'] },
+    { kind: 'title', cells: ['MONTHLY WORKING CAPITAL STATEMENT'] },
+    { kind: 'title', cells: ['CALCULATED OPERATIONAL VIEW'] },
+    { kind: 'header', cells: ['SN', 'DETAILS', ...labels, 'TOTAL'] },
+    { kind: 'section', cells: ['CURRENT ASSETS'] },
+    { kind: 'data', cells: ['1.1', 'CASH AT BANK / OPERATING CASH', ...cashProxy, sumArray(cashProxy)] },
+    { kind: 'data', cells: ['1.2', 'TRADE DEBTORS', ...debtors, sumArray(debtors)] },
+    { kind: 'data', cells: ['1.3', 'COLLECTIONS', ...collections, sumArray(collections)] },
+    { kind: 'total', cells: ['', 'TOTAL CURRENT ASSETS', ...totalAssets, sumArray(totalAssets)] },
+    { kind: 'section', cells: ['CURRENT LIAB'] },
+    { kind: 'data', cells: ['2.1', 'OPERATING EXPENSES', ...expenses, sumArray(expenses)] },
+    { kind: 'data', cells: ['2.2', 'LOANS / SUPPORT', ...supportTotals, sumArray(supportTotals)] },
+    { kind: 'total', cells: ['', 'TOTAL CURRENT LIABILITIES', ...totalLiabilities, sumArray(totalLiabilities)] },
+    { kind: 'total', cells: ['', 'WORKING CAPITAL', ...workingCapital, sumArray(workingCapital)] },
+  ]
+
+  return {
+    key: 'working-capital',
+    title: 'WORKING CAP STATEMENT',
+    subtitle: 'Calculated operational view and not a formal statutory balance sheet',
+    columnCount: 2 + labels.length + 1,
+    rows,
+  }
+}
+
+function buildWorkbookSheets({ primaryReport, comparisonReport, mergedReport, selectedMonths }) {
+  if (!primaryReport) return []
+
+  const sheets = []
+  sheets.push(buildFinancialSheet(primaryReport, selectedMonths, primaryReport.branch_name))
+  if (comparisonReport && comparisonReport.branch_id !== primaryReport.branch_id) {
+    sheets.push(buildFinancialSheet(comparisonReport, selectedMonths, comparisonReport.branch_name))
+  }
+  sheets.push(buildDailySalesSheet(primaryReport, selectedMonths, primaryReport.branch_name))
+  sheets.push(buildInsuranceSheet(primaryReport, comparisonReport, selectedMonths))
+  sheets.push(buildPurchasesSheet(primaryReport, mergedReport ?? primaryReport, selectedMonths))
+  sheets.push(buildWorkingCapitalSheet(mergedReport ?? primaryReport, selectedMonths))
+
+  return sheets
+}
+
+function WorkbookPreviewTable({ sheet }) {
+  const columnCount = sheet.columnCount ?? Math.max(...sheet.rows.map((row) => row.cells.length))
+
+  return (
+    <table className="portal-table report-table workbook-preview-table">
+      <tbody>
+        {sheet.rows.map((row, rowIndex) => {
+          if (row.kind === 'title' || row.kind === 'section') {
+            return (
+              <tr key={`${sheet.key}-${rowIndex}`} className={row.kind === 'section' ? 'report-section-row' : 'workbook-title-row'}>
+                <th colSpan={columnCount}>{row.cells[0]}</th>
+              </tr>
+            )
+          }
+
+          if (row.kind === 'header') {
+            return (
+              <tr key={`${sheet.key}-${rowIndex}`} className="workbook-header-row">
+                {row.cells.map((cell, cellIndex) => (
+                  <th key={`${sheet.key}-${rowIndex}-${cellIndex}`}>{cell}</th>
+                ))}
+              </tr>
+            )
+          }
+
+          return (
+            <tr key={`${sheet.key}-${rowIndex}`} className={row.kind === 'total' ? 'workbook-total-row' : ''}>
+              {row.cells.map((cell, cellIndex) => (
+                <td key={`${sheet.key}-${rowIndex}-${cellIndex}`} className={cellIndex >= 2 ? 'workbook-money-cell' : ''}>
+                  {typeof cell === 'number' ? formatMoney(cell) : cell}
+                </td>
+              ))}
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+function DailySalesPreview({ sheet }) {
+  if (!sheet?.monthGroups?.length) {
+    return <p className="muted-copy">No daily sales are available for the selected range.</p>
+  }
+
+  const maxRows = Math.max(...sheet.monthGroups.map((group) => group.rows.length))
+
+  return (
+    <div className="workbook-daily-scroll">
+      <table className="portal-table report-table workbook-daily-table">
+        <thead>
+          <tr>
+            {sheet.monthGroups.map((group) => (
+              <th key={`daily-month-${group.month}`} colSpan="2">{group.label}</th>
+            ))}
+          </tr>
+          <tr>
+            {sheet.monthGroups.map((group) => (
+              <Fragment key={`daily-sub-${group.month}`}>
+                <th>Date</th>
+                <th>Sales</th>
+              </Fragment>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: maxRows }, (_, rowIndex) => (
+            <tr key={`daily-row-${rowIndex}`}>
+              {sheet.monthGroups.map((group) => {
+                const row = group.rows[rowIndex]
+                return (
+                  <Fragment key={`daily-row-${group.month}-${rowIndex}`}>
+                    <td>{row?.date ?? ''}</td>
+                    <td className="workbook-money-cell">{row ? formatMoney(row.total) : ''}</td>
+                  </Fragment>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            {sheet.monthGroups.map((group) => (
+              <Fragment key={`daily-total-${group.month}`}>
+                <td>Total</td>
+                <td className="workbook-money-cell">{formatMoney(group.total)}</td>
+              </Fragment>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+function buildSheetToAoa(sheet) {
+  if (sheet.key === 'daily') {
+    const rows = [
+      ['BEALET OPTICALS'],
+      [sheet.title],
+      [sheet.subtitle],
+      sheet.monthGroups.flatMap((group) => [group.label, '']),
+      sheet.monthGroups.flatMap(() => ['DATE', 'SALES']),
+    ]
+
+    const maxRows = Math.max(...sheet.monthGroups.map((group) => group.rows.length))
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+      rows.push(sheet.monthGroups.flatMap((group) => {
+        const row = group.rows[rowIndex]
+        return [row?.date ?? '', row?.total ?? '']
+      }))
+    }
+
+    rows.push(sheet.monthGroups.flatMap((group) => ['Total', group.total]))
+
+    return rows
+  }
+
+  return sheet.rows.map((row) => row.cells)
+}
+
+const XLSX_BORDER = {
+  top: { style: 'thin', color: { rgb: '9AA7B5' } },
+  right: { style: 'thin', color: { rgb: '9AA7B5' } },
+  bottom: { style: 'thin', color: { rgb: '9AA7B5' } },
+  left: { style: 'thin', color: { rgb: '9AA7B5' } },
+}
+
+const XLSX_STYLES = {
+  title: {
+    font: { name: 'Calibri', sz: 14, bold: true, color: { rgb: 'FFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: '0F172A' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: XLSX_BORDER,
+  },
+  subtitle: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'D9EAF7' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: XLSX_BORDER,
+  },
+  section: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'F6E7B8' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: XLSX_BORDER,
+  },
+  header: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+    fill: { patternType: 'solid', fgColor: { rgb: '1D4ED8' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: XLSX_BORDER,
+  },
+  dataText: {
+    font: { name: 'Calibri', sz: 11, color: { rgb: '0F172A' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: XLSX_BORDER,
+  },
+  dataNumber: {
+    font: { name: 'Calibri', sz: 11, color: { rgb: '0F172A' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '#,##0.00',
+    border: XLSX_BORDER,
+  },
+  total: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '#,##0.00',
+    border: XLSX_BORDER,
+  },
+  totalLabel: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: XLSX_BORDER,
+  },
+  positive: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '1D4ED8' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FF' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '#,##0.00',
+    border: XLSX_BORDER,
+  },
+  negative: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'DC2626' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'FDECEC' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '#,##0.00',
+    border: XLSX_BORDER,
+  },
+  date: {
+    font: { name: 'Calibri', sz: 11, color: { rgb: '0F172A' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: XLSX_BORDER,
+  },
+}
+
+function cloneStyle(style) {
+  return JSON.parse(JSON.stringify(style))
+}
+
+function excelCellAddress(rowIndex, columnIndex) {
+  return XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })
+}
+
+function setCellStyle(worksheet, rowIndex, columnIndex, style, value, formula = null) {
+  const address = excelCellAddress(rowIndex, columnIndex)
+  worksheet[address] = worksheet[address] ?? { t: typeof value === 'number' ? 'n' : 's', v: value ?? '' }
+  worksheet[address].s = cloneStyle(style)
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    worksheet[address].t = 'n'
+    worksheet[address].v = value
+  } else if (value != null) {
+    worksheet[address].t = 's'
+    worksheet[address].v = String(value)
+  }
+
+  if (formula) {
+    worksheet[address].f = formula
+  }
+}
+
+function buildWorkbookSheet(sheet) {
+  const aoa = buildSheetToAoa(sheet)
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa)
+  const columnCount = Math.max(...aoa.map((row) => row.length))
+  worksheet['!merges'] = buildSheetMerges(sheet)
+  worksheet['!cols'] = Array.from({ length: columnCount }, (_, index) => ({
+    wch: sheet.key === 'daily'
+      ? (index % 2 === 0 ? 14 : 12)
+      : index === 0
+        ? 12
+        : index === 1
+          ? 36
+          : index === columnCount - 1
+            ? 16
+            : 14,
+  }))
+  worksheet['!rows'] = aoa.map((_, index) => ({
+    hpt: index < 3 ? 22 : index === 3 ? 20 : 18,
+  }))
+
+  for (let rowIndex = 0; rowIndex < aoa.length; rowIndex += 1) {
+    const rowValues = aoa[rowIndex]
+    const rowKind = resolveWorkbookRowKind(sheet, rowIndex)
+
+    for (let columnIndex = 0; columnIndex < rowValues.length; columnIndex += 1) {
+      const value = rowValues[columnIndex]
+      const isNumeric = typeof value === 'number' && Number.isFinite(value)
+      const isFirstColumn = columnIndex === 0
+      const isDetailColumn = columnIndex === 1
+      const style = rowKind === 'title'
+        ? rowIndex === 0
+          ? XLSX_STYLES.title
+          : rowIndex === 1
+            ? XLSX_STYLES.subtitle
+            : XLSX_STYLES.section
+        : rowKind === 'section'
+          ? XLSX_STYLES.section
+          : rowKind === 'header'
+            ? XLSX_STYLES.header
+            : rowKind === 'total'
+              ? isFirstColumn
+                ? XLSX_STYLES.totalLabel
+                : XLSX_STYLES.total
+              : isNumeric
+                ? XLSX_STYLES.dataNumber
+                : isFirstColumn
+                  ? XLSX_STYLES.dataText
+                  : isDetailColumn
+                    ? XLSX_STYLES.dataText
+                    : XLSX_STYLES.dataNumber
+
+      setCellStyle(worksheet, rowIndex, columnIndex, style, value)
+    }
+  }
+
+  applyWorkbookFormulas(worksheet, sheet, aoa)
+  return worksheet
+}
+
+function resolveWorkbookRowKind(sheet, rowIndex) {
+  if (sheet.key === 'daily') {
+    if (rowIndex < 3) return 'title'
+    if (rowIndex < 5) return 'header'
+    if (rowIndex === buildSheetToAoa(sheet).length - 1) return 'total'
+    return 'data'
+  }
+
+  return sheet.rows[rowIndex]?.kind ?? 'data'
+}
+
+function applyWorkbookFormulas(worksheet, sheet, aoa) {
+  if (sheet.key.startsWith('financial-')) {
+    applyFinancialSheetFormulas(worksheet, sheet, aoa)
+    return
+  }
+
+  if (sheet.key === 'daily') {
+    applyDailySheetFormulas(worksheet, sheet, aoa)
+    return
+  }
+
+  if (sheet.key === 'insurance') {
+    applyInsuranceSheetFormulas(worksheet, sheet, aoa)
+    return
+  }
+
+  if (sheet.key === 'purchases') {
+    applyPurchasesSheetFormulas(worksheet, sheet, aoa)
+    return
+  }
+
+  if (sheet.key === 'working-capital') {
+    applyWorkingCapitalSheetFormulas(worksheet, sheet, aoa)
+  }
+}
+
+function applyFinancialSheetFormulas(worksheet, sheet, aoa) {
+  const monthsCount = sheet.monthlyTotals.receipts.length
+  const valueStartCol = 2
+  const totalCol = valueStartCol + monthsCount
+  const receiptStartRow = 5
+  const receiptEndRow = receiptStartRow + (sheet.rows.findIndex((row) => row.kind === 'section' && row.cells[0] === 'PAYMENTS') - 5) - 1
+  const paymentStartRow = receiptEndRow + 2
+  const paymentEndRow = paymentStartRow + sheet.rows.filter((row) => row.kind === 'data').length - monthsCount - 8 - 1
+  const rowCountBeforePayments = sheet.rows.findIndex((row) => row.kind === 'section' && row.cells[0] === 'PAYMENTS')
+  const receiptRowCount = rowCountBeforePayments - 5
+  const paymentRowCount = sheet.rows.length - rowCountBeforePayments - 3
+  const receiptTotalRow = receiptStartRow + receiptRowCount
+  const paymentTotalRow = paymentStartRow + paymentRowCount
+  const profitRow = paymentTotalRow + 1
+
+  for (let rowIndex = receiptStartRow; rowIndex < receiptTotalRow; rowIndex += 1) {
+    const totalAddress = excelCellAddress(rowIndex, totalCol)
+    const formula = `SUM(${XLSX.utils.encode_col(valueStartCol)}${rowIndex + 1}:${XLSX.utils.encode_col(totalCol - 1)}${rowIndex + 1})`
+    setCellStyle(worksheet, rowIndex, totalCol, XLSX_STYLES.dataNumber, toNumber(worksheet[excelCellAddress(rowIndex, totalCol)]?.v), formula)
+  }
+
+  for (let monthIndex = 0; monthIndex < monthsCount; monthIndex += 1) {
+    const col = valueStartCol + monthIndex
+    const colLetter = XLSX.utils.encode_col(col)
+    const receiptFormula = `SUM(${colLetter}${receiptStartRow + 1}:${colLetter}${receiptTotalRow})`
+    const paymentFormula = `SUM(${colLetter}${paymentStartRow + 1}:${colLetter}${paymentTotalRow})`
+    const profitFormula = `${colLetter}${receiptTotalRow + 1}-${colLetter}${paymentTotalRow + 1}`
+    setCellStyle(worksheet, receiptTotalRow, col, XLSX_STYLES.total, toNumber(aoa[receiptTotalRow]?.[col]), receiptFormula)
+    setCellStyle(worksheet, paymentTotalRow, col, XLSX_STYLES.total, toNumber(aoa[paymentTotalRow]?.[col]), paymentFormula)
+    const profitValue = toNumber(aoa[profitRow]?.[col])
+    setCellStyle(worksheet, profitRow, col, profitValue < 0 ? XLSX_STYLES.negative : XLSX_STYLES.positive, profitValue, profitFormula)
+  }
+
+  setCellStyle(worksheet, receiptTotalRow, totalCol, XLSX_STYLES.total, toNumber(aoa[receiptTotalRow]?.[totalCol]), `SUM(${XLSX.utils.encode_col(valueStartCol)}${receiptTotalRow + 1}:${XLSX.utils.encode_col(totalCol - 1)}${receiptTotalRow + 1})`)
+  setCellStyle(worksheet, paymentTotalRow, totalCol, XLSX_STYLES.total, toNumber(aoa[paymentTotalRow]?.[totalCol]), `SUM(${XLSX.utils.encode_col(valueStartCol)}${paymentTotalRow + 1}:${XLSX.utils.encode_col(totalCol - 1)}${paymentTotalRow + 1})`)
+  const profitTotalValue = toNumber(aoa[profitRow]?.[totalCol])
+  setCellStyle(worksheet, profitRow, totalCol, profitTotalValue < 0 ? XLSX_STYLES.negative : XLSX_STYLES.positive, profitTotalValue, `SUM(${XLSX.utils.encode_col(valueStartCol)}${profitRow + 1}:${XLSX.utils.encode_col(totalCol - 1)}${profitRow + 1})`)
+}
+
+function applyDailySheetFormulas(worksheet, sheet, aoa) {
+  const startRow = 5
+  const totalRow = aoa.length - 1
+
+  for (let monthIndex = 0; monthIndex < sheet.monthGroups.length; monthIndex += 1) {
+    const salesCol = monthIndex * 2 + 1
+    const salesLetter = XLSX.utils.encode_col(salesCol)
+    const formula = `SUM(${salesLetter}${startRow + 1}:${salesLetter}${totalRow})`
+    setCellStyle(worksheet, totalRow, salesCol, XLSX_STYLES.total, toNumber(aoa[totalRow]?.[salesCol]), formula)
+    setCellStyle(worksheet, totalRow, monthIndex * 2, XLSX_STYLES.totalLabel, 'Total')
+  }
+}
+
+function applyInsuranceSheetFormulas(worksheet, sheet, aoa) {
+  const startCol = 2
+  const endCol = aoa[3].length - 1
+  const dataRows = [4, 5, 7, 8]
+  const totalRows = [6, 9]
+
+  dataRows.forEach((rowIndex) => {
+    const totalCol = endCol
+    const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
+    setCellStyle(worksheet, rowIndex, totalCol, XLSX_STYLES.dataNumber, toNumber(aoa[rowIndex]?.[totalCol]), formula)
   })
 
-  return nextRows
+  totalRows.forEach((rowIndex, totalIndex) => {
+    const sourceRows = totalIndex === 0 ? [4, 5] : [7, 8]
+    for (let col = startCol; col < endCol; col += 1) {
+      const colLetter = XLSX.utils.encode_col(col)
+      const formula = `SUM(${colLetter}${sourceRows[0] + 1}:${colLetter}${sourceRows[1] + 1})`
+      setCellStyle(worksheet, rowIndex, col, XLSX_STYLES.total, toNumber(aoa[rowIndex]?.[col]), formula)
+    }
+    const totalCol = endCol
+    const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
+    setCellStyle(worksheet, rowIndex, totalCol, XLSX_STYLES.total, toNumber(aoa[rowIndex]?.[totalCol]), formula)
+  })
 }
 
-function buildSnapshotItems(primary, comparison, reportType, taxReviewSummary = null) {
-  const primarySummary = primary?.summary ?? {}
-  const comparisonSummary = comparison?.summary ?? {}
-  const variance = Number(primarySummary.net_operating ?? 0) - Number(comparisonSummary.net_operating ?? 0)
+function applyPurchasesSheetFormulas(worksheet, sheet, aoa) {
+  const startCol = 2
+  const endCol = aoa[3].length - 1
+  const soldRows = [5, 9]
+  const purchaseRows = [6, 10]
+  const profitRows = [7, 11]
 
-  if (reportType === 'tax_review') {
-    return [
-      ['Taxable Revenue', formatMoney(taxReviewSummary?.taxableRevenue), 'Visible revenue marked for statutory declaration'],
-      ['Non-taxable Revenue', formatMoney(taxReviewSummary?.nonTaxableRevenue), 'Visible revenue marked exempt or out of scope'],
-      ['Deductible Expenses', formatMoney(taxReviewSummary?.deductibleExpenses), 'Visible expenses included in the working tax treatment'],
-      ['Needs Review', String(taxReviewSummary?.reviewCount ?? 0), 'Entries still awaiting accountant clarification'],
-    ]
+  soldRows.concat(purchaseRows).forEach((rowIndex) => {
+    const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
+    setCellStyle(worksheet, rowIndex, endCol, XLSX_STYLES.dataNumber, toNumber(aoa[rowIndex]?.[endCol]), formula)
+  })
+
+  profitRows.forEach((rowIndex, index) => {
+    const leftRow = soldRows[index]
+    const rightRow = purchaseRows[index]
+    for (let col = startCol; col < endCol; col += 1) {
+      const leftCell = `${XLSX.utils.encode_col(col)}${leftRow + 1}`
+      const rightCell = `${XLSX.utils.encode_col(col)}${rightRow + 1}`
+      const formula = `${leftCell}-${rightCell}`
+      const value = toNumber(aoa[rowIndex]?.[col])
+      setCellStyle(worksheet, rowIndex, col, value < 0 ? XLSX_STYLES.negative : XLSX_STYLES.positive, value, formula)
+    }
+    const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
+    const totalValue = toNumber(aoa[rowIndex]?.[endCol])
+    setCellStyle(worksheet, rowIndex, endCol, totalValue < 0 ? XLSX_STYLES.negative : XLSX_STYLES.positive, totalValue, formula)
+  })
+}
+
+function applyWorkingCapitalSheetFormulas(worksheet, sheet, aoa) {
+  const startCol = 2
+  const endCol = aoa[3].length - 1
+  const assetRows = [5, 6, 7]
+  const liabilityRows = [10, 11]
+  const totalAssetRow = 8
+  const totalLiabilityRow = 12
+  const workingRow = 13
+
+  assetRows.concat(liabilityRows).forEach((rowIndex) => {
+    const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
+    setCellStyle(worksheet, rowIndex, endCol, XLSX_STYLES.dataNumber, toNumber(aoa[rowIndex]?.[endCol]), formula)
+  })
+
+  for (let col = startCol; col < endCol; col += 1) {
+    const colLetter = XLSX.utils.encode_col(col)
+    const assetFormula = `${colLetter}${assetRows[0] + 1}+${colLetter}${assetRows[1] + 1}+${colLetter}${assetRows[2] + 1}`
+    const liabilityFormula = `${colLetter}${liabilityRows[0] + 1}+${colLetter}${liabilityRows[1] + 1}`
+    const workingFormula = `${colLetter}${totalAssetRow + 1}-${colLetter}${totalLiabilityRow + 1}`
+    setCellStyle(worksheet, totalAssetRow, col, XLSX_STYLES.total, toNumber(aoa[totalAssetRow]?.[col]), assetFormula)
+    setCellStyle(worksheet, totalLiabilityRow, col, XLSX_STYLES.total, toNumber(aoa[totalLiabilityRow]?.[col]), liabilityFormula)
+    const workingValue = toNumber(aoa[workingRow]?.[col])
+    setCellStyle(worksheet, workingRow, col, workingValue < 0 ? XLSX_STYLES.negative : XLSX_STYLES.positive, workingValue, workingFormula)
   }
 
-  if (reportType === 'insurance') {
-    return [
-      ['Insurance Pending', formatMoney(primarySummary.insurance_pending), 'Claims still awaiting settlement'],
-      ['Outstanding Balance', formatMoney(primarySummary.outstanding_balance), 'Customer exposure still open'],
-      ['Collections', formatMoney(primarySummary.total_collections), 'Total recognized collections'],
-      ['Gross Billed', formatMoney(primarySummary.gross_billed), 'Total billed value for the selected month'],
+  const totalFormula = `SUM(${XLSX.utils.encode_col(startCol)}${workingRow + 1}:${XLSX.utils.encode_col(endCol - 1)}${workingRow + 1})`
+  const totalValue = toNumber(aoa[workingRow]?.[endCol])
+  setCellStyle(worksheet, workingRow, endCol, totalValue < 0 ? XLSX_STYLES.negative : XLSX_STYLES.positive, totalValue, totalFormula)
+}
+
+function buildSheetMerges(sheet) {
+  if (sheet.key === 'daily') {
+    const merges = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(1, sheet.monthGroups.length * 2 - 1) } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: Math.max(1, sheet.monthGroups.length * 2 - 1) } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: Math.max(1, sheet.monthGroups.length * 2 - 1) } },
     ]
+
+    for (let index = 0; index < sheet.monthGroups.length; index += 1) {
+      merges.push({ s: { r: 3, c: index * 2 }, e: { r: 3, c: index * 2 + 1 } })
+    }
+
+    return merges
   }
 
-  if (reportType === 'comparison') {
-    return [
-      ['Primary Profit', formatMoney(primarySummary.net_operating), primary?.month_label ?? 'Selected month'],
-      ['Comparison Profit', formatMoney(comparisonSummary.net_operating), comparison?.month_label ?? 'Comparison month'],
-      ['Profit Variance', formatSignedMoney(variance), 'Difference between primary and comparison'],
-      ['Outstanding', formatMoney(primarySummary.outstanding_balance), 'Outstanding balance on the primary scope'],
-    ]
-  }
+  const totalColumns = sheet.columnCount ?? Math.max(...sheet.rows.map((row) => row.cells.length))
+  return sheet.rows
+    .map((row, index) => (row.kind === 'title' || row.kind === 'section'
+      ? { s: { r: index, c: 0 }, e: { r: index, c: Math.max(0, totalColumns - 1) } }
+      : null))
+    .filter(Boolean)
+}
+
+function buildSummaryCards(primaryReport, mergedReport, selectedMonths) {
+  const selected = buildSelectedMonths(mergedReport ?? primaryReport, selectedMonths)
+  const receipts = selected.reduce((total, item) => total + toNumber(item.data.collected), 0)
+  const expenses = selected.reduce((total, item) => total + toNumber(item.data.expenses), 0)
+  const insurance = selected.reduce((total, item) => total + toNumber(item.data.insurance_received), 0)
+  const workingCapital = selected.length ? (toNumber(selected[selected.length - 1].data.operating_cash) + toNumber(selected[selected.length - 1].data.debtors)) : 0
 
   return [
-    ['Prepared For', primary?.branch_name ?? 'Branch', primary?.month_label ?? 'Selected month'],
-    ['Report Type', reportTypeOptions.find((option) => option.value === reportType)?.title ?? 'Report', 'Current generator mode'],
-    ['Comparison', comparison ? `${comparison.branch_name} | ${comparison.month_label}` : 'Not selected', 'Comparison scope'],
-    ['Monthly Profit', formatMoney(primarySummary.net_operating), 'Revenue less operating expenses'],
+    ['Collected Revenue', receipts, 'Collections recognized across the selected range', 'seen', 'money'],
+    ['Expenses', expenses, 'Operating costs in the same window', 'pending', 'alert'],
+    ['Insurance Received', insurance, 'Insurance settlements posted in the range', 'today', 'shield'],
+    ['Working Position', workingCapital, 'Operating cash proxy plus trade debtors', 'total', 'finance'],
   ]
 }
 
-function buildSummaryCards(primary, comparison, reportType, taxReviewSummary = null) {
-  const primarySummary = primary?.summary ?? {}
-  const comparisonSummary = comparison?.summary ?? {}
-  const variance = Number(primarySummary.net_operating ?? 0) - Number(comparisonSummary.net_operating ?? 0)
-
-  if (reportType === 'tax_review') {
-    return [
-      ['Taxable Revenue', taxReviewSummary?.taxableRevenue, 'Revenue classified for declaration', 'seen', 'money'],
-      ['Non-taxable Revenue', taxReviewSummary?.nonTaxableRevenue, 'Revenue marked exempt or out of scope', 'today', 'shield'],
-      ['Deductible Expenses', taxReviewSummary?.deductibleExpenses, 'Expenses marked deductible', 'total', 'finance'],
-      ['Audit Pack Value', taxReviewSummary?.auditIncludedTotal, 'Entries currently included in the audit-facing pack', 'pending', 'receipt'],
-    ]
-  }
-
-  if (reportType === 'insurance') {
-    return [
-      ['Insurance Pending', primarySummary.insurance_pending, 'Claims still pending', 'pending', 'shield'],
-      ['Outstanding Balance', primarySummary.outstanding_balance, 'Open customer balances', 'today', 'receipt'],
-      ['Gross Billed', primarySummary.gross_billed, 'Monthly billed value', 'total', 'money'],
-      ['Collections', primarySummary.total_collections, 'Recognized collections', 'seen', 'finance'],
-    ]
-  }
-
-  if (reportType === 'comparison') {
-    return [
-      ['Primary Profit', primarySummary.net_operating, `${primary?.month_label ?? 'Selected month'} operating position`, 'today', 'finance'],
-      ['Comparison Profit', comparisonSummary.net_operating, `${comparison?.month_label ?? 'Comparison month'} operating position`, 'seen', 'money'],
-      ['Profit Variance', variance, 'Primary less comparison', variance < 0 ? 'pending' : 'total', 'trend'],
-      ['Expenses', primarySummary.total_expenses, 'Operating costs in the primary month', 'pending', 'alert'],
-    ]
-  }
-
-  return [
-    ['Gross Billed', primarySummary.gross_billed, `${primary?.branch_name ?? 'Branch'} | ${primary?.month_label ?? ''}`, 'total', 'receipt'],
-    ['Revenue', primarySummary.total_collections, 'Cash, digital, bank, and paid insurance recovery', 'seen', 'money'],
-    ['Expenses', primarySummary.total_expenses, 'Operating costs posted in the selected month', 'pending', 'alert'],
-    ['Lens Expenses', primarySummary.lens_expenses, 'Lens purchase costs from Lens Tracker', 'seen', 'alert'],
-    ['Profit', primarySummary.net_operating, 'Revenue less operating expenses', 'today', 'finance'],
-  ]
+function workbookFileName(primaryReport, selectedMonths) {
+  const start = monthName(selectedMonths[0], false)
+  const end = monthName(selectedMonths[selectedMonths.length - 1], false)
+  return `bealet-report-${slugify(primaryReport?.branch_name)}-${start.toLowerCase()}-${end.toLowerCase()}-${primaryReport?.year ?? currentYear()}.xlsx`
 }
 
-function createReportHtml({
-  primary,
-  comparison,
-  rows,
-  monthlyRows,
-  reportType,
-  showComparison,
-  showMonthlyOverview,
-  taxReviewSummary,
-  includeNotes,
-}) {
-  const comparisonLabel = comparison
-    ? `${comparison.branch_name} | ${comparison.month_label}`
-    : 'Not selected'
-  const title = reportTypeOptions.find((option) => option.value === reportType)?.title ?? 'Financial Report'
-  const summaryItems = buildSnapshotItems(primary, comparison, reportType, taxReviewSummary)
-  const summaryHtml = reportType === 'standalone'
-    ? `
-      <div class="summary-inline">
-        <span>Monthly Profit</span>
-        <strong>${escapeHtml(formatMoney(primary?.summary?.net_operating ?? 0))}</strong>
-        <p>Revenue less operating expenses</p>
-      </div>
-    `
-    : summaryItems.map(([label, value, note]) => `
-      <div class="summary-card">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(value)}</strong>
-        <p>${escapeHtml(note)}</p>
-      </div>
-    `).join('')
+function exportWorkbook(sheets, primaryReport, selectedMonths) {
+  const workbook = XLSX.utils.book_new()
 
-  const monthlyRowsHtml = monthlyRows.map((row, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td>${escapeHtml(row.month_label)}</td>
-      <td>${escapeHtml(formatMoney(row.revenue))}</td>
-      <td>${escapeHtml(formatMoney(row.expenses))}</td>
-      <td>${escapeHtml(formatMoney(row.profit))}</td>
-      <td>${escapeHtml(formatMoney(row.outstanding_balance))}</td>
-    </tr>
-  `).join('')
+  for (const sheet of sheets) {
+    const worksheet = buildWorkbookSheet(sheet)
+    worksheet['!freeze'] = sheet.key === 'daily'
+      ? { xSplit: 2, ySplit: 5, topLeftCell: 'C6', activePane: 'bottomRight', state: 'frozen' }
+      : { xSplit: 2, ySplit: 4, topLeftCell: 'C5', activePane: 'bottomRight', state: 'frozen' }
+    worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: Math.max(3, buildSheetToAoa(sheet).length - 1), c: Math.max(1, buildSheetToAoa(sheet)[3]?.length - 1 ?? 1) } }) }
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetSafeName(sheet.title))
+  }
 
-  const showNotesColumn = includeNotes && rows.some((item) => item.type === 'row' && String(item.note ?? '').trim() !== '')
-  const rowsHtml = rows.map((item) => {
-    if (item.type === 'section') {
-      return `<tr class="section-row"><td colspan="${showComparison ? (showNotesColumn ? 6 : 5) : (showNotesColumn ? 4 : 3)}">${escapeHtml(item.title)}</td></tr>`
-    }
+  workbook.Workbook = {
+    Views: [{ activeTab: 0 }],
+    CalcPr: { fullCalcOnLoad: true, forceFullCalc: true },
+  }
 
-    if (showComparison) {
-      return `
-        <tr>
-          <td>${item.sn}</td>
-          <td>${escapeHtml(item.description)}</td>
-          <td>${escapeHtml(formatMoney(item.amount))}</td>
-          <td>${escapeHtml(formatMoney(item.comparisonAmount))}</td>
-          <td>${escapeHtml(formatSignedMoney(item.variance))}</td>
-          ${showNotesColumn ? `<td>${escapeHtml(item.note)}</td>` : ''}
-        </tr>
-      `
-    }
-
-    return `
-      <tr>
-        <td>${item.sn}</td>
-        <td>${escapeHtml(item.description)}</td>
-        <td>${escapeHtml(formatMoney(item.amount))}</td>
-        ${showNotesColumn ? `<td>${escapeHtml(item.note)}</td>` : ''}
-      </tr>
-    `
-  }).join('')
-
-  return `<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>${escapeHtml(title)}</title>
-      <style>
-        body { font-family: Calibri, Arial, sans-serif; margin: 24px; color: #122033; }
-        h1, h2, h3, p { margin: 0; }
-        .header { text-align: center; margin-bottom: 20px; }
-        .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 18px 0 24px; padding-bottom: 14px; border-bottom: 1px solid #d7e2ec; }
-        .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-        .meta-card { padding: 0; border: none; border-radius: 0; background: transparent; }
-        .summary-card { border: 1px solid #c7d7e6; border-radius: 12px; padding: 12px 14px; }
-        .summary-inline { margin-bottom: 24px; }
-        .summary-inline span { color: #516072; font-size: 12px; }
-        .summary-inline strong { display: block; margin: 4px 0 2px; font-size: 18px; }
-        .summary-inline p { color: #516072; font-size: 12px; }
-        .meta-card strong { display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #516072; }
-        .meta-card p { font-size: 14px; line-height: 1.4; }
-        .meta-card p + p { color: #516072; font-size: 12px; }
-        .summary-card strong { display: block; margin: 8px 0 4px; font-size: 18px; }
-        .summary-card span, .summary-card p { color: #516072; font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-        th, td { border: 1px solid #c7d7e6; padding: 8px 10px; vertical-align: top; font-size: 12px; }
-        th { background: #eaf3fb; text-align: left; }
-        .section-row td { background: #d6e9f8; font-weight: 700; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>BEALET OPTICAL CENTER</h1>
-        <h2>${escapeHtml(title)}</h2>
-        <p>${escapeHtml(reportType === 'tax_review' ? 'Current finance extract scope' : `${primary?.branch_name ?? 'Branch'} | ${primary?.month_label ?? ''}`)}</p>
-      </div>
-
-      <div class="meta">
-        <div class="meta-card"><strong>Primary Scope</strong><p>${escapeHtml(reportType === 'tax_review' ? 'Current finance extract scope' : primary?.branch_name ?? '')}</p><p>${escapeHtml(reportType === 'tax_review' ? 'Revenue and expense classification' : primary?.month_label ?? '')}</p></div>
-        <div class="meta-card"><strong>Comparison Scope</strong><p>${escapeHtml(comparisonLabel)}</p></div>
-        <div class="meta-card"><strong>Report Type</strong><p>${escapeHtml(title)}</p></div>
-        <div class="meta-card"><strong>Export Mode</strong><p>${showComparison ? 'Comparison included' : 'Standalone values only'}</p></div>
-      </div>
-
-      <div class="summary">${summaryHtml}</div>
-
-      ${showMonthlyOverview ? `
-      <table>
-        <thead>
-          <tr>
-            <th>SN</th>
-            <th>Month</th>
-            <th>Revenue</th>
-            <th>Expenses</th>
-            <th>Profit</th>
-            <th>Outstanding</th>
-          </tr>
-        </thead>
-        <tbody>${monthlyRowsHtml}</tbody>
-      </table>
-      ` : ''}
-
-      <table>
-        <thead>
-          ${showComparison ? `
-          <tr>
-            <th>SN</th>
-            <th>Description</th>
-            <th>Primary Amount</th>
-            <th>Comparison Amount</th>
-            <th>Variance</th>
-            ${showNotesColumn ? '<th>Notes</th>' : ''}
-          </tr>
-          ` : `
-          <tr>
-            <th>SN</th>
-            <th>Description</th>
-            <th>Amount</th>
-            ${showNotesColumn ? '<th>Notes</th>' : ''}
-          </tr>
-          `}
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </body>
-  </html>`
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', cellStyles: true, cellFormula: true })
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = workbookFileName(primaryReport, selectedMonths)
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
 }
 
-export default function ReportsSection({ apiFetch, token, session, selectedBranchId, financeSales, financeExpenses }) {
-  const isAccountant = session?.role === 'accountant'
-  const isManager = session?.role === 'manager'
+export default function ReportsSection({ apiFetch, token, session, selectedBranchId }) {
   const isExecutive = ['ceo', 'director'].includes(session?.role)
-  const canCompareBranches = Boolean(session?.is_admin || ['accountant', 'manager', 'ceo'].includes(session?.role))
-  const defaultBranchId = canCompareBranches ? selectedBranchId : session?.branch_id
+  const isManager = session?.role === 'manager'
+  const isAccountant = session?.role === 'accountant'
+  const canAccessWorkbook = Boolean(session && (session.is_admin || ['accountant', 'manager', 'ceo', 'director'].includes(session.role)))
+  const canCompareBranches = Boolean(session?.is_admin || ['accountant', 'manager', 'ceo', 'director'].includes(session?.role))
+  const defaultPrimaryBranch = canCompareBranches ? Number(selectedBranchId ?? session?.branch_id ?? 1) : Number(session?.branch_id ?? 1)
+  const defaultComparisonBranch = defaultPrimaryBranch === 1 ? 2 : 1
   const [filters, setFilters] = useState({
-    branch_id: String(defaultBranchId ?? 1),
-    month: currentMonth(),
-    comparison_branch_id: '',
-    comparison_month: currentMonth(),
-    report_type: 'standalone',
+    year: currentYear(),
+    start_month: '01',
+    end_month: '12',
+    primary_branch_id: String(defaultPrimaryBranch),
+    comparison_branch_id: String(defaultComparisonBranch),
   })
-  const [reportData, setReportData] = useState(null)
-  const [reportError, setReportError] = useState('')
+  const [reportsByBranch, setReportsByBranch] = useState({})
   const [isLoading, setIsLoading] = useState(false)
-  const [rowNotes, setRowNotes] = useState(() => readReportRowNotes())
-  const [rowOverrides, setRowOverrides] = useState(() => readReportRowOverrides())
-  const [reportConfig, setReportConfig] = useState({
-    includedSections: [],
-    includeNotes: false,
-    includeMonthlyOverview: true,
-    includeComparison: true,
-  })
-  const [previewConfig, setPreviewConfig] = useState(null)
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
-  const [editorDraft, setEditorDraft] = useState({})
+  const [error, setError] = useState('')
+  const [activeSheet, setActiveSheet] = useState('primary')
 
   useEffect(() => {
     if (!canCompareBranches) {
       setFilters((current) => {
-        const nextBranchId = String(session?.branch_id ?? 1)
-        if (current.branch_id === nextBranchId) {
-          return current
-        }
-
-        return {
-          ...current,
-          branch_id: nextBranchId,
-        }
+        const lockedBranch = String(session?.branch_id ?? 1)
+        if (current.primary_branch_id === lockedBranch) return current
+        return { ...current, primary_branch_id: lockedBranch, comparison_branch_id: '' }
       })
     }
   }, [canCompareBranches, session?.branch_id])
 
   useEffect(() => {
     if (!canCompareBranches || selectedBranchId == null) return
-
     setFilters((current) => {
-      const nextBranchId = String(selectedBranchId)
-      if (current.branch_id === nextBranchId) {
-        return current
-      }
-
-      return {
-        ...current,
-        branch_id: nextBranchId,
-      }
+      const nextBranch = String(selectedBranchId)
+      if (current.primary_branch_id === nextBranch) return current
+      const nextComparison = nextBranch === '1' ? '2' : '1'
+      return { ...current, primary_branch_id: nextBranch, comparison_branch_id: nextComparison }
     })
   }, [canCompareBranches, selectedBranchId])
 
   useEffect(() => {
+    if (!token || !session || !canAccessWorkbook) return
     let cancelled = false
 
-    async function loadReport() {
-      if (!token || filters.report_type === 'tax_review') return
+    async function loadWorkbook() {
       setIsLoading(true)
-      setReportError('')
+      setError('')
       try {
-        const params = new URLSearchParams({
-          branch_id: filters.branch_id,
-          month: filters.month,
-        })
-        if (filters.comparison_branch_id) params.set('comparison_branch_id', filters.comparison_branch_id)
-        if (filters.comparison_month) params.set('comparison_month', filters.comparison_month)
-        const response = await apiFetch(`/finance/monthly-report?${params.toString()}`, { token })
-        if (!cancelled) {
-          setReportData(response)
-          if (!filters.comparison_month && response.available_months?.[0]?.value) {
-            setFilters((current) => ({ ...current, comparison_month: current.month }))
-          }
+        const branchIds = [0, Number(filters.primary_branch_id)]
+        if (filters.comparison_branch_id) {
+          branchIds.push(Number(filters.comparison_branch_id))
         }
-      } catch (error) {
-        if (!cancelled) setReportError(error.message)
+
+        const uniqueBranchIds = [...new Set(branchIds.filter((value) => Number.isFinite(value)))]
+        const results = await Promise.all(uniqueBranchIds.map(async (branchId) => {
+          try {
+            const response = await apiFetch(`/finance/monitor-workbook?branch_id=${branchId}&year=${filters.year}`, { token })
+            return [String(branchId), response]
+          } catch (requestError) {
+            return [String(branchId), { error: requestError.message }]
+          }
+        }))
+
+        if (cancelled) return
+        const next = {}
+        const errors = []
+        results.forEach(([branchId, response]) => {
+          if (response?.error) {
+            errors.push(response.error)
+            return
+          }
+          next[branchId] = response
+        })
+        setReportsByBranch(next)
+        if (errors.length) {
+          setError(errors.join(' | '))
+        }
+      } catch (requestError) {
+        if (!cancelled) setError(requestError.message)
       } finally {
         if (!cancelled) setIsLoading(false)
       }
     }
 
-    loadReport()
+    loadWorkbook()
     return () => {
       cancelled = true
     }
-  }, [apiFetch, filters.branch_id, filters.month, filters.comparison_branch_id, filters.comparison_month, filters.report_type, token])
+  }, [apiFetch, canAccessWorkbook, filters.primary_branch_id, filters.comparison_branch_id, filters.year, session, token])
 
-  const primary = reportData?.primary
-  const comparison = reportData?.comparison
-  const reportType = filters.report_type
-  const taxReviewPayload = useMemo(() => buildTaxReviewPayload(financeSales, financeExpenses), [financeExpenses, financeSales])
-  const baseRows = useMemo(() => mergeRows(primary, comparison), [primary, comparison])
-  const sourceRows = useMemo(() => (
-    reportType === 'tax_review'
-      ? taxReviewPayload.rows
-      : filterRowsByType(baseRows, reportType)
-  ), [baseRows, reportType, taxReviewPayload.rows])
-  const monthlyRows = useMemo(() => buildMonthlyRows(reportData), [reportData])
-  const hasComparison = Boolean(filters.comparison_branch_id && comparison)
-  const showComparison = reportType !== 'tax_review' && (reportType === 'comparison' || (reportType === 'all' && hasComparison))
-  const showMonthlyOverview = reportType === 'all'
-  const reportMode = reportTypeOptions.find((option) => option.value === reportType) ?? reportTypeOptions[0]
-  const summaryCards = buildSummaryCards(primary, comparison, reportType, taxReviewPayload.summary)
-  const snapshotItems = buildSnapshotItems(primary, comparison, reportType, taxReviewPayload.summary)
-  const monthOptions = reportData?.available_months ?? [{ value: currentMonth(), label: currentMonth() }]
-  const branchOptions = reportData?.branches ?? [
-    { id: 0, name: 'Merged Branches' },
-    { id: 1, name: 'Labadi' },
-    { id: 2, name: 'Madina' },
-  ]
-  const sectionOptions = useMemo(() => sourceRows
-    .filter((item) => item.type === 'section')
-    .map((item) => ({ key: item.key, title: item.title })), [sourceRows])
-  const configuredRows = useMemo(() => filterRowsBySections(sourceRows, reportConfig.includedSections), [reportConfig.includedSections, sourceRows])
-  const configuredRowsWithNotes = useMemo(
-    () => applyPresentationOverrides(configuredRows, rowOverrides, rowNotes),
-    [configuredRows, rowNotes, rowOverrides],
-  )
-  const previewRows = useMemo(() => {
-    if (!previewConfig) return []
-
-    return applyPresentationOverrides(
-      filterRowsBySections(sourceRows, previewConfig.includedSections),
-      rowOverrides,
-      rowNotes,
-    )
-  }, [previewConfig, rowNotes, rowOverrides, sourceRows])
-  const editableRows = useMemo(() => sourceRows.filter((item) => item.type === 'row'), [sourceRows])
-  const previewShowComparison = showComparison && (previewConfig?.includeComparison ?? true)
-  const previewShowMonthlyOverview = showMonthlyOverview && (previewConfig?.includeMonthlyOverview ?? true)
-  const hasVisibleRows = configuredRowsWithNotes.some((item) => item.type === 'row')
-  const hasPreviewRows = previewRows.some((item) => item.type === 'row')
+  const primaryReport = reportsByBranch[filters.primary_branch_id] ?? null
+  const comparisonReport = filters.comparison_branch_id ? (reportsByBranch[filters.comparison_branch_id] ?? null) : null
+  const mergedReport = reportsByBranch['0'] ?? primaryReport
+  const selectedMonths = useMemo(() => monthRange(filters.start_month, filters.end_month), [filters.end_month, filters.start_month])
+  const sheets = useMemo(() => buildWorkbookSheets({
+    primaryReport,
+    comparisonReport,
+    mergedReport,
+    selectedMonths,
+  }), [comparisonReport, mergedReport, primaryReport, selectedMonths])
+  const activeSheetModel = sheets.find((sheet) => sheet.key === activeSheet) ?? sheets[0] ?? null
+  const summaryCards = useMemo(() => buildSummaryCards(primaryReport, mergedReport, selectedMonths), [mergedReport, primaryReport, selectedMonths])
+  const availableYears = useMemo(() => {
+    const now = currentYear()
+    return Array.from({ length: 6 }, (_, index) => now - 3 + index)
+  }, [])
+  const canExport = Boolean(primaryReport && sheets.length)
 
   useEffect(() => {
-    const nextSections = sectionOptions.map((section) => section.key)
-    setReportConfig((current) => ({
-      ...current,
-      includedSections: current.includedSections.length
-        ? current.includedSections.filter((key) => nextSections.includes(key))
-        : nextSections,
-      includeMonthlyOverview: showMonthlyOverview,
-      includeComparison: showComparison,
-    }))
-    setPreviewConfig(null)
-  }, [sectionOptions, showComparison, showMonthlyOverview, reportType, filters.branch_id, filters.month, filters.comparison_branch_id, filters.comparison_month])
-
-  useEffect(() => {
-    writeReportRowNotes(rowNotes)
-  }, [rowNotes])
-
-  useEffect(() => {
-    writeReportRowOverrides(rowOverrides)
-  }, [rowOverrides])
-
-  function updateFilter(key, value) {
-    setFilters((current) => {
-      const next = { ...current, [key]: value }
-
-      if (key === 'comparison_branch_id' && !value) {
-        next.comparison_month = current.month
-      }
-
-      if (key === 'month' && !current.comparison_branch_id) {
-        next.comparison_month = value
-      }
-
-      return next
-    })
-  }
-
-  function toggleSection(sectionKey) {
-    setReportConfig((current) => ({
-      ...current,
-      includedSections: current.includedSections.includes(sectionKey)
-        ? current.includedSections.filter((key) => key !== sectionKey)
-        : [...current.includedSections, sectionKey],
-    }))
-  }
-
-  function updateRowNote(rowKey, note) {
-    setRowNotes((current) => ({
-      ...current,
-      [rowKey]: note,
-    }))
-  }
-
-  function openEditor() {
-    const nextDraft = {}
-    editableRows.forEach((row) => {
-      const override = rowOverrides[row.key] ?? {}
-      nextDraft[row.key] = {
-        include: override.include !== false,
-        description: override.description ?? row.description,
-        amount: override.amount ?? row.amount,
-        note: rowNotes[row.key] ?? '',
-        section: row.section,
-      }
-    })
-    setEditorDraft(nextDraft)
-    setIsEditorOpen(true)
-  }
-
-  function updateEditorDraft(rowKey, field, value) {
-    setEditorDraft((current) => ({
-      ...current,
-      [rowKey]: {
-        ...current[rowKey],
-        [field]: value,
-      },
-    }))
-  }
-
-  function saveEditorDraft() {
-    const nextOverrides = {}
-    const nextNotes = {}
-
-    editableRows.forEach((row) => {
-      const draft = editorDraft[row.key]
-      if (!draft) return
-
-      nextOverrides[row.key] = {
-        include: draft.include !== false,
-        description: draft.description,
-        amount: draft.amount,
-      }
-
-      if (String(draft.note ?? '').trim()) {
-        nextNotes[row.key] = draft.note
-      }
-    })
-
-    setRowOverrides(nextOverrides)
-    setRowNotes(nextNotes)
-    setIsEditorOpen(false)
-    setPreviewConfig(null)
-  }
-
-  function previewReport() {
-    setPreviewConfig({
-      includedSections: [...reportConfig.includedSections],
-      includeNotes: reportConfig.includeNotes,
-      includeMonthlyOverview: reportConfig.includeMonthlyOverview,
-      includeComparison: reportConfig.includeComparison,
-    })
-    setIsPreviewOpen(true)
-  }
-
-  function exportExcel() {
-    const html = createReportHtml({
-      primary,
-      comparison,
-      rows: previewRows,
-      monthlyRows,
-      reportType,
-      showComparison: previewShowComparison,
-      showMonthlyOverview: previewShowMonthlyOverview,
-      taxReviewSummary: taxReviewPayload.summary,
-      includeNotes: previewConfig?.includeNotes ?? false,
-    })
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `monthly-report-${slugify(primary?.branch_name)}-${slugify(reportType)}-${primary?.month ?? currentMonth()}.xls`
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    URL.revokeObjectURL(url)
-  }
-
-  function exportPdf() {
-    const html = createReportHtml({
-      primary,
-      comparison,
-      rows: previewRows,
-      monthlyRows,
-      reportType,
-      showComparison: previewShowComparison,
-      showMonthlyOverview: previewShowMonthlyOverview,
-      taxReviewSummary: taxReviewPayload.summary,
-      includeNotes: previewConfig?.includeNotes ?? false,
-    })
-    const printWindow = window.open('', '_blank', 'width=1200,height=900')
-    if (!printWindow) return
-    printWindow.document.open()
-    printWindow.document.write(html)
-    printWindow.document.close()
-    printWindow.document.title = `${reportMode.title} - ${primary?.branch_name ?? 'Branch'}`
-    printWindow.focus()
-    setTimeout(() => {
-      printWindow.print()
-    }, 300)
-  }
-
-  const exportBlocked = reportType === 'tax_review'
-    ? !hasPreviewRows
-    : !primary || isLoading || !hasPreviewRows || (reportType === 'comparison' && !hasComparison)
-
-  const submissionPayload = previewConfig && primary ? {
-    title: `${reportMode.title} - ${primary?.branch_name ?? 'Branch'} - ${primary?.month_label ?? filters.month}`,
-    report_type: reportType,
-    month: primary?.month ?? filters.month,
-    comparison_branch_id: filters.comparison_branch_id || null,
-    comparison_month: filters.comparison_month || null,
-    reportMode,
-    primary,
-    comparison,
-    rows: previewRows,
-    monthlyRows: previewShowMonthlyOverview ? monthlyRows : [],
-    showComparison: previewShowComparison,
-    showMonthlyOverview: previewShowMonthlyOverview,
-    snapshotItems,
-    includeNotes: previewConfig.includeNotes,
-  } : null
+    if (!activeSheetModel && sheets[0]) {
+      setActiveSheet(sheets[0].key)
+    }
+  }, [activeSheetModel, sheets])
 
   if (isExecutive) {
     return (
@@ -915,236 +1042,119 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     )
   }
 
+  if (!canAccessWorkbook) {
+    return (
+      <section className="finance-section">
+        <div className="message-banner error">Only the accountant, General Manager, and executives can access this report workbook.</div>
+      </section>
+    )
+  }
+
   return (
-    <section className="finance-section">
-      <div className="patients-header">
+    <section className="finance-section report-workbook-shell">
+      <header className="report-workbook-hero">
         <div>
           <p className="eyebrow">Reports</p>
-          <h3>{isManager ? 'Report generator and validation workspace' : 'Accountant report generator'}</h3>
+          <h3>Workbook-style branch reporting</h3>
           <p className="header-copy">
-            {isManager
-              ? 'Build the same finance reports available to the accountant, then review and validate submitted reports from the same workspace.'
-              : 'Choose the exact report you need, preview it on screen, and export the same output to PDF or Excel.'}
+            This page mirrors the attached Excel workbook structure, keeps the sheet tabs visible on screen, and exports a real `.xlsx` file with the same tab order.
           </p>
         </div>
-      </div>
-
-      {reportError ? <div className="message-banner error">{reportError}</div> : null}
-      {reportType === 'comparison' && !hasComparison ? (
-        <div className="message-banner">Select a comparison branch to generate and export the compared report.</div>
-      ) : null}
-      {reportType === 'tax_review' ? (
-        <div className="message-banner">
-          Tax review exports use the classifications captured in the Extract workspace for the revenue and expense rows currently loaded in Finance.
+        <div className="report-workbook-actions">
+          <button type="button" className="ghost-button" onClick={() => window.print()} disabled={!activeSheetModel}>Print / Save PDF</button>
+          <button type="button" className="primary-button" onClick={() => exportWorkbook(sheets, primaryReport, selectedMonths)} disabled={!canExport}>Export Excel workbook</button>
         </div>
-      ) : null}
+      </header>
 
-      <section className="stats-grid patient-stats-grid">
+      {error ? <div className="message-banner error">{error}</div> : null}
+      {isLoading ? <div className="message-banner">Refreshing workbook data for the selected year and branches...</div> : null}
+
+      <section className="report-toolbar-grid report-workbook-toolbar">
+        <label>
+          Year
+          <select value={filters.year} onChange={(event) => setFilters((current) => ({ ...current, year: Number(event.target.value) }))}>
+            {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+
+        <label>
+          Start month
+          <select value={filters.start_month} onChange={(event) => setFilters((current) => ({ ...current, start_month: event.target.value }))}>
+            {MONTHS.map((month) => <option key={month.value} value={month.value}>{month.long}</option>)}
+          </select>
+        </label>
+
+        <label>
+          End month
+          <select value={filters.end_month} onChange={(event) => setFilters((current) => ({ ...current, end_month: event.target.value }))}>
+            {MONTHS.map((month) => <option key={month.value} value={month.value}>{month.long}</option>)}
+          </select>
+        </label>
+
+        <label>
+          Primary branch
+          <select
+            value={filters.primary_branch_id}
+            disabled={!canCompareBranches}
+            onChange={(event) => setFilters((current) => ({ ...current, primary_branch_id: event.target.value }))}
+          >
+            {BRANCHES.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
+        </label>
+
+        <label>
+          Comparison branch
+          <select
+            value={filters.comparison_branch_id}
+            disabled={!canCompareBranches}
+            onChange={(event) => setFilters((current) => ({ ...current, comparison_branch_id: event.target.value }))}
+          >
+            <option value="">No comparison</option>
+            {BRANCHES.filter((branch) => branch.id !== 0).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
+        </label>
+      </section>
+
+      <section className="stats-grid patient-stats-grid report-summary-strip">
         {summaryCards.map(([label, value, note, className, icon]) => (
           <StatWidget key={label} label={label} value={formatMoney(value)} note={note} icon={icon} className={className} />
         ))}
       </section>
 
-      <div className="report-stack">
-        <article className="panel report-command-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Selected Period</p>
-              <h3>Statement snapshot and report controls</h3>
-            </div>
-            <span className="panel-tag">{reportMode.label}</span>
+      <nav className="report-tab-strip" aria-label="Workbook sheets">
+        {sheets.map((sheet) => (
+          <button
+            key={sheet.key}
+            type="button"
+            className={activeSheet === sheet.key ? 'report-tab-button is-active' : 'report-tab-button'}
+            onClick={() => setActiveSheet(sheet.key)}
+          >
+            {sheet.title}
+          </button>
+        ))}
+      </nav>
+
+      <article className="panel report-sheet workbook-sheet-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">{activeSheetModel?.title ?? 'Workbook'}</p>
+            <h3>{activeSheetModel?.subtitle ?? 'Select a sheet to preview'}</h3>
           </div>
+          <span className="panel-tag">
+            {selectedMonths.length ? `${monthName(selectedMonths[0], false)} - ${monthName(selectedMonths[selectedMonths.length - 1], false)} ${filters.year}` : filters.year}
+          </span>
+        </div>
 
-          <div className="report-snapshot-bar">
-            {snapshotItems.map(([label, value, note]) => (
-              <div key={label} className="report-snapshot-card">
-                <span>{label}</span>
-                <strong>{value}</strong>
-                <p>{note}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="report-type-grid">
-            {reportTypeOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={option.value === reportType ? 'report-type-card is-active' : 'report-type-card'}
-                onClick={() => setFilters((current) => ({ ...current, report_type: option.value }))}
-              >
-                <span>{option.label}</span>
-                <strong>{option.title}</strong>
-                <p>{option.copy}</p>
-              </button>
-            ))}
-          </div>
-
-          <div className="report-toolbar-grid">
-            <label>
-              Primary branch
-              <select
-                value={filters.branch_id}
-                disabled={reportType === 'tax_review' || !canCompareBranches}
-                onChange={(event) => updateFilter('branch_id', event.target.value)}
-              >
-                {branchOptions.map((branch) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Primary month
-              <select
-                value={filters.month}
-                disabled={reportType === 'tax_review'}
-                onChange={(event) => updateFilter('month', event.target.value)}
-              >
-                {monthOptions.map((month) => (
-                  <option key={month.value} value={month.value}>{month.label}</option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Comparison branch
-              <select
-                value={filters.comparison_branch_id}
-                disabled={reportType === 'tax_review' || !canCompareBranches}
-                onChange={(event) => updateFilter('comparison_branch_id', event.target.value)}
-              >
-                <option value="">No comparison</option>
-                {branchOptions.map((branch) => (
-                  <option key={`compare-${branch.id}`} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Comparison month
-              <select
-                value={filters.comparison_month}
-                disabled={reportType === 'tax_review' || !filters.comparison_branch_id}
-                onChange={(event) => updateFilter('comparison_month', event.target.value)}
-              >
-                {monthOptions.map((month) => (
-                  <option key={`month-${month.value}`} value={month.value}>{month.label}</option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Report to generate
-              <select
-                value={filters.report_type}
-                onChange={(event) => updateFilter('report_type', event.target.value)}
-              >
-                {reportTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{option.title}</option>
-                ))}
-              </select>
-            </label>
-
-            <article className="report-config-box">
-              <span>Preview Options</span>
-              <strong>Choose what appears in the report</strong>
-              <div className="report-options-list">
-                {showMonthlyOverview ? (
-                  <label className="report-check">
-                    <input
-                      type="checkbox"
-                      checked={reportConfig.includeMonthlyOverview}
-                      onChange={(event) => setReportConfig((current) => ({ ...current, includeMonthlyOverview: event.target.checked }))}
-                    />
-                    <span>Include monthly overview table</span>
-                  </label>
-                ) : null}
-
-                {showComparison ? (
-                  <label className="report-check">
-                    <input
-                      type="checkbox"
-                      checked={reportConfig.includeComparison}
-                      onChange={(event) => setReportConfig((current) => ({ ...current, includeComparison: event.target.checked }))}
-                    />
-                    <span>Include comparison columns</span>
-                  </label>
-                ) : null}
-
-                <label className="report-check">
-                  <input
-                    type="checkbox"
-                    checked={reportConfig.includeNotes}
-                    onChange={(event) => setReportConfig((current) => ({ ...current, includeNotes: event.target.checked }))}
-                  />
-                  <span>Include accountant notes in generated report</span>
-                </label>
-              </div>
-            </article>
-
-            <article className="report-config-box report-section-box">
-              <span>Sections</span>
-              <strong>Select categories to include</strong>
-              <div className="report-section-list">
-                {sectionOptions.map((section) => (
-                  <label key={section.key} className="report-check">
-                    <input
-                      type="checkbox"
-                      checked={reportConfig.includedSections.includes(section.key)}
-                      onChange={() => toggleSection(section.key)}
-                    />
-                    <span>{section.title}</span>
-                  </label>
-                ))}
-              </div>
-            </article>
-
-            <div className="report-export-box">
-              <span>Preview & Export</span>
-              <strong>{reportMode.title}</strong>
-              <p>{previewConfig ? 'The preview modal now holds the exact version that will print, export, and route for approval.' : 'Preview the report first, then print or export the approved version.'}</p>
-              <div className="filter-actions-row">
-                <button type="button" className="ghost-button" disabled={!editableRows.length} onClick={openEditor}>
-                  Open Report Editor
-                </button>
-                <button type="button" className="primary-button" disabled={!hasVisibleRows} onClick={previewReport}>
-                  Preview Report
-                </button>
-                <button type="button" className="ghost-button" disabled={!previewConfig} onClick={() => setIsPreviewOpen(true)}>
-                  Open Preview Modal
-                </button>
-                <button type="button" className="primary-button" disabled={exportBlocked} onClick={exportPdf}>
-                  Print / Save PDF
-                </button>
-                <button type="button" className="ghost-button" disabled={exportBlocked} onClick={exportExcel}>
-                  Export Excel
-                </button>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article className="panel report-sheet">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">{reportMode.label} Report</p>
-              <h3>{previewConfig ? `${reportMode.title} Preview Ready` : reportMode.title}</h3>
-            </div>
-            <span className="panel-tag">{previewConfig ? 'Preview ready' : (isLoading ? 'Refreshing...' : (primary?.month_label ?? 'Ready'))}</span>
-          </div>
-
-          {previewConfig ? (
-            <div className="message-banner success">
-              Preview ready. Open the popup modal to inspect the final report, add notes, print, or export.
-            </div>
-          ) : (
-            <div className="message-banner">
-              Configure the sections to include, then click `Preview Report` to inspect the final report before printing or exporting.
-            </div>
-          )}
-        </article>
-      </div>
+        {!primaryReport ? (
+          <div className="message-banner">Loading workbook data...</div>
+        ) : activeSheetModel ? (
+          activeSheetModel.key.startsWith('daily-')
+            ? <DailySalesPreview sheet={activeSheetModel} />
+            : <WorkbookPreviewTable sheet={activeSheetModel} />
+        ) : (
+          <div className="message-banner">No workbook sheet is available for the current selection.</div>
+        )}
+      </article>
 
       {isAccountant ? (
         <ReportWorkflowSection
@@ -1152,7 +1162,6 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
           token={token}
           session={session}
           selectedBranchId={selectedBranchId}
-          submissionPayload={submissionPayload}
         />
       ) : null}
 
@@ -1164,275 +1173,6 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
           selectedBranchId={selectedBranchId}
         />
       ) : null}
-
-      {isEditorOpen ? (
-        <div className="modal-overlay" onClick={() => setIsEditorOpen(false)}>
-          <article className="modal-panel report-editor-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Report Editor</p>
-                <h3>Presentation-only spreadsheet editor</h3>
-              </div>
-              <div className="modal-actions">
-                <span className="panel-tag">{editableRows.length} editable row{editableRows.length === 1 ? '' : 's'}</span>
-                <button type="button" className="ghost-button" onClick={() => setIsEditorOpen(false)}>
-                  Close
-                </button>
-              </div>
-            </div>
-
-            <p className="muted-copy">
-              Changes here only affect how the report is presented. Your real finance records stay untouched.
-            </p>
-
-            <div className="table-shell report-editor-shell">
-              <table className="portal-table report-editor-table">
-                <thead>
-                  <tr>
-                    <th>Include</th>
-                    <th>Section</th>
-                    <th>Description</th>
-                    <th>Display Amount</th>
-                    <th>Accountant Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {editableRows.map((row) => {
-                    const draft = editorDraft[row.key] ?? {
-                      include: true,
-                      description: row.description,
-                      amount: row.amount,
-                      note: '',
-                      section: row.section,
-                    }
-
-                    return (
-                      <tr key={`editor-${row.key}`}>
-                        <td>
-                          <label className="report-editor-check">
-                            <input
-                              type="checkbox"
-                              checked={draft.include !== false}
-                              onChange={(event) => updateEditorDraft(row.key, 'include', event.target.checked)}
-                            />
-                            <span>{draft.include !== false ? 'Show' : 'Hide'}</span>
-                          </label>
-                        </td>
-                        <td>{draft.section}</td>
-                        <td>
-                          <textarea
-                            className="report-editor-textarea"
-                            rows="2"
-                            value={draft.description}
-                            onChange={(event) => updateEditorDraft(row.key, 'description', event.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="report-editor-input"
-                            type="number"
-                            step="0.01"
-                            value={draft.amount}
-                            onChange={(event) => updateEditorDraft(row.key, 'amount', event.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <textarea
-                            className="report-editor-textarea"
-                            rows="2"
-                            value={draft.note}
-                            onChange={(event) => updateEditorDraft(row.key, 'note', event.target.value)}
-                            placeholder="Optional presentation note"
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="filter-actions-row">
-              <button type="button" className="ghost-button" onClick={() => setIsEditorOpen(false)}>
-                Cancel
-              </button>
-              <button type="button" className="primary-button" onClick={saveEditorDraft}>
-                Save Presentation Edits
-              </button>
-            </div>
-          </article>
-        </div>
-      ) : null}
-
-      {previewConfig && isPreviewOpen ? (
-        <div className="modal-overlay" onClick={() => setIsPreviewOpen(false)}>
-          <article className="modal-panel report-preview-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">{reportMode.label} Preview</p>
-                <h3>{reportMode.title}</h3>
-              </div>
-              <div className="modal-actions">
-                <span className="panel-tag">{reportType === 'tax_review' ? 'Finance extract scope' : `${primary?.branch_name ?? 'Branch'} | ${primary?.month_label ?? ''}`}</span>
-                <button type="button" className="ghost-button" onClick={exportPdf} disabled={exportBlocked}>
-                  Print / Save PDF
-                </button>
-                <button type="button" className="ghost-button" onClick={exportExcel} disabled={exportBlocked}>
-                  Export Excel
-                </button>
-                <button type="button" className="ghost-button" onClick={() => setIsPreviewOpen(false)}>
-                  Close
-                </button>
-              </div>
-            </div>
-
-            <ReportPreviewContent
-              comparison={comparison}
-              hasPreviewRows={hasPreviewRows}
-              monthlyRows={monthlyRows}
-              previewRows={previewRows}
-              previewShowComparison={previewShowComparison}
-              previewShowMonthlyOverview={previewShowMonthlyOverview}
-              primary={primary}
-              reportMode={reportMode}
-              reportType={reportType}
-              rowNotes={rowNotes}
-              snapshotItems={snapshotItems}
-              updateRowNote={updateRowNote}
-            />
-          </article>
-        </div>
-      ) : null}
     </section>
-  )
-}
-
-function ReportPreviewContent({
-  comparison,
-  hasPreviewRows,
-  monthlyRows,
-  previewRows,
-  previewShowComparison,
-  previewShowMonthlyOverview,
-  primary,
-  reportMode,
-  reportType,
-  rowNotes,
-  snapshotItems,
-  updateRowNote,
-}) {
-  return (
-    <>
-      {previewShowMonthlyOverview ? (
-        <article className="panel report-sheet">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Monthly Overview</p>
-              <h3>Revenue, expenses, and profit by month</h3>
-            </div>
-            <span className="panel-tag">{monthlyRows.length} month{monthlyRows.length === 1 ? '' : 's'}</span>
-          </div>
-
-          <div className="table-shell">
-            <table className="portal-table report-table report-monthly-table">
-              <thead>
-                <tr>
-                  <th>SN</th>
-                  <th>Month</th>
-                  <th>Revenue</th>
-                  <th>Expenses</th>
-                  <th>Profit</th>
-                  <th>Outstanding</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthlyRows.length ? monthlyRows.map((row, index) => (
-                  <tr key={row.month}>
-                    <td>{index + 1}</td>
-                    <td>{row.month_label}</td>
-                    <td>{formatMoney(row.revenue)}</td>
-                    <td>{formatMoney(row.expenses)}</td>
-                    <td className={row.profit < 0 ? 'report-negative' : 'report-positive'}>{formatMoney(row.profit)}</td>
-                    <td>{formatMoney(row.outstanding_balance)}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="6">No monthly report data is available yet for this branch.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </article>
-      ) : null}
-
-      <article className="panel report-sheet">
-        <div className="report-page-header">
-          <strong>BEALET OPTICAL CENTER</strong>
-          <span>{reportMode.title}</span>
-          <span>{reportType === 'tax_review' ? 'Current finance extract scope' : `${primary?.branch_name ?? 'Branch'} | ${primary?.month_label ?? ''}`}</span>
-        </div>
-
-        <div className="report-summary-grid">
-          {snapshotItems.map(([label, value, note]) => (
-            <div key={label} className="report-summary-card">
-              <span>{label}</span>
-              <strong>{value}</strong>
-              <small>{note}</small>
-            </div>
-          ))}
-        </div>
-
-        <div className="table-shell">
-          <table className={previewShowComparison ? 'portal-table report-table report-detail-table' : 'portal-table report-table report-simple-table'}>
-            <thead>
-              <tr>
-                <th>SN</th>
-                <th>Description</th>
-                <th>{previewShowComparison ? `${primary?.branch_name ?? 'Primary'} Amount` : 'Amount'}</th>
-                {previewShowComparison ? <th>{comparison?.branch_name ?? 'Comparison'} Amount</th> : null}
-                {previewShowComparison ? <th>Variance</th> : null}
-                <th>Accountant Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hasPreviewRows ? previewRows.map((item) => item.type === 'section' ? (
-                <tr key={item.key} className="report-section-row">
-                  <td colSpan={previewShowComparison ? 6 : 4}>{item.title}</td>
-                </tr>
-              ) : (
-                <tr key={item.key}>
-                  <td>{item.sn}</td>
-                  <td>
-                    <div className="report-row-copy">
-                      <strong>{item.description}</strong>
-                      {item.systemNote ? <small>{item.systemNote}</small> : null}
-                    </div>
-                  </td>
-                  <td>{formatMoney(item.amount)}</td>
-                  {previewShowComparison ? <td>{formatMoney(item.comparisonAmount)}</td> : null}
-                  {previewShowComparison ? <td className={item.variance < 0 ? 'report-negative' : 'report-positive'}>{formatSignedMoney(item.variance)}</td> : null}
-                  <td>
-                    <textarea
-                      className="report-note-input"
-                      rows="2"
-                      value={rowNotes[item.key] ?? ''}
-                      onChange={(event) => updateRowNote(item.key, event.target.value)}
-                      placeholder="Optional accountant note"
-                    />
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={previewShowComparison ? 6 : 4}>
-                    No report rows are available for the current preview selection.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </>
   )
 }

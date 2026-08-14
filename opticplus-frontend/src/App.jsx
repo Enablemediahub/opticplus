@@ -535,6 +535,24 @@ const defaultCompanyProfile = () => ({
   login_wallpaper_url: '',
   loginWallpaperFile: null,
   loginWallpaperPreview: '',
+  dashboard_hero_image: null,
+  dashboard_hero_image_url: '',
+  dashboardHeroImageFile: null,
+  dashboardHeroImagePreview: '',
+  dashboard_hero_position_x: 50,
+  dashboard_hero_position_y: 50,
+  labadi_dashboard_hero_image: null,
+  labadi_dashboard_hero_image_url: '',
+  labadiDashboardHeroImageFile: null,
+  labadiDashboardHeroImagePreview: '',
+  labadi_dashboard_hero_position_x: 50,
+  labadi_dashboard_hero_position_y: 50,
+  madina_dashboard_hero_image: null,
+  madina_dashboard_hero_image_url: '',
+  madinaDashboardHeroImageFile: null,
+  madinaDashboardHeroImagePreview: '',
+  madina_dashboard_hero_position_x: 50,
+  madina_dashboard_hero_position_y: 50,
   updated_at: '',
 })
 
@@ -723,7 +741,21 @@ function App() {
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
   const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
-  const heroWallpaper = companyProfileForm.loginWallpaperPreview || companyProfileForm.login_wallpaper_url || ''
+  const branchHero = selectedBranchId === 1
+    ? {
+        image: companyProfileForm.labadiDashboardHeroImagePreview || companyProfileForm.labadi_dashboard_hero_image_url || '',
+        positionX: companyProfileForm.labadi_dashboard_hero_position_x,
+        positionY: companyProfileForm.labadi_dashboard_hero_position_y,
+      }
+    : selectedBranchId === 2
+      ? {
+          image: companyProfileForm.madinaDashboardHeroImagePreview || companyProfileForm.madina_dashboard_hero_image_url || '',
+          positionX: companyProfileForm.madina_dashboard_hero_position_x,
+          positionY: companyProfileForm.madina_dashboard_hero_position_y,
+        }
+      : null
+  const dashboardHeroImage = branchHero?.image || companyProfileForm.dashboardHeroImagePreview || companyProfileForm.dashboard_hero_image_url || ''
+  const dashboardHeroPosition = `${Number(branchHero?.image ? branchHero.positionX : companyProfileForm.dashboard_hero_position_x ?? 50)}% ${Number(branchHero?.image ? branchHero.positionY : companyProfileForm.dashboard_hero_position_y ?? 50)}%`
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -2747,6 +2779,21 @@ function App() {
       if (companyProfileForm.loginWallpaperFile) {
         formData.append('login_wallpaper', companyProfileForm.loginWallpaperFile)
       }
+      if (companyProfileForm.dashboardHeroImageFile) {
+        formData.append('dashboard_hero_image', companyProfileForm.dashboardHeroImageFile)
+      }
+      if (companyProfileForm.labadiDashboardHeroImageFile) {
+        formData.append('labadi_dashboard_hero_image', companyProfileForm.labadiDashboardHeroImageFile)
+      }
+      if (companyProfileForm.madinaDashboardHeroImageFile) {
+        formData.append('madina_dashboard_hero_image', companyProfileForm.madinaDashboardHeroImageFile)
+      }
+      formData.append('dashboard_hero_position_x', String(companyProfileForm.dashboard_hero_position_x ?? 50))
+      formData.append('dashboard_hero_position_y', String(companyProfileForm.dashboard_hero_position_y ?? 50))
+      formData.append('labadi_dashboard_hero_position_x', String(companyProfileForm.labadi_dashboard_hero_position_x ?? 50))
+      formData.append('labadi_dashboard_hero_position_y', String(companyProfileForm.labadi_dashboard_hero_position_y ?? 50))
+      formData.append('madina_dashboard_hero_position_x', String(companyProfileForm.madina_dashboard_hero_position_x ?? 50))
+      formData.append('madina_dashboard_hero_position_y', String(companyProfileForm.madina_dashboard_hero_position_y ?? 50))
 
       const response = await apiFetch('/company-profile', {
         method: 'POST',
@@ -4342,7 +4389,7 @@ function App() {
             <header className="portal-header">
               <div
                 className="portal-hero"
-                style={heroWallpaper ? { '--portal-hero-wallpaper': `url("${heroWallpaper}")` } : undefined}
+                style={dashboardHeroImage ? { '--portal-hero-wallpaper': `url("${dashboardHeroImage}")`, '--portal-hero-position': dashboardHeroPosition } : undefined}
               >
                 <div className="portal-hero-main">
                   <div className="portal-hero-copy">
