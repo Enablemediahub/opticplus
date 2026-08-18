@@ -1925,6 +1925,9 @@ class PatientRecordController extends Controller
             'firstname' => $record->firstname ?? null,
             'othernames' => $record->othernames ?? null,
             'name' => $record->name ?? null,
+            'patient_status' => property_exists($record, 'status') ? ($record->status ?? null) : null,
+            'assigned_optometrist_id' => property_exists($record, 'assigned_optometrist_id') ? ($record->assigned_optometrist_id ?? null) : null,
+            'assigned_optometrist_name' => property_exists($record, 'assigned_optometrist_name') ? ($record->assigned_optometrist_name ?? null) : null,
         ];
     }
 

@@ -202,9 +202,17 @@ class DashboardController extends Controller
         $user = $request->user();
         $requestedBranchId = (int) $request->integer('branch_id');
 
-        return $user->isAdmin()
-            ? (($requestedBranchId >= 0) ? $requestedBranchId : (int) ($user->branch_id ?: 1))
-            : (int) $user->branch_id;
+        if ($user->isAdmin()) {
+            return ($requestedBranchId >= 0) ? $requestedBranchId : (int) ($user->branch_id ?: 1);
+        }
+
+        if (($user->role ?? null) === 'technician') {
+            return in_array($requestedBranchId, [1, 2], true)
+                ? $requestedBranchId
+                : (int) ($user->branch_id ?: 1);
+        }
+
+        return (int) $user->branch_id;
     }
 
     private function branchName(int $branchId): string

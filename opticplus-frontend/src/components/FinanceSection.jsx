@@ -1710,6 +1710,43 @@ function ExpensesTab(props) {
   }
   const expenseFilterDefaults = isReceptionistExpenseView ? receptionistExpenseDefaults : managementExpenseDefaults
 
+  function commitExpenseFilters(nextFilters) {
+    props.setFinanceExpenseFilters(nextFilters)
+    props.setFinanceExpenseQuery((current) => ({
+      ...current,
+      ...nextFilters,
+      page: 1,
+    }))
+  }
+
+  useEffect(() => {
+    const liveUpdateDelay = props.financeExpenseFilters.search ? 220 : 0
+    const timeoutId = window.setTimeout(() => {
+      props.setFinanceExpenseQuery((current) => {
+        const next = {
+          ...current,
+          filter: props.financeExpenseFilters.filter,
+          month: props.financeExpenseFilters.month ?? 'all',
+          start_date: props.financeExpenseFilters.start_date,
+          end_date: props.financeExpenseFilters.end_date,
+          category: props.financeExpenseFilters.category,
+          search: props.financeExpenseFilters.search,
+          page: 1,
+          per_page: current?.per_page ?? props.financeExpenseFilters.per_page ?? 12,
+        }
+
+        return ['filter', 'month', 'start_date', 'end_date', 'category', 'search', 'page', 'per_page']
+          .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
+          ? current
+          : next
+      })
+    }, liveUpdateDelay)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [props.financeExpenseFilters, props.setFinanceExpenseQuery])
+
   function openExpenseModal(expense) {
     setSelectedExpense(expense)
     setExpenseModalForm({
@@ -1783,11 +1820,7 @@ function ExpensesTab(props) {
               className={`expense-page-stack expense-filter-grid-horizontal${usePremiumExpenseLayout ? ' expense-premium-form expense-premium-filter-form' : ''}`}
               onSubmit={(event) => {
                 event.preventDefault()
-                props.setFinanceExpenseQuery((current) => ({
-                  ...current,
-                  ...props.financeExpenseFilters,
-                  page: 1,
-                }))
+                commitExpenseFilters({ ...props.financeExpenseFilters, page: 1 })
               }}
               >
               <label>
@@ -1796,17 +1829,17 @@ function ExpensesTab(props) {
                   value={props.financeExpenseFilters.month ?? 'all'}
                   onChange={(event) => {
                     const monthValue = event.target.value
-                    props.setFinanceExpenseFilters((current) => {
-                      if (monthValue === 'all') {
-                        return { ...current, month: 'all', start_date: '', end_date: '', page: 1 }
-                      }
+                    if (monthValue === 'all') {
+                      commitExpenseFilters({ ...props.financeExpenseFilters, month: 'all', start_date: '', end_date: '', page: 1 })
+                      return
+                    }
 
-                      if (monthValue === 'custom') {
-                        return { ...current, month: 'custom', page: 1 }
-                      }
+                    if (monthValue === 'custom') {
+                      commitExpenseFilters({ ...props.financeExpenseFilters, month: 'custom', page: 1 })
+                      return
+                    }
 
-                      return { ...current, month: monthValue, ...monthRange(monthValue), page: 1 }
-                    })
+                    commitExpenseFilters({ ...props.financeExpenseFilters, month: monthValue, ...monthRange(monthValue), page: 1 })
                   }}
                 >
                   {expenseMonthOptions().map((option) => (
@@ -1818,7 +1851,7 @@ function ExpensesTab(props) {
                 Search
                 <input
                   value={props.financeExpenseFilters.search}
-                  onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, search: event.target.value }))}
+                  onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, search: event.target.value, page: 1 })}
                   placeholder="Description or note"
                 />
               </label>
@@ -1826,7 +1859,7 @@ function ExpensesTab(props) {
                 Category
                 <select
                   value={props.financeExpenseFilters.category}
-                  onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, category: event.target.value }))}
+                  onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, category: event.target.value, page: 1 })}
                 >
                   <option value="all">All categories</option>
                   {categoryOptions.map((category) => (
@@ -1839,7 +1872,7 @@ function ExpensesTab(props) {
                 <input
                   type="date"
                   value={props.financeExpenseFilters.start_date}
-                  onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, start_date: event.target.value, month: 'custom' }))}
+                  onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, start_date: event.target.value, month: 'custom', page: 1 })}
                 />
               </label>
               <label>
@@ -1847,7 +1880,7 @@ function ExpensesTab(props) {
                 <input
                   type="date"
                   value={props.financeExpenseFilters.end_date}
-                  onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, end_date: event.target.value, month: 'custom' }))}
+                  onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, end_date: event.target.value, month: 'custom', page: 1 })}
                 />
               </label>
               <div className="filter-actions-row full-span">
@@ -1856,8 +1889,7 @@ function ExpensesTab(props) {
                   type="button"
                   className="ghost-button"
                   onClick={() => {
-                    props.setFinanceExpenseFilters(expenseFilterDefaults)
-                    props.setFinanceExpenseQuery(expenseFilterDefaults)
+                    commitExpenseFilters(expenseFilterDefaults)
                   }}
                 >
                   Reset
@@ -2464,19 +2496,51 @@ function CeoExpenseReviewView(props) {
   }))
   const categoryItems = (props.financeExpenses?.category_breakdown ?? []).slice(0, 6)
 
-  function applyCeoExpenseFilters(event) {
-    event.preventDefault()
+  function commitExpenseFilters(nextFilters) {
+    props.setFinanceExpenseFilters(nextFilters)
     props.setFinanceExpenseQuery((current) => ({
       ...current,
-      ...props.financeExpenseFilters,
+      ...nextFilters,
       page: 1,
     }))
   }
 
+  useEffect(() => {
+    const liveUpdateDelay = props.financeExpenseFilters.search ? 220 : 0
+    const timeoutId = window.setTimeout(() => {
+      props.setFinanceExpenseQuery((current) => {
+        const next = {
+          ...current,
+          filter: props.financeExpenseFilters.filter,
+          month: props.financeExpenseFilters.month ?? 'all',
+          start_date: props.financeExpenseFilters.start_date,
+          end_date: props.financeExpenseFilters.end_date,
+          category: props.financeExpenseFilters.category,
+          search: props.financeExpenseFilters.search,
+          page: 1,
+          per_page: current?.per_page ?? props.financeExpenseFilters.per_page ?? 12,
+        }
+
+        return ['filter', 'month', 'start_date', 'end_date', 'category', 'search', 'page', 'per_page']
+          .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
+          ? current
+          : next
+      })
+    }, liveUpdateDelay)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [props.financeExpenseFilters, props.setFinanceExpenseQuery])
+
+  function applyCeoExpenseFilters(event) {
+    event.preventDefault()
+    commitExpenseFilters({ ...props.financeExpenseFilters, page: 1 })
+  }
+
   function resetCeoExpenseFilters() {
     const defaults = { filter: 'all', month: 'all', start_date: '', end_date: '', category: 'all', search: '', page: 1, per_page: 12 }
-    props.setFinanceExpenseFilters(defaults)
-    props.setFinanceExpenseQuery(defaults)
+    commitExpenseFilters(defaults)
   }
 
   return (
@@ -2498,17 +2562,17 @@ function CeoExpenseReviewView(props) {
               value={props.financeExpenseFilters.month ?? 'all'}
               onChange={(event) => {
                 const monthValue = event.target.value
-                props.setFinanceExpenseFilters((current) => {
-                  if (monthValue === 'all') {
-                    return { ...current, month: 'all', start_date: '', end_date: '', page: 1 }
-                  }
+                if (monthValue === 'all') {
+                  commitExpenseFilters({ ...props.financeExpenseFilters, month: 'all', start_date: '', end_date: '', page: 1 })
+                  return
+                }
 
-                  if (monthValue === 'custom') {
-                    return { ...current, month: 'custom', page: 1 }
-                  }
+                if (monthValue === 'custom') {
+                  commitExpenseFilters({ ...props.financeExpenseFilters, month: 'custom', page: 1 })
+                  return
+                }
 
-                  return { ...current, month: monthValue, ...monthRange(monthValue), page: 1 }
-                })
+                commitExpenseFilters({ ...props.financeExpenseFilters, month: monthValue, ...monthRange(monthValue), page: 1 })
               }}
             >
               {expenseMonthOptions().map((option) => (
@@ -2520,7 +2584,7 @@ function CeoExpenseReviewView(props) {
             Search expense notes
             <input
               value={props.financeExpenseFilters.search}
-              onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, search: event.target.value }))}
+              onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, search: event.target.value, page: 1 })}
               placeholder="Description or note"
             />
           </label>
@@ -2528,7 +2592,7 @@ function CeoExpenseReviewView(props) {
             Category
             <select
               value={props.financeExpenseFilters.category}
-              onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, category: event.target.value }))}
+              onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, category: event.target.value, page: 1 })}
             >
               <option value="all">All categories</option>
               {props.categoryOptions.map((category) => (
@@ -2541,7 +2605,7 @@ function CeoExpenseReviewView(props) {
             <input
               type="date"
               value={props.financeExpenseFilters.start_date}
-              onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, start_date: event.target.value, month: 'custom' }))}
+              onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, start_date: event.target.value, month: 'custom', page: 1 })}
             />
           </label>
           <label>
@@ -2549,7 +2613,7 @@ function CeoExpenseReviewView(props) {
             <input
               type="date"
               value={props.financeExpenseFilters.end_date}
-              onChange={(event) => props.setFinanceExpenseFilters((current) => ({ ...current, end_date: event.target.value, month: 'custom' }))}
+              onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, end_date: event.target.value, month: 'custom', page: 1 })}
             />
           </label>
           <div className="filter-actions-row full-span">

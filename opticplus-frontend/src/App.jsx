@@ -14,6 +14,7 @@ import ExtractSection from './components/ExtractSection.jsx'
 import FinanceSection from './components/FinanceSection.jsx'
 import InsuranceSection from './components/InsuranceSection.jsx'
 import InventorySection from './components/InventorySection.jsx'
+import LensOrdersSection from './components/LensOrdersSection.jsx'
 import LoginScreen from './components/LoginScreen.jsx'
 import ExecutiveDashboardSection from './components/ExecutiveDashboardSection.jsx'
 import ManagerDashboardSection from './components/ManagerDashboardSection.jsx'
@@ -31,6 +32,7 @@ import ReportsSection from './components/ReportsSection.jsx'
 import MonitorSection from './components/MonitorSection.jsx'
 import SettingsSection from './components/SettingsSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
+import TechnicianDashboardSection from './components/TechnicianDashboardSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
 
 const API_BASE = (
@@ -154,6 +156,24 @@ const receptionistNavSections = [
   {
     title: 'Preferences',
     items: [{ label: 'Settings', navLabel: 'Settings', icon: 'settings' }],
+  },
+]
+
+const technicianNavSections = [
+  {
+    title: 'Overview',
+    items: [{ label: 'Dashboard', navLabel: 'Dashboard Overview', icon: 'dashboard' }],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { label: 'Lens Tracker', navLabel: 'Lens Tracker', icon: 'glasses' },
+      { label: 'Lens Orders', navLabel: 'Lens Orders', icon: 'receipt' },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [{ label: 'Notes', navLabel: 'Notes', icon: 'message' }],
   },
 ]
 
@@ -287,6 +307,7 @@ const viewHashMap = {
   'BSMI Tracking': '#/bsmi-tracking',
   'Assets Register': '#/assets-register',
   'Lens Tracker': '#/lens-tracker',
+  'Lens Orders': '#/lens-orders',
   Memos: '#/memos',
   Payroll: '#/payroll',
   'Bank Deposits': '#/bank-deposits',
@@ -315,6 +336,7 @@ const financeViews = ['Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Extra
 const paymentDetailViews = ['Billing', ...financeViews]
 const insuranceViews = ['Insurance', 'Insurance Claims']
 const inventoryViews = ['Inventory', 'Lens Tracker', 'BSMI Tracking', 'Assets Register', 'Memos']
+const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Notes']
 const optometristPatientViews = [
   'Patient Management',
   'Prescription Reference',
@@ -481,6 +503,13 @@ const defaultLensTrackerFilters = () => ({
   date_to: todayIso(),
   search: '',
   tracking: 'all',
+})
+
+const defaultLensOrdersFilters = () => ({
+  month: currentMonthKey(),
+  date_from: currentMonthDateRange().start_date,
+  date_to: currentMonthDateRange().end_date,
+  search: '',
 })
 
 const defaultCustomerServiceFilters = () => ({
@@ -675,14 +704,20 @@ function App() {
   const [isVerifyingPaystack, setIsVerifyingPaystack] = useState(false)
   const [inventoryData, setInventoryData] = useState(null)
   const [inventoryLensData, setInventoryLensData] = useState(null)
+  const [lensOrdersData, setLensOrdersData] = useState(null)
   const [inventoryBsmiData, setInventoryBsmiData] = useState(null)
   const [inventoryFilters, setInventoryFilters] = useState(defaultInventoryFilters())
   const [inventoryQuery, setInventoryQuery] = useState(defaultInventoryFilters())
   const [inventoryForm, setInventoryForm] = useState(defaultInventoryProductForm())
   const [lensTrackerFilters, setLensTrackerFilters] = useState(defaultLensTrackerFilters())
   const [lensTrackerQuery, setLensTrackerQuery] = useState(defaultLensTrackerFilters())
+  const [lensOrdersFilters, setLensOrdersFilters] = useState(defaultLensOrdersFilters())
+  const [lensOrdersQuery, setLensOrdersQuery] = useState(defaultLensOrdersFilters())
   const [inventoryError, setInventoryError] = useState('')
   const [inventorySuccess, setInventorySuccess] = useState('')
+  const [lensOrdersError, setLensOrdersError] = useState('')
+  const [lensOrdersSuccess, setLensOrdersSuccess] = useState('')
+  const [isLoadingLensOrders, setIsLoadingLensOrders] = useState(false)
   const [isLoadingInventory, setIsLoadingInventory] = useState(false)
   const [isLoadingLensTracker, setIsLoadingLensTracker] = useState(false)
   const [isSavingInventoryProduct, setIsSavingInventoryProduct] = useState(false)
@@ -735,11 +770,14 @@ function App() {
   const isAccountant = session?.role === 'accountant'
   const isGeneralManager = session?.role === 'manager'
   const isOptometrist = session?.role === 'optometrist'
+  const isTechnician = session?.role === 'technician'
   const isExecutive = ['ceo', 'director'].includes(session?.role)
   const canAccessSystemSettings = ['ceo', 'director', 'manager'].includes(session?.role)
   const isMergedView = session?.is_admin && selectedBranchId === 0
+  const canSwitchBranch = session?.is_admin || isTechnician
+  const scopedBranchId = canSwitchBranch ? selectedBranchId : session?.branch_id
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
-  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
+  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
   const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
@@ -1401,7 +1439,7 @@ function App() {
 
       setIsLoadingDashboard(true)
       try {
-        const branchId = session.is_admin ? selectedBranchId : session.branch_id
+        const branchId = scopedBranchId ?? session.branch_id
         const response = await apiFetch(`/dashboard?branch_id=${branchId}`, { token })
         if (!cancelled) setDashboard(response)
       } catch (error) {
@@ -1415,7 +1453,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [selectedBranchId, session, token])
+  }, [scopedBranchId, session, token])
 
   useEffect(() => {
     let cancelled = false
@@ -1468,14 +1506,20 @@ function App() {
     setFinanceSuccess('')
     setInventoryData(null)
     setInventoryLensData(null)
+    setLensOrdersData(null)
     setInventoryBsmiData(null)
     setInventoryFilters(defaultInventoryFilters())
     setInventoryQuery(defaultInventoryFilters())
     setInventoryForm(defaultInventoryProductForm())
     setLensTrackerFilters(defaultLensTrackerFilters())
     setLensTrackerQuery(defaultLensTrackerFilters())
+    setLensOrdersFilters(defaultLensOrdersFilters())
+    setLensOrdersQuery(defaultLensOrdersFilters())
     setInventoryError('')
     setInventorySuccess('')
+    setLensOrdersError('')
+    setLensOrdersSuccess('')
+    setIsLoadingLensOrders(false)
     setCustomerServiceData(null)
     setCustomerServiceFilters(defaultCustomerServiceFilters())
     setCustomerServiceQuery(defaultCustomerServiceFilters())
@@ -2000,7 +2044,7 @@ function App() {
       setIsLoadingInventory(true)
       setInventoryError('')
       try {
-        const branchId = session.is_admin ? selectedBranchId : session.branch_id
+        const branchId = scopedBranchId ?? session.branch_id
         const params = buildInventoryParams(branchId)
         const response = await apiFetch(`/inventory?${params.toString()}`, { token })
         if (!cancelled) setInventoryData(response)
@@ -2015,7 +2059,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeView, inventoryQuery, selectedBranchId, session, token])
+  }, [activeView, inventoryQuery, scopedBranchId, session, token])
 
   useEffect(() => {
     let cancelled = false
@@ -2025,7 +2069,7 @@ function App() {
       setIsLoadingLensTracker(true)
       setInventoryError('')
       try {
-        const branchId = session.is_admin ? selectedBranchId : session.branch_id
+        const branchId = scopedBranchId ?? session.branch_id
         const params = new URLSearchParams({
           branch_id: String(branchId),
           date_from: lensTrackerQuery.date_from,
@@ -2053,7 +2097,39 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeView, lensTrackerQuery, selectedBranchId, session, token])
+  }, [activeView, lensTrackerQuery, scopedBranchId, session, token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadLensOrders() {
+      if (!token || !session || (activeView !== 'Lens Orders' && !(isTechnician && activeView === 'Dashboard'))) return
+      setIsLoadingLensOrders(true)
+      setLensOrdersError('')
+      try {
+        const branchId = scopedBranchId ?? session.branch_id
+        const query = activeView === 'Lens Orders' ? lensOrdersQuery : defaultLensOrdersFilters()
+        const params = new URLSearchParams({
+          branch_id: String(branchId),
+          month: query.month,
+          date_from: query.date_from,
+          date_to: query.date_to,
+        })
+        if (query.search) params.set('search', query.search)
+        const response = await apiFetch(`/inventory/lens-orders?${params.toString()}`, { token })
+        if (!cancelled) setLensOrdersData(response)
+      } catch (error) {
+        if (!cancelled) setLensOrdersError(error.message)
+      } finally {
+        if (!cancelled) setIsLoadingLensOrders(false)
+      }
+    }
+
+    loadLensOrders()
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, isTechnician, lensOrdersQuery, scopedBranchId, session, token])
 
   useEffect(() => {
     if (!inventoryViews.includes(activeView) && activeView !== 'Lens Tracker' && activeView !== 'BSMI Tracking') {
@@ -2084,6 +2160,34 @@ function App() {
       window.clearTimeout(timeoutId)
     }
   }, [activeView, lensTrackerFilters])
+
+  useEffect(() => {
+    if (activeView !== 'Lens Orders') return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      setLensOrdersQuery((current) => {
+        const nextQuery = {
+          ...current,
+          ...lensOrdersFilters,
+        }
+
+        if (
+          current.month === nextQuery.month &&
+          current.date_from === nextQuery.date_from &&
+          current.date_to === nextQuery.date_to &&
+          current.search === nextQuery.search
+        ) {
+          return current
+        }
+
+        return nextQuery
+      })
+    }, lensOrdersFilters.search ? 250 : 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [activeView, lensOrdersFilters])
 
   useEffect(() => {
     let cancelled = false
@@ -2507,6 +2611,10 @@ function App() {
       }))
       .filter((section) => section.items.length)
 
+    if (session?.role === 'technician') {
+      return stripSettings(technicianNavSections)
+    }
+
     if (isOptometrist) {
       return stripSettings(optometristNavSections)
     }
@@ -2524,7 +2632,7 @@ function App() {
     }
 
     return stripSettings(receptionistNavSections)
-  }, [canAccessSystemSettings, hasManagerSidebar, isAccountant, isExecutive, isOptometrist])
+  }, [canAccessSystemSettings, hasManagerSidebar, isAccountant, isExecutive, isOptometrist, session?.role])
 
   const visibleNavItems = useMemo(
     () => visibleNavSections.flatMap((section) => section.items),
@@ -2557,6 +2665,21 @@ function App() {
     if (session?.role !== 'receptionist' || activeView !== 'Reports') return
     setActiveView('Notes')
   }, [activeView, session])
+
+  useEffect(() => {
+    if (session?.role !== 'technician' || technicianViews.includes(activeView)) return
+    setActiveView('Dashboard')
+  }, [activeView, session?.role])
+
+  useEffect(() => {
+    if (activeView !== 'Lens Orders' || session?.role === 'technician') return
+    setActiveView('Dashboard')
+  }, [activeView, session?.role])
+
+  useEffect(() => {
+    if (!session || session?.role !== 'technician' || selectedBranchId !== 0) return
+    setSelectedBranchId(session.branch_id || 1)
+  }, [selectedBranchId, session])
 
   useEffect(() => {
     if (activeView !== 'Audit Log' || isGeneralManager) return
@@ -4330,7 +4453,7 @@ function App() {
               </div>
               <div className="sidebar-brand-copy">
                 <strong>Bealet Optical Center</strong>
-                <span>{isOptometrist ? 'Optometrist Panel' : isExecutive ? 'Executive Finance Desk' : 'OPTICPLUS Operations Portal'}</span>
+                <span>{session?.role === 'technician' ? 'Technician Panel' : isOptometrist ? 'Optometrist Panel' : isExecutive ? 'Executive Finance Desk' : 'OPTICPLUS Operations Portal'}</span>
               </div>
               <button
                 type="button"
@@ -4406,33 +4529,35 @@ function App() {
                     <h2>{session.name}</h2>
                     <div className="portal-hero-meta">
                       <span className="portal-hero-branch">
-                        {session.is_admin ? activeBranchName : `${session.branch || activeBranchName} Branch`}
+                        {canSwitchBranch ? activeBranchName : `${session.branch || activeBranchName} Branch`}
                       </span>
                       <span className="portal-hero-role">{roleLabels[session.role] ?? session.role}</span>
                     </div>
                     <div className="portal-hero-page">
                       <strong>{activeView}</strong>
                       <p className="header-copy">
-                        {isOptometrist
+                        {isTechnician
+                          ? 'Tracking prescriptions, lens orders, and production readiness for the active branch.'
+                          : isOptometrist
                           ? 'Managing patient review, appointments, prescriptions, and clinical follow-up for your branch.'
                           : isExecutive
                           ? 'Reviewing revenue, expenses, insurance exposure, reports, and internal communication from an executive read-only desk.'
                           : isMergedView
                           ? 'Monitoring company-wide performance across the mastered database.'
-                          : `Monitoring ${session.is_admin ? `${activeBranchName} branch` : `${session.branch || activeBranchName} branch`} operations.`}
+                          : `Monitoring ${canSwitchBranch ? `${activeBranchName} branch` : `${session.branch || activeBranchName} branch`} operations.`}
                       </p>
                     </div>
                   </div>
 
                   <div className="header-actions portal-hero-actions">
-                    {session.is_admin ? (
+                    {session.is_admin || session.role === 'technician' ? (
                       <label className="branch-select">
                         Branch
                         <select
                           value={selectedBranchId}
                           onChange={(event) => setSelectedBranchId(Number(event.target.value))}
                         >
-                          {branchOptions.map((branch) => (
+                          {(session.role === 'technician' ? branchOptions.filter((branch) => branch.id !== 0) : branchOptions).map((branch) => (
                             <option key={branch.id} value={branch.id}>
                               {branch.name}
                             </option>
@@ -4563,6 +4688,14 @@ function App() {
                   isLoadingPatients={isLoadingPatients}
                   rowBusyId={rowBusyId}
                   markAsSeen={markAsSeen}
+                  setActiveView={setActiveView}
+                />
+              ) : isTechnician ? (
+                <TechnicianDashboardSection
+                  dashboard={dashboard}
+                  lensOrdersData={lensOrdersData}
+                  isLoadingDashboard={isLoadingDashboard}
+                  isLoadingLensOrders={isLoadingLensOrders}
                   setActiveView={setActiveView}
                 />
               ) : (
@@ -5114,6 +5247,18 @@ function App() {
               />
             ) : null}
 
+            {activeView === 'Lens Orders' ? (
+              <LensOrdersSection
+                lensOrdersData={lensOrdersData}
+                lensOrdersFilters={lensOrdersFilters}
+                setLensOrdersFilters={setLensOrdersFilters}
+                lensOrdersError={lensOrdersError}
+                lensOrdersSuccess={lensOrdersSuccess}
+                setLensOrdersError={setLensOrdersError}
+                setLensOrdersSuccess={setLensOrdersSuccess}
+              />
+            ) : null}
+
             {activeView === 'BSMI Tracking' ? (
               <BsmiTrackingSection
                 bsmiData={inventoryBsmiData}
@@ -5247,7 +5392,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>
