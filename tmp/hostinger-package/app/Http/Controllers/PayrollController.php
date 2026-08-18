@@ -173,6 +173,8 @@ class PayrollController extends Controller
             'pay_month' => ['required', 'integer', 'min:1', 'max:12'],
             'pay_year' => ['required', 'integer', 'min:2020'],
             'payment_method' => ['nullable', 'string', 'max:50'],
+            'declared_salary_payment_method' => ['nullable', 'string', 'max:50'],
+            'allowance_payment_method' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
             'declared_salary' => ['nullable', 'numeric', 'min:0'],
             'allowance_amount' => ['nullable', 'numeric', 'min:0'],
@@ -233,8 +235,10 @@ class PayrollController extends Controller
         $updatedDeclaredPaid = round($existingDeclaredPaid + $declaredPayment, 2);
         $updatedAllowancePaid = round($existingAllowancePaid + $allowancePayment, 2);
         $netSalary = round($declaredDue + $allowanceDue, 2);
+        $declaredPaymentMethod = $validated['declared_salary_payment_method'] ?? $validated['payment_method'] ?? 'bank_transfer';
+        $allowancePaymentMethod = $validated['allowance_payment_method'] ?? $validated['payment_method'] ?? 'cash';
 
-        DB::transaction(function () use ($validated, $branchId, $employee, $grossSalary, $declaredSalary, $allowanceAmount, $updatedDeclaredPaid, $updatedAllowancePaid, $advanceDeduction, $netSalary, $paymentAmount, $paymentLabel, $currentBalance, $overrideBalance, $existingPayroll): void {
+        DB::transaction(function () use ($validated, $branchId, $employee, $grossSalary, $declaredSalary, $allowanceAmount, $updatedDeclaredPaid, $updatedAllowancePaid, $advanceDeduction, $netSalary, $paymentAmount, $paymentLabel, $currentBalance, $overrideBalance, $existingPayroll, $declaredPaymentMethod, $allowancePaymentMethod): void {
             if ($existingPayroll) {
                 DB::table('payroll_history')
                     ->where('id', $existingPayroll->id)
@@ -250,6 +254,8 @@ class PayrollController extends Controller
                         'payment_date' => now(),
                         'notes' => $validated['notes'] ?? $existingPayroll->notes ?? '',
                         'payment_method' => $validated['payment_method'] ?? 'bank_transfer',
+                        'declared_payment_method' => $declaredPaymentMethod,
+                        'allowance_payment_method' => $allowancePaymentMethod,
                         'updated_at' => now(),
                     ]);
             } else {
@@ -269,6 +275,8 @@ class PayrollController extends Controller
                     'payment_date' => now(),
                     'notes' => $validated['notes'] ?? '',
                     'payment_method' => $validated['payment_method'] ?? 'bank_transfer',
+                    'declared_payment_method' => $declaredPaymentMethod,
+                    'allowance_payment_method' => $allowancePaymentMethod,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -357,6 +365,8 @@ class PayrollController extends Controller
                     $declaration['allowance_amount'] ?? null,
                 );
                 [$declaredPaid, $allowancePaid] = $this->allocatePayrollSplitAfterDeduction($declaredSalary, $allowanceAmount, (float) $employee['pending_advances']);
+                $declaredPaymentMethod = $declaration['declared_salary_payment_method'] ?? $validated['payment_method'] ?? 'bank_transfer';
+                $allowancePaymentMethod = $declaration['allowance_payment_method'] ?? $validated['payment_method'] ?? 'cash';
 
                 DB::table('payroll_history')->insert([
                     'branch_id' => $branchId,
@@ -374,6 +384,8 @@ class PayrollController extends Controller
                     'payment_date' => now(),
                     'notes' => trim(($declaration['notes'] ?? '').' Bulk payroll processing'),
                     'payment_method' => $validated['payment_method'] ?? 'bank_transfer',
+                    'declared_payment_method' => $declaredPaymentMethod,
+                    'allowance_payment_method' => $allowancePaymentMethod,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -676,6 +688,8 @@ class PayrollController extends Controller
                 'ph.payment_date',
                 'ph.notes',
                 'ph.payment_method',
+                'ph.declared_payment_method',
+                'ph.allowance_payment_method',
                 'ec.ghana_card_name',
                 'ec.staff_id',
                 'ec.branch',
@@ -697,6 +711,8 @@ class PayrollController extends Controller
                 'payment_date' => $row->payment_date,
                 'notes' => $row->notes,
                 'payment_method' => $row->payment_method ?: 'bank_transfer',
+                'declared_payment_method' => $row->declared_payment_method ?: 'bank_transfer',
+                'allowance_payment_method' => $row->allowance_payment_method ?: 'cash',
             ])->all();
     }
 
@@ -921,6 +937,18 @@ class PayrollController extends Controller
         if (! Schema::hasColumn('payroll_history', 'allowance_paid')) {
             Schema::table('payroll_history', function (Blueprint $table): void {
                 $table->decimal('allowance_paid', 12, 2)->default(0)->after('declared_paid');
+            });
+        }
+
+        if (! Schema::hasColumn('payroll_history', 'declared_payment_method')) {
+            Schema::table('payroll_history', function (Blueprint $table): void {
+                $table->string('declared_payment_method', 50)->default('bank_transfer')->after('allowance_paid');
+            });
+        }
+
+        if (! Schema::hasColumn('payroll_history', 'allowance_payment_method')) {
+            Schema::table('payroll_history', function (Blueprint $table): void {
+                $table->string('allowance_payment_method', 50)->default('cash')->after('declared_payment_method');
             });
         }
 

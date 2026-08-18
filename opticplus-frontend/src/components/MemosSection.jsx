@@ -11,11 +11,36 @@ const defaultForm = (session) => ({
   category: 'finance',
   priority: 'medium',
   cc: '',
-  body: '',
+  body: `Seeking approval for the disbursement of funds. The amount in total to be disbursed is GH₵ [amount]. This payment is to settle the [purpose/reason] for the [period/description]. The payment will be made through [cash / bank / both].
+
+Thank you for your cooperation.`,
   requires_approval: true,
   accountant_signature: null,
   attachments: [],
 })
+const defaultTemplateBuilder = () => ({
+  amount: '',
+  purpose: '',
+  period: '',
+  paymentMethod: 'bank',
+})
+
+function buildMemoBody(templateData) {
+  if (!templateData.amount && !templateData.purpose && !templateData.period && !templateData.paymentMethod) {
+    return `Seeking approval for the disbursement of funds. The amount in total to be disbursed is GH₵ [amount]. This payment is to settle the [purpose/reason] for the [period/description]. The payment will be made through [cash / bank / both].
+
+Thank you for your cooperation.`
+  }
+  
+  const amount = templateData.amount || '[amount]'
+  const purpose = templateData.purpose || '[purpose/reason]'
+  const period = templateData.period || '[period/description]'
+  const method = templateData.paymentMethod || '[cash / bank / both]'
+  
+  return `Seeking approval for the disbursement of funds. The amount in total to be disbursed is GH₵ ${amount}. This payment is to settle the ${purpose} for the ${period}. The payment will be made through ${method}.
+
+Thank you for your cooperation.`
+}
 const defaultDecisionForm = () => ({ decision: 'approved', approval_notes: '', gm_signature: null })
 
 function buildMemoReference(memoDate = todayIso()) {
@@ -66,6 +91,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
   const [filters, setFilters] = useState(defaultFilters())
   const [query, setQuery] = useState(defaultFilters())
   const [form, setForm] = useState(() => defaultForm(session))
+  const [templateBuilder, setTemplateBuilder] = useState(defaultTemplateBuilder())
   const [decisionForm, setDecisionForm] = useState(defaultDecisionForm())
   const [selectedMemoId, setSelectedMemoId] = useState(null)
   const [error, setError] = useState('')
@@ -103,6 +129,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
 
   useEffect(() => {
     setForm(defaultForm(session))
+    setTemplateBuilder(defaultTemplateBuilder())
     setEditingDraftId(null)
     setExistingAttachments([])
     setExistingSignatureUrl('')
@@ -246,6 +273,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
         ...defaultForm(session),
         reference: buildMemoReference(todayIso()),
       })
+      setTemplateBuilder(defaultTemplateBuilder())
       setEditingDraftId(null)
       setExistingAttachments([])
       setExistingSignatureUrl('')
@@ -280,6 +308,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
         accountant_signature: null,
         attachments: [],
       })
+      setTemplateBuilder(defaultTemplateBuilder())
       setEditingDraftId(draftMemo.id)
       setExistingAttachments(response.attachments ?? [])
       setExistingSignatureUrl(draftMemo.digital_signature_url ?? '')
@@ -302,6 +331,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
       ...defaultForm(session),
       reference: buildMemoReference(todayIso()),
     })
+    setTemplateBuilder(defaultTemplateBuilder())
   }
 
   async function submitDecision(event) {
@@ -427,9 +457,74 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
               CC
               <input value={form.cc} onChange={(event) => setForm((current) => ({ ...current, cc: event.target.value }))} placeholder="CEO, HR, Operations" />
             </label>
+
+            <div className="memo-template-builder">
+              <p className="eyebrow" style={{ marginBottom: '12px' }}>Quick Template Builder</p>
+              <p className="muted-copy">Fill these fields to automatically generate the memo body:</p>
+              <div className="patient-filter-grid" style={{ marginTop: '12px' }}>
+                <label>
+                  Amount (GH₵)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={templateBuilder.amount}
+                    onChange={(event) => {
+                      const newTemplate = { ...templateBuilder, amount: event.target.value }
+                      setTemplateBuilder(newTemplate)
+                      setForm((current) => ({ ...current, body: buildMemoBody(newTemplate) }))
+                    }}
+                    placeholder="e.g., 5000"
+                  />
+                </label>
+                <label>
+                  Purpose/Reason
+                  <input
+                    type="text"
+                    value={templateBuilder.purpose}
+                    onChange={(event) => {
+                      const newTemplate = { ...templateBuilder, purpose: event.target.value }
+                      setTemplateBuilder(newTemplate)
+                      setForm((current) => ({ ...current, body: buildMemoBody(newTemplate) }))
+                    }}
+                    placeholder="e.g., Staff training fees"
+                  />
+                </label>
+                <label>
+                  Period/Description
+                  <input
+                    type="text"
+                    value={templateBuilder.period}
+                    onChange={(event) => {
+                      const newTemplate = { ...templateBuilder, period: event.target.value }
+                      setTemplateBuilder(newTemplate)
+                      setForm((current) => ({ ...current, body: buildMemoBody(newTemplate) }))
+                    }}
+                    placeholder="e.g., June 2026"
+                  />
+                </label>
+                <label>
+                  Payment Method
+                  <select
+                    value={templateBuilder.paymentMethod}
+                    onChange={(event) => {
+                      const newTemplate = { ...templateBuilder, paymentMethod: event.target.value }
+                      setTemplateBuilder(newTemplate)
+                      setForm((current) => ({ ...current, body: buildMemoBody(newTemplate) }))
+                    }}
+                  >
+                    <option value="">-- Select method --</option>
+                    <option value="cash">Cash</option>
+                    <option value="bank">Bank Transfer</option>
+                    <option value="mobile money">Mobile Money</option>
+                    <option value="both">Both Cash & Bank</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
             <label className="full-span">
               Memo body
-              <textarea rows="8" value={form.body} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} placeholder="Write the memo details, reason, and requested approval here." />
+              <textarea rows="8" value={form.body} onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))} placeholder="Fill in: [amount], [purpose/reason], [period/description], and [cash / bank / both]" />
             </label>
             <div className="memo-upload-field">
               <span className="memo-upload-label">Accountant signature</span>

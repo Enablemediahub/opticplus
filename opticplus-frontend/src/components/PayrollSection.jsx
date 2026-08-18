@@ -54,7 +54,13 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   const [deletingHistoryId, setDeletingHistoryId] = useState(null)
   const [payrollDeclarations, setPayrollDeclarations] = useState(() => readPayrollDeclarations())
   const [salaryModalEmployee, setSalaryModalEmployee] = useState(null)
-  const [salaryDraft, setSalaryDraft] = useState({ declared_salary: '', note: '' })
+  const [salaryDraft, setSalaryDraft] = useState({ 
+    declared_salary: '', 
+    note: '',
+    split_mode: 'monthly',
+    declared_salary_payment_method: 'bank_transfer',
+    allowance_payment_method: 'cash',
+  })
   const [processModalEmployee, setProcessModalEmployee] = useState(null)
   const [processDraft, setProcessDraft] = useState({
     pay_declared_salary: true,
@@ -224,6 +230,8 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
           pay_month: Number(query.month),
           pay_year: Number(query.year),
           payment_method: processDraft.payment_method,
+          declared_salary_payment_method: processDraft.declared_salary_payment_method,
+          allowance_payment_method: processDraft.allowance_payment_method,
           override_balance: processDraft.override_balance,
           declared_salary: declaration?.declared_salary ?? null,
           allowance_amount: declaration?.allowance_amount ?? null,
@@ -309,6 +317,9 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
     setSalaryDraft({
       declared_salary: String(declaration.declared_salary ?? employee.salary ?? 0),
       note: declaration.note ?? '',
+      split_mode: declaration.split_mode ?? 'monthly',
+      declared_salary_payment_method: declaration.declared_salary_payment_method ?? 'bank_transfer',
+      allowance_payment_method: declaration.allowance_payment_method ?? 'cash',
     })
   }
 
@@ -328,6 +339,8 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
       pay_declared_salary: remainingDeclared > 0,
       pay_allowance: remainingAllowance > 0,
       payment_method: bulkPaymentMethod,
+      declared_salary_payment_method: declaration.declared_salary_payment_method ?? 'bank_transfer',
+      allowance_payment_method: declaration.allowance_payment_method ?? 'cash',
       override_balance: bulkOverrideBalance,
       notes: declaration.note ?? '',
     })
@@ -339,16 +352,36 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
     const grossSalary = Number(salaryModalEmployee.salary ?? 0)
     const declaredSalary = clampDeclaredSalary(Number(salaryDraft.declared_salary ?? grossSalary), grossSalary)
     const branchKey = String(branchId ?? '0')
-    const periodKey = `${query.year}-${String(query.month).padStart(2, '0')}`
-    const storageKey = payrollDeclarationKey(branchKey, periodKey, salaryModalEmployee.id)
+    const isYearWide = salaryDraft.split_mode === 'yearly'
+    
+    const declarationData = {
+      declared_salary: declaredSalary,
+      note: salaryDraft.note ?? '',
+      split_mode: salaryDraft.split_mode,
+      declared_salary_payment_method: salaryDraft.declared_salary_payment_method,
+      allowance_payment_method: salaryDraft.allowance_payment_method,
+    }
 
-    setPayrollDeclarations((current) => ({
-      ...current,
-      [storageKey]: {
-        declared_salary: declaredSalary,
-        note: salaryDraft.note ?? '',
-      },
-    }))
+    setPayrollDeclarations((current) => {
+      const updated = { ...current }
+      
+      if (isYearWide) {
+        // Apply to all 12 months of the selected year
+        for (let month = 1; month <= 12; month++) {
+          const periodKey = `${query.year}-${String(month).padStart(2, '0')}`
+          const storageKey = payrollDeclarationKey(branchKey, periodKey, salaryModalEmployee.id)
+          updated[storageKey] = declarationData
+        }
+      } else {
+        // Apply only to the current selected month
+        const periodKey = `${query.year}-${String(query.month).padStart(2, '0')}`
+        const storageKey = payrollDeclarationKey(branchKey, periodKey, salaryModalEmployee.id)
+        updated[storageKey] = declarationData
+      }
+      
+      return updated
+    })
+    
     setSalaryModalEmployee(null)
   }
 
@@ -762,6 +795,25 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                 Pending advances
                 <input type="text" value={currency.format(Number(salaryModalEmployee.pending_advances ?? 0))} readOnly />
               </label>
+              <label>
+                Apply to
+                <select value={salaryDraft.split_mode} onChange={(event) => setSalaryDraft((current) => ({ ...current, split_mode: event.target.value }))}>
+                  <option value="monthly">This month only ({monthLabel(query.month, query.year)})</option>
+                  <option value="yearly">Entire year ({query.year})</option>
+                </select>
+              </label>
+              <label>
+                Declared salary payment method
+                <select value={salaryDraft.declared_salary_payment_method} onChange={(event) => setSalaryDraft((current) => ({ ...current, declared_salary_payment_method: event.target.value }))}>
+                  {(meta?.payment_methods ?? []).map((method) => <option key={`declared-${method}`} value={method}>{titleize(method)}</option>)}
+                </select>
+              </label>
+              <label>
+                Allowance payment method
+                <select value={salaryDraft.allowance_payment_method} onChange={(event) => setSalaryDraft((current) => ({ ...current, allowance_payment_method: event.target.value }))}>
+                  {(meta?.payment_methods ?? []).map((method) => <option key={`allowance-${method}`} value={method}>{titleize(method)}</option>)}
+                </select>
+              </label>
               <label className="full-span">
                 Payroll note
                 <textarea
@@ -831,6 +883,14 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                 />
                 <span>Pay remaining salary portion</span>
               </label>
+              {processDraft.pay_declared_salary && (
+                <label>
+                  Declared salary payment method
+                  <select value={processDraft.declared_salary_payment_method} onChange={(event) => setProcessDraft((current) => ({ ...current, declared_salary_payment_method: event.target.value }))}>
+                    {(meta?.payment_methods ?? []).map((method) => <option key={`declared-process-${method}`} value={method}>{titleize(method)}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="memo-checkbox payroll-process-toggle">
                 <input
                   type="checkbox"
@@ -840,12 +900,14 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                 />
                 <span>Pay remaining allowance portion</span>
               </label>
-              <label>
-                Payment method
-                <select value={processDraft.payment_method} onChange={(event) => setProcessDraft((current) => ({ ...current, payment_method: event.target.value }))}>
-                  {(meta?.payment_methods ?? []).map((method) => <option key={`process-${method}`} value={method}>{titleize(method)}</option>)}
-                </select>
-              </label>
+              {processDraft.pay_allowance && (
+                <label>
+                  Allowance payment method
+                  <select value={processDraft.allowance_payment_method} onChange={(event) => setProcessDraft((current) => ({ ...current, allowance_payment_method: event.target.value }))}>
+                    {(meta?.payment_methods ?? []).map((method) => <option key={`allowance-process-${method}`} value={method}>{titleize(method)}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="memo-checkbox payroll-process-toggle">
                 <input
                   type="checkbox"

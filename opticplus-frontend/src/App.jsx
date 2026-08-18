@@ -384,6 +384,7 @@ const defaultFinanceSalesFilters = () => ({
 
 const defaultFinanceExpenseFilters = () => ({
   filter: 'all',
+  month: 'all',
   start_date: '',
   end_date: '',
   category: 'all',
@@ -394,6 +395,7 @@ const defaultFinanceExpenseFilters = () => ({
 
 const defaultReceptionistExpenseFilters = () => ({
   ...defaultFinanceExpenseFilters(),
+  month: currentMonthKey(),
   ...currentMonthDateRange(),
 })
 
@@ -1910,8 +1912,6 @@ function App() {
             ? {
                 ...defaultReceptionistExpenseFilters(),
                 ...financeExpenseQuery,
-                start_date: financeExpenseQuery.start_date || currentMonthDateRange().start_date,
-                end_date: financeExpenseQuery.end_date || currentMonthDateRange().end_date,
               }
             : financeExpenseQuery
 
@@ -5591,6 +5591,11 @@ function currentMonthDateRange() {
     start_date: localDateIso(new Date(now.getFullYear(), now.getMonth(), 1)),
     end_date: localDateIso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
   }
+}
+
+function currentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 function buildIdempotencyKey(path, options = {}) {
