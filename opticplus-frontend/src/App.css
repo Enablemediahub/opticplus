@@ -2097,6 +2097,82 @@
   margin-top: 2px;
 }
 
+.report-comparison-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px;
+}
+
+.report-comparison-meta {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.report-comparison-meta-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-soft);
+}
+
+.report-comparison-meta-card span,
+.report-metric-group .eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.report-comparison-meta-card strong {
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.report-metric-selector {
+  display: grid;
+  gap: 16px;
+}
+
+.report-metric-group {
+  display: grid;
+  gap: 10px;
+}
+
+.report-metric-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.report-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.report-metric-pill input {
+  accent-color: var(--accent-strong);
+}
+
+.report-metric-pill.is-active {
+  background: rgba(59, 130, 246, 0.09);
+  border-color: rgba(59, 130, 246, 0.24);
+  color: var(--text-primary);
+}
+
+.report-metric-pill:hover {
+  transform: translateY(-1px);
+}
+
 .report-tab-strip {
   display: flex;
   flex-wrap: wrap;
@@ -2146,6 +2222,11 @@
 
 .workbook-financial-table th,
 .workbook-financial-table td {
+  white-space: nowrap;
+}
+
+.report-detail-table th,
+.report-detail-table td {
   white-space: nowrap;
 }
 
@@ -5169,6 +5250,230 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.lens-orders-section .patients-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.lens-orders-hero-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.lens-orders-panel {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.24), rgba(15, 23, 42, 0.08)),
+    var(--surface-soft);
+  box-shadow:
+    0 22px 48px rgba(2, 8, 18, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='light'] .lens-orders-panel {
+  background:
+    radial-gradient(circle at top right, rgba(0, 119, 182, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 252, 0.94));
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.lens-orders-toolbar {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background:
+    linear-gradient(180deg, rgba(8, 15, 28, 0.46), rgba(8, 15, 28, 0.12)),
+    rgba(15, 23, 42, 0.3);
+}
+
+:root[data-theme='light'] .lens-orders-toolbar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92));
+}
+
+.lens-orders-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lens-preset-pill {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  background: rgba(2, 8, 18, 0.25);
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.lens-preset-pill:hover {
+  transform: translateY(-1px);
+}
+
+.lens-preset-pill.is-active {
+  border-color: rgba(56, 189, 248, 0.58);
+  background: rgba(56, 189, 248, 0.16);
+  box-shadow: 0 12px 24px rgba(56, 189, 248, 0.12);
+}
+
+:root[data-theme='light'] .lens-preset-pill {
+  background: #ffffff;
+}
+
+.lens-orders-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lens-orders-filter-grid label {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.lens-orders-filter-grid input {
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 8, 18, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme='light'] .lens-orders-filter-grid input {
+  background: #ffffff;
+}
+
+.lens-orders-filter-grid input:focus {
+  border-color: rgba(56, 189, 248, 0.48);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.08);
+}
+
+.lens-orders-search-field {
+  grid-column: span 1;
+}
+
+.lens-orders-actions {
+  justify-content: flex-start;
+}
+
+.lens-orders-actions .nav-item {
+  border-radius: 14px;
+}
+
+.lens-orders-table-heading {
+  margin-top: 1.25rem;
+}
+
+.lens-orders-table-shell {
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.lens-orders-table {
+  min-width: 100%;
+}
+
+.lens-orders-table th,
+.lens-orders-table td {
+  vertical-align: top;
+}
+
+.lens-order-prescription {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.lens-order-prescription strong {
+  font-size: 0.98rem;
+}
+
+.lens-order-comment-input {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 8, 18, 0.24);
+  color: var(--text-primary);
+  padding: 0.85rem 0.95rem;
+  line-height: 1.5;
+}
+
+:root[data-theme='light'] .lens-order-comment-input {
+  background: #ffffff;
+}
+
+.lens-order-comment-input:focus {
+  border-color: rgba(56, 189, 248, 0.48);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.08);
+}
+
+.lens-orders-signoff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 8, 18, 0.14);
+}
+
+:root[data-theme='light'] .lens-orders-signoff {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.lens-signoff-block {
+  display: grid;
+  gap: 8px;
+}
+
+.lens-signoff-block span {
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.lens-signoff-block strong {
+  font-size: 1rem;
+}
+
+.lens-signature-line {
+  min-height: 44px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.6);
+}
+
+@media (max-width: 960px) {
+  .lens-orders-section .patients-header {
+    align-items: flex-start;
+  }
+
+  .lens-orders-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lens-orders-search-field {
+    grid-column: auto;
+  }
+
+  .lens-orders-signoff {
+    grid-template-columns: 1fr;
+  }
 }
 
 .lens-orders-filter-stack {
@@ -8933,6 +9238,7 @@ td.billing-balance-due,
   .report-summary-grid,
   .report-balance-strip,
   .report-toolbar-grid,
+  .report-comparison-meta,
   .payroll-controls-layout,
   .payroll-bulk-bar,
   .memo-filter-bar,
@@ -9159,6 +9465,7 @@ td.billing-balance-due,
   .report-snapshot-bar,
   .report-type-grid,
   .report-toolbar-grid,
+  .report-comparison-meta,
   .payroll-controls-layout,
   .payroll-bulk-bar,
   .memo-filter-bar,
@@ -9205,6 +9512,10 @@ td.billing-balance-due,
   .pagination-actions,
   .filter-actions-row {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .report-metric-grid {
     flex-direction: column;
   }
 

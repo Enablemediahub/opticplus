@@ -9,6 +9,8 @@ export default function OptometristDashboardSection({
   rowBusyId,
   markAsSeen,
   setActiveView,
+  onManagePatient,
+  onViewPatientRecord,
 }) {
   if (isLoadingDashboard && !dashboard) {
     return (
@@ -182,10 +184,18 @@ export default function OptometristDashboardSection({
                     >
                       {rowBusyId === record.id ? 'Saving...' : 'Mark as Seen'}
                     </button>
-                    <button type="button" className="ghost-button" onClick={() => setActiveView('Patient Review')}>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => (onManagePatient ? onManagePatient(record) : setActiveView('Patient Review'))}
+                    >
                       Manage Patient
                     </button>
-                    <button type="button" className="ghost-button" onClick={() => setActiveView('Patient Records')}>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => (onViewPatientRecord ? onViewPatientRecord(record) : setActiveView('Patient Records'))}
+                    >
                       View Record
                     </button>
                   </div>

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx-js-style'
+import * as XLSX from 'xlsx-js-style/dist/xlsx.min.js'
 import StatWidget from './StatWidget.jsx'
 import ReportWorkflowSection from './ReportWorkflowSection.jsx'
 
@@ -30,6 +30,30 @@ const BRANCHES = [
   { id: 2, name: 'Madina' },
 ]
 
+const COMPARISON_MODES = [
+  { value: 'branch', label: 'Branch vs Branch', description: 'Compare the same months across two branches.' },
+  { value: 'previous_year', label: 'Previous Year', description: 'Compare the selected months against the same months last year.' },
+  { value: 'previous_period', label: 'Previous Months', description: 'Compare the selected months against the immediately previous months.' },
+  { value: 'custom', label: 'Custom Scope', description: 'Compare any branch, year, and month range you choose.' },
+]
+
+const COMPARISON_METRICS = [
+  { key: 'collections', label: 'Receipts / Collections', group: 'Receipts', aggregation: 'sum' },
+  { key: 'payments', label: 'Payments / Expenses', group: 'Payments', aggregation: 'sum' },
+  { key: 'insurance_received', label: 'Insurance Received', group: 'Insurance', aggregation: 'sum' },
+  { key: 'insurance_claimed', label: 'Insurance Claimed', group: 'Insurance', aggregation: 'sum' },
+  { key: 'consultation', label: 'Consultation Revenue', group: 'Receipts', aggregation: 'sum' },
+  { key: 'frames', label: 'Frame Revenue', group: 'Receipts', aggregation: 'sum' },
+  { key: 'lenses', label: 'Lens Revenue', group: 'Receipts', aggregation: 'sum' },
+  { key: 'cases', label: 'Cases Revenue', group: 'Receipts', aggregation: 'sum' },
+  { key: 'sales_reconciliation', label: 'Sales Reconciliation', group: 'Receipts', aggregation: 'sum' },
+  { key: 'profit', label: 'Net Operating Position', group: 'Position', aggregation: 'sum' },
+  { key: 'debtors', label: 'Trade Debtors', group: 'Position', aggregation: 'end' },
+  { key: 'operating_cash', label: 'Operating Cash', group: 'Position', aggregation: 'end' },
+]
+
+const COMPARISON_METRIC_MAP = new Map(COMPARISON_METRICS.map((metric) => [metric.key, metric]))
+
 function currentYear() {
   return new Date().getFullYear()
 }
@@ -52,6 +76,85 @@ function monthRange(startMonth, endMonth) {
   }
 
   return range
+}
+
+function periodLabel(year, month, short = true) {
+  return `${monthName(month, short)} ${year}`
+}
+
+function buildPeriodRange(year, startMonth, endMonth) {
+  const startDate = new Date(Number(year), Number(startMonth) - 1, 1)
+  const endDate = new Date(Number(year), Number(endMonth) - 1, 1)
+  const range = []
+  const cursor = new Date(startDate)
+
+  while (cursor <= endDate) {
+    range.push({
+      year: cursor.getFullYear(),
+      month: String(cursor.getMonth() + 1).padStart(2, '0'),
+    })
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  return range
+}
+
+function shiftPeriodRange(periods, deltaMonths) {
+  if (!periods.length) return []
+
+  const startDate = new Date(Number(periods[0].year), Number(periods[0].month) - 1, 1)
+  const endDate = new Date(Number(periods[periods.length - 1].year), Number(periods[periods.length - 1].month) - 1, 1)
+  startDate.setMonth(startDate.getMonth() + deltaMonths)
+  endDate.setMonth(endDate.getMonth() + deltaMonths)
+
+  const shifted = []
+  const cursor = new Date(startDate)
+
+  while (cursor <= endDate) {
+    shifted.push({
+      year: cursor.getFullYear(),
+      month: String(cursor.getMonth() + 1).padStart(2, '0'),
+    })
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+
+  return shifted
+}
+
+function buildPeriodRangeLabel(periods) {
+  if (!periods.length) return ''
+  if (periods.length === 1) {
+    return periodLabel(periods[0].year, periods[0].month, false)
+  }
+
+  const first = periods[0]
+  const last = periods[periods.length - 1]
+  return `${periodLabel(first.year, first.month)} - ${periodLabel(last.year, last.month)}`
+}
+
+function branchDisplayName(branchId) {
+  return BRANCHES.find((branch) => branch.id === Number(branchId))?.name ?? `Branch ${branchId}`
+}
+
+function comparisonModeDisplayName(mode) {
+  return COMPARISON_MODES.find((item) => item.value === mode)?.label ?? 'Comparison'
+}
+
+function comparisonColumnLabel(filters, comparisonState, primaryBranchId) {
+  const primaryLabel = branchDisplayName(primaryBranchId)
+  const comparisonBranchId = Number(comparisonState.branch_id || filters.comparison_branch_id || primaryBranchId)
+  const branchName = branchDisplayName(comparisonBranchId)
+  const comparisonLabel = comparisonState.mode === 'branch'
+    ? branchName
+    : comparisonState.mode === 'custom'
+      ? `${branchName} ${comparisonModeDisplayName(comparisonState.mode)}`
+      : comparisonModeDisplayName(comparisonState.mode)
+
+  return {
+    primaryLabel,
+    comparisonLabel,
+    comparisonBranchId,
+  }
 }
 
 function toNumber(value) {
@@ -120,6 +223,219 @@ function buildSelectedMonths(report, selectedMonths) {
       operating_cash: 0,
     },
   }))
+}
+
+function getMonthlyRow(report, year, month) {
+  if (!report || Number(report.year) !== Number(year)) return null
+  return report?.months?.[Number(month) - 1] ?? null
+}
+
+function getMetricSpec(metricKey) {
+  return COMPARISON_METRIC_MAP.get(metricKey) ?? COMPARISON_METRICS[0]
+}
+
+function getMetricValueFromRow(row, metricKey) {
+  if (!row) return 0
+
+  switch (metricKey) {
+    case 'collections':
+      return toNumber(row.collected)
+    case 'payments':
+      return toNumber(row.expenses)
+    case 'insurance_received':
+      return toNumber(row.insurance_received)
+    case 'insurance_claimed':
+      return toNumber(row.insurance_claimed)
+    case 'consultation':
+      return toNumber(row.consultation)
+    case 'frames':
+      return toNumber(row.frames)
+    case 'lenses':
+      return toNumber(row.lenses)
+    case 'cases':
+      return toNumber(row.cases)
+    case 'sales_reconciliation':
+      return toNumber(row.sales_reconciliation)
+    case 'profit':
+      return toNumber(row.collected) - toNumber(row.expenses)
+    case 'debtors':
+      return toNumber(row.debtors)
+    case 'operating_cash':
+      return toNumber(row.operating_cash)
+    default:
+      return 0
+  }
+}
+
+function getPeriodValue(report, periods, metricKey) {
+  const spec = getMetricSpec(metricKey)
+
+  if (!periods.length) return 0
+
+  if (spec.aggregation === 'end') {
+    const lastPeriod = periods[periods.length - 1]
+    return getMetricValueFromRow(getMonthlyRow(report, lastPeriod.year, lastPeriod.month), metricKey)
+  }
+
+  return periods.reduce((total, period) => total + getMetricValueFromRow(getMonthlyRow(report, period.year, period.month), metricKey), 0)
+}
+
+function getPeriodPairValue(reportsByKey, branchId, period, metricKey) {
+  const report = reportsByKey[`${branchId}:${period.year}`]
+  return getMetricValueFromRow(getMonthlyRow(report, period.year, period.month), metricKey)
+}
+
+function getSeriesValue(reportsByKey, branchId, periods, metricKey) {
+  const spec = getMetricSpec(metricKey)
+
+  if (!periods.length) return 0
+
+  if (spec.aggregation === 'end') {
+    return getPeriodPairValue(reportsByKey, branchId, periods[periods.length - 1], metricKey)
+  }
+
+  return periods.reduce((total, period) => total + getPeriodPairValue(reportsByKey, branchId, period, metricKey), 0)
+}
+
+function buildComparisonPeriods(filters, comparisonState) {
+  const primaryPeriods = buildPeriodRange(filters.year, filters.start_month, filters.end_month)
+
+  switch (comparisonState.mode) {
+    case 'previous_year':
+      return buildPeriodRange(Number(filters.year) - 1, filters.start_month, filters.end_month)
+    case 'previous_period':
+      return shiftPeriodRange(primaryPeriods, -primaryPeriods.length)
+    case 'custom':
+      return buildPeriodRange(comparisonState.year, comparisonState.start_month, comparisonState.end_month)
+    case 'branch':
+    default:
+      return primaryPeriods
+  }
+}
+
+function buildComparisonWorkbookSheets({ reportsByKey, primaryBranchId, primaryPeriods, comparisonPeriods, comparisonState }) {
+  const selectedMetricKeys = comparisonState.metricKeys?.length ? comparisonState.metricKeys : ['collections', 'payments', 'insurance_received', 'profit']
+  const comparisonBranchId = Number(comparisonState.branch_id || primaryBranchId)
+  const { primaryLabel, comparisonLabel } = comparisonColumnLabel({ comparison_branch_id: comparisonBranchId }, comparisonState, primaryBranchId)
+  const comparisonSourceLabel = comparisonState.mode === 'branch'
+    ? `${comparisonState.branch_name ?? 'Comparison Branch'}`
+    : comparisonState.mode === 'custom'
+      ? `${comparisonState.branch_name ?? 'Custom Scope'}`
+      : comparisonState.mode === 'previous_year'
+        ? 'Previous Year'
+        : 'Previous Months'
+
+  const overviewRows = selectedMetricKeys.map((metricKey, index) => {
+    const spec = getMetricSpec(metricKey)
+    const primaryTotal = getSeriesValue(reportsByKey, primaryBranchId, primaryPeriods, metricKey)
+    const comparisonTotal = getSeriesValue(
+      reportsByKey,
+      comparisonState.mode === 'branch' || comparisonState.mode === 'custom' ? comparisonBranchId : primaryBranchId,
+      comparisonPeriods,
+      metricKey,
+    )
+    const variance = primaryTotal - comparisonTotal
+    const variancePercent = comparisonTotal !== 0 ? variance / comparisonTotal : 0
+
+    return {
+      kind: 'data',
+      metricKey,
+      cells: [
+        index + 1,
+        spec.label,
+        spec.group,
+        primaryTotal,
+        comparisonTotal,
+        variance,
+        variancePercent,
+      ],
+    }
+  })
+
+  const sheets = [
+    {
+      key: 'comparison-overview',
+      title: 'COMPARISON OVERVIEW',
+      subtitle: `${buildPeriodRangeLabel(primaryPeriods)} vs ${buildPeriodRangeLabel(comparisonPeriods)} | ${comparisonState.label}`,
+      columnCount: 7,
+      percentColumns: [6],
+      rows: [
+        { kind: 'title', cells: ['BEALET OPTICALS'] },
+        { kind: 'title', cells: ['FLEXIBLE COMPARISON DASHBOARD'] },
+        { kind: 'title', cells: [`${buildPeriodRangeLabel(primaryPeriods)} vs ${buildPeriodRangeLabel(comparisonPeriods)}`] },
+        { kind: 'header', cells: ['SN', 'Metric', 'Group', primaryLabel, comparisonLabel, 'Variance', 'Variance %'] },
+        ...overviewRows,
+        {
+          kind: 'total',
+          cells: [
+            '',
+            'Selected metrics',
+            '',
+            overviewRows.reduce((total, row) => total + toNumber(row.cells[3]), 0),
+            overviewRows.reduce((total, row) => total + toNumber(row.cells[4]), 0),
+            overviewRows.reduce((total, row) => total + toNumber(row.cells[5]), 0),
+            '',
+          ],
+        },
+      ],
+    },
+  ]
+
+  selectedMetricKeys.forEach((metricKey) => {
+    const spec = getMetricSpec(metricKey)
+    const rows = primaryPeriods.map((period, index) => {
+      const comparisonPeriod = comparisonPeriods[index] ?? period
+      const primaryTotal = getPeriodPairValue(reportsByKey, primaryBranchId, period, metricKey)
+      const comparisonTotal = comparisonState.mode === 'branch' || comparisonState.mode === 'custom'
+        ? getPeriodPairValue(reportsByKey, comparisonBranchId, comparisonPeriod, metricKey)
+        : getPeriodPairValue(reportsByKey, primaryBranchId, comparisonPeriod, metricKey)
+      const variance = primaryTotal - comparisonTotal
+      const variancePercent = comparisonTotal !== 0 ? variance / comparisonTotal : 0
+
+      return {
+        kind: 'data',
+        cells: [
+          index + 1,
+          periodLabel(period.year, period.month, false),
+          periodLabel(comparisonPeriod.year, comparisonPeriod.month, false),
+          primaryTotal,
+          comparisonTotal,
+          variance,
+          variancePercent,
+        ],
+      }
+    })
+
+    rows.push({
+      kind: 'total',
+      cells: [
+        '',
+        'Total',
+        comparisonState.mode === 'branch' || comparisonState.mode === 'custom' ? comparisonSourceLabel : 'Previous scope',
+        getSeriesValue(reportsByKey, primaryBranchId, primaryPeriods, metricKey),
+        getSeriesValue(reportsByKey, comparisonState.mode === 'branch' || comparisonState.mode === 'custom' ? comparisonBranchId : primaryBranchId, comparisonPeriods, metricKey),
+        toNumber(getSeriesValue(reportsByKey, primaryBranchId, primaryPeriods, metricKey)) - toNumber(getSeriesValue(reportsByKey, comparisonState.mode === 'branch' || comparisonState.mode === 'custom' ? comparisonBranchId : primaryBranchId, comparisonPeriods, metricKey)),
+        '',
+      ],
+    })
+
+    sheets.push({
+      key: `comparison-${metricKey}`,
+      title: `COMPARISON - ${spec.label.toUpperCase()}`,
+      subtitle: `${buildPeriodRangeLabel(primaryPeriods)} vs ${buildPeriodRangeLabel(comparisonPeriods)} | ${comparisonState.label}`,
+      columnCount: 7,
+      percentColumns: [6],
+      rows: [
+        { kind: 'title', cells: ['BEALET OPTICALS'] },
+        { kind: 'title', cells: [spec.label.toUpperCase()] },
+        { kind: 'title', cells: [`${comparisonState.label} | ${comparisonSourceLabel}`] },
+        { kind: 'header', cells: ['SN', `${primaryLabel} Month`, `${comparisonLabel} Month`, primaryLabel, comparisonLabel, 'Variance', 'Variance %'] },
+        ...rows,
+      ],
+    })
+  })
+
+  return sheets
 }
 
 function sumArray(values) {
@@ -341,17 +657,20 @@ function buildDailySalesSheet(report, selectedMonths, branchLabel) {
   }
 }
 
-function buildInsuranceSheet(primaryReport, comparisonReport, selectedMonths) {
-  const monthRowsPrimary = buildSelectedMonths(primaryReport, selectedMonths)
-  const monthRowsComparison = comparisonReport ? buildSelectedMonths(comparisonReport, selectedMonths) : monthRowsPrimary.map((item) => ({ ...item, data: null }))
-  const labels = selectedMonths.map((month) => monthName(month, true))
+function buildInsuranceSheet(primaryReport, reportsByKey, primaryPeriods, comparisonPeriods, comparisonState) {
+  const labels = primaryPeriods.map((period) => monthName(period.month, true))
   const title = 'INSURANCE'
   const subtitle = 'MONTHLY INSURANCE CLAIMS'
 
-  const claimsPrimary = monthRowsPrimary.map((item) => toNumber(item.data.insurance_claimed))
-  const claimsComparison = monthRowsComparison.map((item) => toNumber(item.data?.insurance_claimed))
-  const receivedPrimary = monthRowsPrimary.map((item) => toNumber(item.data.insurance_received))
-  const receivedComparison = monthRowsComparison.map((item) => toNumber(item.data?.insurance_received))
+  const comparisonBranchId = Number(comparisonState.branch_id || primaryReport.branch_id)
+  const comparisonSourceBranch = comparisonState.mode === 'branch' || comparisonState.mode === 'custom'
+    ? comparisonBranchId
+    : primaryReport.branch_id
+
+  const claimsPrimary = primaryPeriods.map((period) => getPeriodPairValue(reportsByKey, primaryReport.branch_id, period, 'insurance_claimed'))
+  const claimsComparison = comparisonPeriods.map((period) => getPeriodPairValue(reportsByKey, comparisonSourceBranch, period, 'insurance_claimed'))
+  const receivedPrimary = primaryPeriods.map((period) => getPeriodPairValue(reportsByKey, primaryReport.branch_id, period, 'insurance_received'))
+  const receivedComparison = comparisonPeriods.map((period) => getPeriodPairValue(reportsByKey, comparisonSourceBranch, period, 'insurance_received'))
   const claimsTotal = claimsPrimary.map((amount, index) => amount + claimsComparison[index])
   const receivedTotal = receivedPrimary.map((amount, index) => amount + receivedComparison[index])
 
@@ -361,10 +680,10 @@ function buildInsuranceSheet(primaryReport, comparisonReport, selectedMonths) {
     { kind: 'title', cells: ['MONTHLY INSURANCE CLAIMS'] },
     { kind: 'header', cells: ['SN', 'DETAILS', ...labels, 'TOTAL'] },
     { kind: 'data', cells: ['1.1', `INSURANCE CLAIMS - ${primaryReport?.branch_name ?? 'PRIMARY'}`.toUpperCase(), ...claimsPrimary, sumArray(claimsPrimary)] },
-    { kind: 'data', cells: ['1.2', `INSURANCE CLAIMS - ${comparisonReport?.branch_name ?? 'COMPARISON'}`.toUpperCase(), ...claimsComparison, sumArray(claimsComparison)] },
+    { kind: 'data', cells: ['1.2', `INSURANCE CLAIMS - ${comparisonState.label ?? 'COMPARISON'}`.toUpperCase(), ...claimsComparison, sumArray(claimsComparison)] },
     { kind: 'total', cells: ['', 'TOTAL', ...claimsTotal, sumArray(claimsTotal)] },
     { kind: 'data', cells: ['2.1', `INSURANCE RECEIVED - ${primaryReport?.branch_name ?? 'PRIMARY'}`.toUpperCase(), ...receivedPrimary, sumArray(receivedPrimary)] },
-    { kind: 'data', cells: ['2.2', `INSURANCE RECEIVED - ${comparisonReport?.branch_name ?? 'COMPARISON'}`.toUpperCase(), ...receivedComparison, sumArray(receivedComparison)] },
+    { kind: 'data', cells: ['2.2', `INSURANCE RECEIVED - ${comparisonState.label ?? 'COMPARISON'}`.toUpperCase(), ...receivedComparison, sumArray(receivedComparison)] },
     { kind: 'total', cells: ['', 'TOTAL', ...receivedTotal, sumArray(receivedTotal)] },
   ]
 
@@ -461,18 +780,24 @@ function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
   }
 }
 
-function buildWorkbookSheets({ primaryReport, comparisonReport, mergedReport, selectedMonths }) {
+function buildWorkbookSheets({ reportsByKey, primaryReport, mergedReport, selectedMonths, comparisonState, primaryPeriods, comparisonPeriods }) {
   if (!primaryReport) return []
 
   const sheets = []
   sheets.push(buildFinancialSheet(primaryReport, selectedMonths, primaryReport.branch_name))
-  if (comparisonReport && comparisonReport.branch_id !== primaryReport.branch_id) {
-    sheets.push(buildFinancialSheet(comparisonReport, selectedMonths, comparisonReport.branch_name))
+  if (comparisonState.mode === 'branch' || comparisonState.mode === 'custom') {
+    const comparisonBranchId = Number(comparisonState.branch_id || primaryReport.branch_id)
+    const comparisonYear = comparisonPeriods[0]?.year ?? primaryReport.year
+    const comparisonReport = reportsByKey[`${comparisonBranchId}:${comparisonYear}`] ?? null
+    if (comparisonReport && comparisonReport.branch_id !== primaryReport.branch_id) {
+      sheets.push(buildFinancialSheet(comparisonReport, selectedMonths, comparisonReport.branch_name))
+    }
   }
   sheets.push(buildDailySalesSheet(primaryReport, selectedMonths, primaryReport.branch_name))
-  sheets.push(buildInsuranceSheet(primaryReport, comparisonReport, selectedMonths))
+  sheets.push(buildInsuranceSheet(primaryReport, reportsByKey, primaryPeriods, comparisonPeriods, comparisonState))
   sheets.push(buildPurchasesSheet(primaryReport, mergedReport ?? primaryReport, selectedMonths))
   sheets.push(buildWorkingCapitalSheet(mergedReport ?? primaryReport, selectedMonths))
+  sheets.push(...buildComparisonWorkbookSheets({ reportsByKey, primaryBranchId: primaryReport.branch_id, primaryPeriods, comparisonPeriods, comparisonState }))
 
   return sheets
 }
@@ -582,6 +907,7 @@ function FinancialWorkbookPreview({ sheet, budgets = {}, onBudgetChange = () => 
 
 function WorkbookPreviewTable({ sheet }) {
   const columnCount = sheet.columnCount ?? Math.max(...sheet.rows.map((row) => row.cells.length))
+  const percentColumns = new Set(sheet.percentColumns ?? [])
 
   return (
     <table className="portal-table report-table workbook-preview-table">
@@ -609,7 +935,11 @@ function WorkbookPreviewTable({ sheet }) {
             <tr key={`${sheet.key}-${rowIndex}`} className={row.kind === 'total' ? 'workbook-total-row' : ''}>
               {row.cells.map((cell, cellIndex) => (
                 <td key={`${sheet.key}-${rowIndex}-${cellIndex}`} className={cellIndex >= 2 ? 'workbook-money-cell' : ''}>
-                  {typeof cell === 'number' ? formatMoney(cell) : cell}
+                  {typeof cell === 'number'
+                    ? percentColumns.has(cellIndex)
+                      ? formatPercentRatio(cell)
+                      : formatMoney(cell)
+                    : cell}
                 </td>
               ))}
             </tr>
@@ -862,7 +1192,8 @@ function buildWorkbookSheet(sheet) {
       const isNumeric = typeof value === 'number' && Number.isFinite(value)
       const isFirstColumn = columnIndex === 0
       const isDetailColumn = columnIndex === 1
-      const isPercentColumn = sheet.key.startsWith('financial-') && (columnIndex === 2 || columnIndex === achievedIndex)
+      const isPercentColumn = (sheet.key.startsWith('financial-') && (columnIndex === 2 || columnIndex === achievedIndex))
+        || (Array.isArray(sheet.percentColumns) && sheet.percentColumns.includes(columnIndex))
       const isMoneyColumn = sheet.key.startsWith('financial-')
         ? (columnIndex === totalIndex || columnIndex === balanceIndex || columnIndex === monthlyBudgetIndex || (columnIndex >= 4 && columnIndex < totalIndex))
         : isNumeric
@@ -1109,13 +1440,14 @@ function buildSummaryCards(primaryReport, mergedReport, selectedMonths) {
   ]
 }
 
-function workbookFileName(primaryReport, selectedMonths) {
+function workbookFileName(primaryReport, selectedMonths, comparisonScope) {
   const start = monthName(selectedMonths[0], false)
   const end = monthName(selectedMonths[selectedMonths.length - 1], false)
-  return `bealet-report-${slugify(primaryReport?.branch_name)}-${start.toLowerCase()}-${end.toLowerCase()}-${primaryReport?.year ?? currentYear()}.xlsx`
+  const comparisonTag = comparisonScope?.mode ? `-${slugify(comparisonScope.mode)}` : ''
+  return `bealet-report-${slugify(primaryReport?.branch_name)}-${start.toLowerCase()}-${end.toLowerCase()}-${primaryReport?.year ?? currentYear()}${comparisonTag}.xlsx`
 }
 
-function exportWorkbook(sheets, primaryReport, selectedMonths) {
+function exportWorkbook(sheets, primaryReport, selectedMonths, comparisonScope) {
   const workbook = XLSX.utils.book_new()
 
   for (const sheet of sheets) {
@@ -1139,7 +1471,7 @@ function exportWorkbook(sheets, primaryReport, selectedMonths) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = workbookFileName(primaryReport, selectedMonths)
+  anchor.download = workbookFileName(primaryReport, selectedMonths, comparisonScope)
   document.body.appendChild(anchor)
   anchor.click()
   document.body.removeChild(anchor)
@@ -1161,7 +1493,15 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     primary_branch_id: String(defaultPrimaryBranch),
     comparison_branch_id: String(defaultComparisonBranch),
   })
-  const [reportsByBranch, setReportsByBranch] = useState({})
+  const [comparisonState, setComparisonState] = useState({
+    mode: 'branch',
+    branch_id: String(defaultComparisonBranch),
+    year: currentYear(),
+    start_month: '01',
+    end_month: '12',
+    metricKeys: ['collections', 'payments', 'insurance_received', 'insurance_claimed', 'profit'],
+  })
+  const [reportsByKey, setReportsByKey] = useState({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [budgetMessage, setBudgetMessage] = useState('')
@@ -1189,6 +1529,55 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
   }, [canCompareBranches, selectedBranchId])
 
   useEffect(() => {
+    setComparisonState((current) => {
+      if (current.mode === 'custom') return current
+      if (current.mode === 'previous_year' || current.mode === 'previous_period') {
+        return current
+      }
+
+      return {
+        ...current,
+        year: filters.year,
+        start_month: filters.start_month,
+        end_month: filters.end_month,
+        branch_id: String(filters.comparison_branch_id || defaultComparisonBranch),
+      }
+    })
+  }, [defaultComparisonBranch, filters.comparison_branch_id, filters.end_month, filters.start_month, filters.year])
+
+  const primaryPeriods = useMemo(
+    () => buildPeriodRange(filters.year, filters.start_month, filters.end_month),
+    [filters.end_month, filters.start_month, filters.year],
+  )
+
+  const comparisonPeriods = useMemo(
+    () => buildComparisonPeriods(filters, comparisonState),
+    [comparisonState, filters.end_month, filters.start_month, filters.year],
+  )
+
+  const comparisonScope = useMemo(() => {
+    const comparisonBranchId = comparisonState.mode === 'branch' || comparisonState.mode === 'custom'
+      ? Number(comparisonState.branch_id || filters.comparison_branch_id || defaultComparisonBranch)
+      : Number(filters.primary_branch_id)
+    const branchName = BRANCHES.find((branch) => branch.id === comparisonBranchId)?.name ?? `Branch ${comparisonBranchId}`
+    const label = comparisonState.mode === 'branch'
+      ? `Branch comparison: ${branchName}`
+      : comparisonState.mode === 'previous_year'
+        ? `Previous year: ${buildPeriodRangeLabel(comparisonPeriods)}`
+        : comparisonState.mode === 'previous_period'
+          ? `Previous months: ${buildPeriodRangeLabel(comparisonPeriods)}`
+          : `Custom scope: ${branchName} | ${buildPeriodRangeLabel(comparisonPeriods)}`
+
+    return {
+      ...comparisonState,
+      branch_id: String(comparisonBranchId),
+      branch_name: branchName,
+      label,
+      periods: comparisonPeriods,
+    }
+  }, [comparisonPeriods, comparisonState, defaultComparisonBranch, filters.comparison_branch_id, filters.primary_branch_id])
+
+  useEffect(() => {
     if (!token || !session || !canAccessWorkbook) return
     let cancelled = false
 
@@ -1197,18 +1586,27 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
       setError('')
       setBudgetMessage('')
       try {
-        const branchIds = [0, Number(filters.primary_branch_id)]
-        if (filters.comparison_branch_id) {
-          branchIds.push(Number(filters.comparison_branch_id))
-        }
+        const requestMap = new Map()
+        const primaryBranchId = Number(filters.primary_branch_id)
+        const comparisonBranchId = Number(comparisonScope.branch_id)
 
-        const uniqueBranchIds = [...new Set(branchIds.filter((value) => Number.isFinite(value)))]
-        const results = await Promise.all(uniqueBranchIds.map(async (branchId) => {
+        requestMap.set(`${primaryBranchId}:${filters.year}`, { branchId: primaryBranchId, year: filters.year })
+        requestMap.set(`0:${filters.year}`, { branchId: 0, year: filters.year })
+
+        const comparisonBranchForRequests = comparisonState.mode === 'branch' || comparisonState.mode === 'custom'
+          ? comparisonBranchId
+          : primaryBranchId
+
+        comparisonPeriods.forEach((period) => {
+          requestMap.set(`${comparisonBranchForRequests}:${period.year}`, { branchId: comparisonBranchForRequests, year: period.year })
+        })
+
+        const results = await Promise.all([...requestMap.values()].map(async ({ branchId, year }) => {
           try {
-            const response = await apiFetch(`/finance/monitor-workbook?branch_id=${branchId}&year=${filters.year}`, { token })
-            return [String(branchId), response]
+            const response = await apiFetch(`/finance/monitor-workbook?branch_id=${branchId}&year=${year}`, { token })
+            return [`${branchId}:${year}`, response]
           } catch (requestError) {
-            return [String(branchId), { error: requestError.message }]
+            return [`${branchId}:${year}`, { error: requestError.message }]
           }
         }))
 
@@ -1222,7 +1620,7 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
           }
           next[branchId] = response
         })
-        setReportsByBranch(next)
+        setReportsByKey(next)
         if (errors.length) {
           setError(errors.join(' | '))
         }
@@ -1237,18 +1635,20 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     return () => {
       cancelled = true
     }
-  }, [apiFetch, canAccessWorkbook, filters.primary_branch_id, filters.comparison_branch_id, filters.year, session, token])
+  }, [apiFetch, canAccessWorkbook, comparisonPeriods, comparisonScope.branch_id, filters.primary_branch_id, filters.year, session, token])
 
-  const primaryReport = reportsByBranch[filters.primary_branch_id] ?? null
-  const comparisonReport = filters.comparison_branch_id ? (reportsByBranch[filters.comparison_branch_id] ?? null) : null
-  const mergedReport = reportsByBranch['0'] ?? primaryReport
+  const primaryReport = reportsByKey[`${filters.primary_branch_id}:${filters.year}`] ?? null
+  const mergedReport = reportsByKey[`0:${filters.year}`] ?? primaryReport
   const selectedMonths = useMemo(() => monthRange(filters.start_month, filters.end_month), [filters.end_month, filters.start_month])
   const sheets = useMemo(() => buildWorkbookSheets({
+    reportsByKey,
     primaryReport,
-    comparisonReport,
     mergedReport,
     selectedMonths,
-  }), [comparisonReport, mergedReport, primaryReport, selectedMonths])
+    comparisonState: comparisonScope,
+    primaryPeriods,
+    comparisonPeriods,
+  }), [comparisonPeriods, comparisonScope, mergedReport, primaryPeriods, primaryReport, reportsByKey, selectedMonths])
   const activeSheetModel = sheets.find((sheet) => sheet.key === activeSheet) ?? sheets[0] ?? null
   const activeFinancialBudgets = activeSheetModel?.budgets ?? {}
   const summaryCards = useMemo(() => buildSummaryCards(primaryReport, mergedReport, selectedMonths), [mergedReport, primaryReport, selectedMonths])
@@ -1257,6 +1657,37 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     return Array.from({ length: 6 }, (_, index) => now - 3 + index)
   }, [])
   const canExport = Boolean(primaryReport && sheets.length)
+  const comparisonSummaryRows = useMemo(() => {
+    const primaryBranchId = Number(filters.primary_branch_id)
+    const comparisonBranchId = Number(comparisonScope.branch_id || primaryBranchId)
+    const sourceBranchId = comparisonScope.mode === 'branch' || comparisonScope.mode === 'custom'
+      ? comparisonBranchId
+      : primaryBranchId
+
+    return (comparisonScope.metricKeys?.length ? comparisonScope.metricKeys : ['collections', 'payments', 'insurance_received', 'profit'])
+      .map((metricKey, index) => {
+        const spec = getMetricSpec(metricKey)
+        const primaryValue = getSeriesValue(reportsByKey, primaryBranchId, primaryPeriods, metricKey)
+        const comparisonValue = getSeriesValue(reportsByKey, sourceBranchId, comparisonPeriods, metricKey)
+        const variance = primaryValue - comparisonValue
+        const variancePercent = comparisonValue !== 0 ? variance / comparisonValue : 0
+
+        return {
+          index: index + 1,
+          metricKey,
+          label: spec.label,
+          group: spec.group,
+          primaryValue,
+          comparisonValue,
+          variance,
+          variancePercent,
+        }
+      })
+  }, [comparisonPeriods, comparisonScope.branch_id, comparisonScope.metricKeys, comparisonScope.mode, filters.primary_branch_id, primaryPeriods, reportsByKey])
+  const comparisonTableLabels = useMemo(
+    () => comparisonColumnLabel(filters, comparisonScope, filters.primary_branch_id),
+    [comparisonScope, filters, filters.primary_branch_id],
+  )
 
   useEffect(() => {
     if (!activeSheetModel && sheets[0]) {
@@ -1265,12 +1696,13 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
   }, [activeSheetModel, sheets])
 
   function updateReportBudget(branchId, lineKey, amount) {
-    setReportsByBranch((current) => {
-      const report = current[String(branchId)]
+    const reportKey = `${branchId}:${filters.year}`
+    setReportsByKey((current) => {
+      const report = current[reportKey]
       if (!report) return current
       return {
         ...current,
-        [String(branchId)]: {
+        [reportKey]: {
           ...report,
           budgets: {
             ...(report.budgets ?? {}),
@@ -1335,7 +1767,7 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
         </div>
         <div className="report-workbook-actions">
           <button type="button" className="ghost-button" onClick={() => window.print()} disabled={!activeSheetModel}>Print / Save PDF</button>
-          <button type="button" className="primary-button" onClick={() => exportWorkbook(sheets, primaryReport, selectedMonths)} disabled={!canExport}>Export Excel workbook</button>
+          <button type="button" className="primary-button" onClick={() => exportWorkbook(sheets, primaryReport, selectedMonths, comparisonScope)} disabled={!canExport}>Export Excel workbook</button>
         </div>
       </header>
 
@@ -1377,16 +1809,50 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
         </label>
 
         <label>
-          Comparison branch
+          Comparison mode
           <select
-            value={filters.comparison_branch_id}
-            disabled={!canCompareBranches}
-            onChange={(event) => setFilters((current) => ({ ...current, comparison_branch_id: event.target.value }))}
+            value={comparisonScope.mode}
+            onChange={(event) => setComparisonState((current) => ({ ...current, mode: event.target.value }))}
           >
-            <option value="">No comparison</option>
-            {BRANCHES.filter((branch) => branch.id !== 0).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            {COMPARISON_MODES.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
           </select>
         </label>
+
+        {(comparisonScope.mode === 'branch' || comparisonScope.mode === 'custom') ? (
+          <label>
+            Comparison branch
+            <select
+              value={comparisonScope.branch_id}
+              disabled={!canCompareBranches}
+              onChange={(event) => setComparisonState((current) => ({ ...current, branch_id: event.target.value }))}
+            >
+              {BRANCHES.filter((branch) => branch.id !== 0).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
+          </label>
+        ) : null}
+
+        {comparisonScope.mode === 'custom' ? (
+          <>
+            <label>
+              Comparison year
+              <select value={comparisonScope.year} onChange={(event) => setComparisonState((current) => ({ ...current, year: Number(event.target.value) }))}>
+                {availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </label>
+            <label>
+              Comparison start month
+              <select value={comparisonScope.start_month} onChange={(event) => setComparisonState((current) => ({ ...current, start_month: event.target.value }))}>
+                {MONTHS.map((month) => <option key={month.value} value={month.value}>{month.long}</option>)}
+              </select>
+            </label>
+            <label>
+              Comparison end month
+              <select value={comparisonScope.end_month} onChange={(event) => setComparisonState((current) => ({ ...current, end_month: event.target.value }))}>
+                {MONTHS.map((month) => <option key={month.value} value={month.value}>{month.long}</option>)}
+              </select>
+            </label>
+          </>
+        ) : null}
       </section>
 
       <section className="stats-grid patient-stats-grid report-summary-strip">
@@ -1394,6 +1860,97 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
           <StatWidget key={label} label={label} value={formatMoney(value)} note={note} icon={icon} className={className} />
         ))}
       </section>
+
+      <article className="panel report-sheet report-comparison-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Comparison Lab</p>
+            <h3>Choose the variables and scope you want to compare</h3>
+          </div>
+          <span className="panel-tag">{comparisonScope.label}</span>
+        </div>
+
+        <div className="report-comparison-meta">
+          <div className="report-comparison-meta-card">
+            <span>Primary scope</span>
+            <strong>{buildPeriodRangeLabel(primaryPeriods)} | {BRANCHES.find((branch) => branch.id === Number(filters.primary_branch_id))?.name ?? 'Primary branch'}</strong>
+          </div>
+          <div className="report-comparison-meta-card">
+            <span>Comparison scope</span>
+            <strong>{buildPeriodRangeLabel(comparisonPeriods)} | {comparisonScope.branch_name ?? 'Comparison'}</strong>
+          </div>
+          <div className="report-comparison-meta-card">
+            <span>Selected metrics</span>
+            <strong>{comparisonScope.metricKeys?.length ?? 0}</strong>
+          </div>
+        </div>
+
+        <div className="report-metric-selector">
+          {Object.entries(COMPARISON_METRICS.reduce((groups, metric) => {
+            if (!groups[metric.group]) groups[metric.group] = []
+            groups[metric.group].push(metric)
+            return groups
+          }, {})).map(([group, metrics]) => (
+            <div key={group} className="report-metric-group">
+              <p className="eyebrow">{group}</p>
+              <div className="report-metric-grid">
+                {metrics.map((metric) => {
+                  const isActive = comparisonScope.metricKeys?.includes(metric.key)
+                  return (
+                    <label key={metric.key} className={isActive ? 'report-metric-pill is-active' : 'report-metric-pill'}>
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={() => setComparisonState((current) => {
+                          const currentKeys = current.metricKeys ?? []
+                          const nextKeys = currentKeys.includes(metric.key)
+                            ? currentKeys.filter((key) => key !== metric.key)
+                            : [...currentKeys, metric.key]
+                          return { ...current, metricKeys: nextKeys }
+                        })}
+                      />
+                      <span>{metric.label}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="table-shell">
+          <table className="portal-table report-table report-detail-table">
+            <thead>
+              <tr>
+                <th>SN</th>
+                <th>Metric</th>
+                <th>Group</th>
+                <th>{comparisonTableLabels.primaryLabel}</th>
+                <th>{comparisonTableLabels.comparisonLabel}</th>
+                <th>Variance</th>
+                <th>Variance %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparisonSummaryRows.length ? comparisonSummaryRows.map((row) => (
+                <tr key={row.metricKey}>
+                  <td>{row.index}</td>
+                  <td>{row.label}</td>
+                  <td>{row.group}</td>
+                  <td>{formatMoney(row.primaryValue)}</td>
+                  <td>{formatMoney(row.comparisonValue)}</td>
+                  <td>{formatMoney(row.variance)}</td>
+                  <td>{formatPercentRatio(row.variancePercent)}</td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan="7">Choose at least one metric to generate the comparison preview.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
 
       <nav className="report-tab-strip" aria-label="Workbook sheets">
         {sheets.map((sheet) => (

@@ -1059,7 +1059,6 @@ class PatientRecordController extends Controller
         $combined = $formPrescriptions
             ->concat($legacyPrescriptions->map(fn ($item) => (array) $item))
             ->sortByDesc(fn ($item) => ($item['date'] ?? '').'|'.($item['created_at'] ?? '').'|'.($item['prescription_id'] ?? ''))
-            ->unique(fn ($item) => ($item['patient_id'] ?? 'patient').':'.($item['folder_id'] ?? 'folder'))
             ->values();
 
         $total = $combined->count();
@@ -1338,57 +1337,144 @@ class PatientRecordController extends Controller
                 'pr.branch_id',
             ]);
 
-        $records = $patientRecords->map(function ($record) {
-            $latestForm = DB::table('patient_form_data')
-                ->where('folder_id', $record->folder_id)
-                ->orderByDesc('version')
-                ->orderByDesc('updated_at')
-                ->first([
-                    'folder_id',
-                    'version',
-                    'status',
-                    'updated_at',
-                    'form_data',
-                ]);
+        $records = $patientRecords
+            ->flatMap(function ($record) use ($branchId) {
+                $formQuery = DB::table('patient_form_data')
+                    ->where('folder_id', $record->folder_id)
+                    ->orderByDesc('version')
+                    ->orderByDesc('updated_at');
 
-            $prescription = $this->extractPrescriptionFromFormData($latestForm?->form_data);
+                if (Schema::hasColumn('patient_form_data', 'branch_id')) {
+                    $formQuery->where('branch_id', $branchId);
+                }
 
-            return [
-                'id' => $record->id,
-                'patient_id' => $record->id,
-                'folder_id' => $record->folder_id,
-                'name' => trim($record->name ?: implode(' ', array_filter([
-                    $record->surname,
-                    $record->firstname,
-                    $record->othernames,
-                ]))),
-                'phone' => $record->phone,
-                'email' => $record->email,
-                'sex' => $record->sex,
-                'age' => $record->age,
-                'purpose' => $record->purpose,
-                'status' => $record->status,
-                'appointment_date' => $record->appointment_date,
-                'latest_form_version' => $latestForm?->version,
-                'latest_form_status' => $latestForm?->status,
-                'latest_form_updated_at' => $latestForm?->updated_at,
-                'prescription' => $prescription,
-                'prescription_id' => $latestForm?->version ? 'FORM-'.$record->id.'-'.$latestForm->version : null,
-                'date' => $latestForm?->updated_at ? substr((string) $latestForm->updated_at, 0, 10) : null,
-                'sph_od' => $prescription['od']['sphere'] ?? '',
-                'cyl_od' => $prescription['od']['cylinder'] ?? '',
-                'axis_od' => $prescription['od']['axis'] ?? '',
-                'add_od' => $prescription['od']['add'] ?? '',
-                'sph_os' => $prescription['os']['sphere'] ?? '',
-                'cyl_os' => $prescription['os']['cylinder'] ?? '',
-                'axis_os' => $prescription['os']['axis'] ?? '',
-                'add_os' => $prescription['os']['add'] ?? '',
-                'ipd' => '',
-                'lens_type' => $prescription['od']['lens_type'] ?? ($prescription['os']['lens_type'] ?? ''),
-                'notes' => $prescription['prescription_notes'] ?? '',
-                'source' => 'exam_form',
-            ];
-        })->values();
+                $formPrescriptions = $formQuery
+                    ->get([
+                        'id',
+                        'version',
+                        'status',
+                        'updated_at',
+                        'form_data',
+                    ])
+                    ->map(function ($form) use ($record) {
+                        $prescription = $this->extractPrescriptionFromFormData($form->form_data);
+
+                        if (! $prescription) {
+                            return null;
+                        }
+
+                        return [
+                            'id' => $record->id,
+                            'patient_id' => $record->id,
+                            'folder_id' => $record->folder_id,
+                            'name' => trim($record->name ?: implode(' ', array_filter([
+                                $record->surname,
+                                $record->firstname,
+                                $record->othernames,
+                            ]))),
+                            'phone' => $record->phone,
+                            'email' => $record->email,
+                            'sex' => $record->sex,
+                            'age' => $record->age,
+                            'purpose' => $record->purpose,
+                            'status' => $record->status,
+                            'appointment_date' => $record->appointment_date,
+                            'latest_form_version' => $form->version,
+                            'latest_form_status' => $form->status,
+                            'latest_form_updated_at' => $form->updated_at,
+                            'prescription' => $prescription,
+                            'prescription_id' => 'FORM-'.$record->id.'-'.$form->version,
+                            'date' => $form->updated_at ? substr((string) $form->updated_at, 0, 10) : null,
+                            'sph_od' => $prescription['od']['sphere'] ?? '',
+                            'cyl_od' => $prescription['od']['cylinder'] ?? '',
+                            'axis_od' => $prescription['od']['axis'] ?? '',
+                            'add_od' => $prescription['od']['add'] ?? '',
+                            'sph_os' => $prescription['os']['sphere'] ?? '',
+                            'cyl_os' => $prescription['os']['cylinder'] ?? '',
+                            'axis_os' => $prescription['os']['axis'] ?? '',
+                            'add_os' => $prescription['os']['add'] ?? '',
+                            'ipd' => '',
+                            'lens_type' => $prescription['od']['lens_type'] ?? ($prescription['os']['lens_type'] ?? ''),
+                            'notes' => $prescription['prescription_notes'] ?? '',
+                            'source' => 'exam_form',
+                        ];
+                    })
+                    ->filter()
+                    ->values();
+
+                $legacyQuery = DB::table('glasses_prescriptions as gp')
+                    ->where('gp.folder_id', $record->folder_id)
+                    ->orderByDesc('gp.date')
+                    ->orderByDesc('gp.created_at')
+                    ->orderByDesc('gp.prescription_id');
+
+                if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
+                    $legacyQuery->where('gp.branch_id', $branchId);
+                }
+
+                $legacyPrescriptions = $legacyQuery
+                    ->get([
+                        'gp.prescription_id',
+                        'gp.patient_id',
+                        'gp.folder_id',
+                        'gp.date',
+                        'gp.sph_od',
+                        'gp.sph_os',
+                        'gp.cyl_od',
+                        'gp.cyl_os',
+                        'gp.axis_od',
+                        'gp.axis_os',
+                        'gp.add_od',
+                        'gp.add_os',
+                        'gp.ipd',
+                        'gp.lens_type',
+                        'gp.lens_material',
+                        'gp.color',
+                        'gp.notes',
+                        'gp.status',
+                        'gp.created_at',
+                    ])
+                    ->map(function ($item) use ($record) {
+                        return [
+                            'id' => $record->id,
+                            'patient_id' => $record->id,
+                            'folder_id' => $record->folder_id,
+                            'name' => trim($record->name ?: implode(' ', array_filter([
+                                $record->surname,
+                                $record->firstname,
+                                $record->othernames,
+                            ]))),
+                            'phone' => $record->phone,
+                            'email' => $record->email,
+                            'sex' => $record->sex,
+                            'age' => $record->age,
+                            'purpose' => $record->purpose,
+                            'status' => $record->status,
+                            'appointment_date' => $record->appointment_date,
+                            'prescription_id' => $item->prescription_id,
+                            'date' => $item->date,
+                            'sph_od' => $item->sph_od,
+                            'cyl_od' => $item->cyl_od,
+                            'axis_od' => $item->axis_od,
+                            'add_od' => $item->add_od,
+                            'sph_os' => $item->sph_os,
+                            'cyl_os' => $item->cyl_os,
+                            'axis_os' => $item->axis_os,
+                            'add_os' => $item->add_os,
+                            'ipd' => $item->ipd,
+                            'lens_type' => $item->lens_type,
+                            'notes' => $item->notes,
+                            'status' => $item->status,
+                            'created_at' => $item->created_at,
+                            'source' => 'legacy',
+                        ];
+                    })
+                    ->values();
+
+                return $formPrescriptions->concat($legacyPrescriptions);
+            })
+            ->sortByDesc(fn ($item) => ($item['date'] ?? '').'|'.($item['created_at'] ?? '').'|'.($item['prescription_id'] ?? ''))
+            ->values();
 
         return response()->json([
             'branch_id' => $branchId,
@@ -1788,10 +1874,12 @@ class PatientRecordController extends Controller
             $od['cylinder'],
             $od['axis'],
             $od['add'],
+            $od['lens_type'],
             $os['sphere'],
             $os['cylinder'],
             $os['axis'],
             $os['add'],
+            $os['lens_type'],
             $diagnosis['prescription'] ?? null,
             $diagnosis['diagnosis'] ?? null,
         ], fn ($value) => filled($value));
@@ -1885,6 +1973,8 @@ class PatientRecordController extends Controller
 
             if ($parts !== []) {
                 $lines[] = $label.': '.implode(' ', $parts);
+            } elseif (filled($eye['lens_type'] ?? null)) {
+                $lines[] = $label.': '.$eye['lens_type'];
             }
         }
 
@@ -1925,6 +2015,9 @@ class PatientRecordController extends Controller
             'firstname' => $record->firstname ?? null,
             'othernames' => $record->othernames ?? null,
             'name' => $record->name ?? null,
+            'patient_status' => property_exists($record, 'status') ? ($record->status ?? null) : null,
+            'assigned_optometrist_id' => property_exists($record, 'assigned_optometrist_id') ? ($record->assigned_optometrist_id ?? null) : null,
+            'assigned_optometrist_name' => property_exists($record, 'assigned_optometrist_name') ? ($record->assigned_optometrist_name ?? null) : null,
         ];
     }
 

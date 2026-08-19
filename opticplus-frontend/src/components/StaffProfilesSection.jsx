@@ -32,6 +32,35 @@ const emptyEditForm = {
   institution: '',
 }
 
+const emptyCreateForm = {
+  name: '',
+  email: '',
+  phone: '',
+  job_title: '',
+  department: '',
+  date_of_birth: '',
+  gender: 'Other',
+  marital_status: 'Single',
+  residential_address: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
+  employment_type: 'Full-Time',
+  date_employed: '',
+  ssnit_number: '',
+  tin_number: '',
+  bank_name: '',
+  bank_branch: '',
+  bank_other: '',
+  account_name: '',
+  account_number: '',
+  salary: '',
+  qualification: '',
+  institution: '',
+  year_completed: '',
+  professional_license: '',
+  status: 'active',
+}
+
 function withImageVersion(url, versionKey) {
   if (!url) return ''
   const separator = url.includes('?') ? '&' : '?'
@@ -49,9 +78,10 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
+  const [modalMode, setModalMode] = useState('view')
   const [isSaving, setIsSaving] = useState(false)
   const [editForm, setEditForm] = useState(emptyEditForm)
+  const [createForm, setCreateForm] = useState(emptyCreateForm)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
 
@@ -96,6 +126,8 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
   const pagination = data?.pagination
 
   const tableRows = useMemo(() => data?.records ?? [], [data])
+  const isEditing = modalMode === 'edit'
+  const isCreating = modalMode === 'create'
 
   function normalizeEmployee(employee, versionKey = Date.now()) {
     if (!employee) return null
@@ -128,7 +160,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
   function resetEditor(nextDetail = detail, options = {}) {
     const { clearPreview = true } = options
     const nextEmployee = nextDetail?.employee
-    setIsEditing(false)
+    setModalMode('view')
     setPhotoFile(null)
     if (clearPreview) {
       setPhotoPreview('')
@@ -156,13 +188,19 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     })
   }
 
+  function resetCreateForm() {
+    setCreateForm(emptyCreateForm)
+  }
+
   async function openEmployeeModal(employeeId) {
     setSelectedEmployeeId(employeeId)
     setIsModalOpen(true)
-    setIsEditing(false)
+    setModalMode('view')
     setSuccess('')
     setError('')
     setDetail(null)
+    setPhotoFile(null)
+    setPhotoPreview('')
     setIsLoadingDetail(true)
 
     try {
@@ -177,9 +215,21 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     }
   }
 
+  function openCreateModal() {
+    setIsModalOpen(true)
+    setModalMode('create')
+    setSelectedEmployeeId(null)
+    setDetail(null)
+    setSuccess('')
+    setError('')
+    setPhotoFile(null)
+    setPhotoPreview('')
+    resetCreateForm()
+  }
+
   function closeModal() {
     setIsModalOpen(false)
-    setIsEditing(false)
+    setModalMode('view')
     setSelectedEmployeeId(null)
     setDetail(null)
     emitHeaderProfile(null)
@@ -192,7 +242,9 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     setPhotoFile(file)
     if (!file) {
       setPhotoPreview('')
-      emitHeaderProfile(employee ?? null)
+      if (!isCreating) {
+        emitHeaderProfile(employee ?? null)
+      }
       return
     }
 
@@ -200,7 +252,9 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     reader.onload = () => {
       const nextPreview = typeof reader.result === 'string' ? reader.result : ''
       setPhotoPreview(nextPreview)
-      emitHeaderProfile(employee ?? null, nextPreview)
+      if (!isCreating) {
+        emitHeaderProfile(employee ?? null, nextPreview)
+      }
     }
     reader.readAsDataURL(file)
   }
@@ -262,6 +316,65 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     }
   }
 
+  async function submitCreate(event) {
+    event.preventDefault()
+
+    setIsSaving(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const body = new FormData()
+      body.append('name', createForm.name)
+      body.append('email', createForm.email)
+      body.append('phone', createForm.phone)
+      body.append('job_title', createForm.job_title)
+      body.append('department', createForm.department)
+      body.append('date_of_birth', createForm.date_of_birth)
+      body.append('gender', createForm.gender)
+      body.append('marital_status', createForm.marital_status)
+      body.append('residential_address', createForm.residential_address)
+      body.append('emergency_contact_name', createForm.emergency_contact_name)
+      body.append('emergency_contact_phone', createForm.emergency_contact_phone)
+      body.append('employment_type', createForm.employment_type)
+      body.append('date_employed', createForm.date_employed)
+      body.append('ssnit_number', createForm.ssnit_number)
+      body.append('tin_number', createForm.tin_number)
+      body.append('bank_name', createForm.bank_name)
+      body.append('bank_branch', createForm.bank_branch)
+      body.append('bank_other', createForm.bank_other)
+      body.append('account_name', createForm.account_name)
+      body.append('account_number', createForm.account_number)
+      body.append('salary', createForm.salary === '' ? '' : String(createForm.salary))
+      body.append('qualification', createForm.qualification)
+      body.append('institution', createForm.institution)
+      body.append('year_completed', createForm.year_completed)
+      body.append('professional_license', createForm.professional_license)
+      body.append('status', createForm.status)
+      body.append('branch_id', String(selectedBranchId))
+      if (photoFile) body.append('photo', photoFile)
+
+      const response = await apiFetch('/manager/employees', {
+        method: 'POST',
+        token,
+        body,
+      })
+
+      const createdDetail = response.employee ? { ...response, employee: normalizeEmployee(response.employee) } : response
+      setDetail(createdDetail)
+      setSelectedEmployeeId(createdDetail.employee?.id ?? null)
+      emitHeaderProfile(createdDetail.employee ?? null)
+      resetEditor(createdDetail, { clearPreview: true })
+      setModalMode('view')
+      setSuccess(response.message || 'Staff profile created successfully.')
+      setQuery((current) => ({ ...current, page: 1 }))
+    } catch (nextError) {
+      setError(nextError.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   function changePage(nextPage) {
     if (!pagination) return
     if (nextPage < 1 || nextPage > pagination.total_pages) return
@@ -297,9 +410,20 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
             <p className="eyebrow">Directory</p>
             <h3>Employee register</h3>
           </div>
-          <span className="panel-tag">
-            {(data?.branch_name ?? 'Branch')} | {pagination?.total ?? 0} records
-          </span>
+          <div className="modal-actions">
+            <span className="panel-tag">
+              {(data?.branch_name ?? 'Branch')} | {pagination?.total ?? 0} records
+            </span>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={openCreateModal}
+              disabled={selectedBranchId === 0}
+              title={selectedBranchId === 0 ? 'Switch to a branch before creating staff profiles.' : 'Register a new staff profile'}
+            >
+              New Staff
+            </button>
+          </div>
         </div>
 
         <form
@@ -437,11 +561,13 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
           <article className="modal-panel staff-profile-modal" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">{isEditing ? 'Edit Profile' : 'Staff Profile'}</p>
-                <h3>{employee?.name || 'Loading staff profile'}</h3>
+                <p className="eyebrow">
+                  {isCreating ? 'Register Staff' : isEditing ? 'Edit Profile' : 'Staff Profile'}
+                </p>
+                <h3>{isCreating ? 'New staff registration' : employee?.name || 'Loading staff profile'}</h3>
               </div>
               <div className="modal-actions">
-                {employee ? (
+                {employee && !isCreating ? (
                   <button
                     type="button"
                     className="ghost-button"
@@ -451,10 +577,23 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                         return
                       }
                       resetEditor()
-                      setIsEditing(true)
+                      setModalMode('edit')
                     }}
                   >
                     {isEditing ? 'Cancel edit' : 'Edit profile'}
+                  </button>
+                ) : null}
+                {isCreating ? (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      resetCreateForm()
+                      setPhotoFile(null)
+                      setPhotoPreview('')
+                    }}
+                  >
+                    Reset form
                   </button>
                 ) : null}
                 <button type="button" className="ghost-button" onClick={closeModal}>Close</button>
@@ -463,6 +602,166 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
 
             {isLoadingDetail ? (
               <p className="muted-copy">Loading staff profile...</p>
+            ) : isCreating ? (
+              <div className="staff-profile-modal-body">
+                {error ? <div className="message-banner error">{error}</div> : null}
+                {success ? <div className="message-banner success">{success}</div> : null}
+
+                <section className="staff-profile-hero">
+                  <div className="settings-avatar-block">
+                    <div className="settings-avatar-frame staff-profile-avatar">
+                      {photoPreview ? (
+                        <img src={photoPreview} alt="New staff preview" className="settings-avatar-image" />
+                      ) : createForm.name ? (
+                        <span className="settings-avatar-fallback">{createForm.name.slice(0, 2).toUpperCase()}</span>
+                      ) : (
+                        <span className="settings-avatar-fallback">NS</span>
+                      )}
+                    </div>
+                    <div className="settings-avatar-copy">
+                      <strong>{createForm.name || 'New staff profile'}</strong>
+                      <span>Staff ID will be assigned automatically</span>
+                      <span>{data?.branch_name ?? 'Selected branch'}</span>
+                    </div>
+                  </div>
+
+                  <label className="staff-photo-upload">
+                    <span>Photo</span>
+                    <input type="file" accept="image/*" onChange={handlePhotoChange} />
+                  </label>
+                </section>
+
+                <form className="staff-edit-grid" onSubmit={submitCreate}>
+                  <label>
+                    Full name
+                    <input value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))} required />
+                  </label>
+                  <label>
+                    Email
+                    <input type="email" value={createForm.email} onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))} />
+                  </label>
+                  <label>
+                    Phone
+                    <input value={createForm.phone} onChange={(event) => setCreateForm((current) => ({ ...current, phone: event.target.value }))} required />
+                  </label>
+                  <label>
+                    Job title
+                    <input value={createForm.job_title} onChange={(event) => setCreateForm((current) => ({ ...current, job_title: event.target.value }))} />
+                  </label>
+                  <label>
+                    Department
+                    <input value={createForm.department} onChange={(event) => setCreateForm((current) => ({ ...current, department: event.target.value }))} />
+                  </label>
+                  <label>
+                    Status
+                    <select value={createForm.status} onChange={(event) => setCreateForm((current) => ({ ...current, status: event.target.value }))}>
+                      <option value="active">active</option>
+                      <option value="inactive">inactive</option>
+                    </select>
+                  </label>
+                  <label>
+                    Date of birth
+                    <input type="date" value={createForm.date_of_birth} onChange={(event) => setCreateForm((current) => ({ ...current, date_of_birth: event.target.value }))} />
+                  </label>
+                  <label>
+                    Gender
+                    <select value={createForm.gender} onChange={(event) => setCreateForm((current) => ({ ...current, gender: event.target.value }))}>
+                      <option value="Other">Other</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </label>
+                  <label>
+                    Marital status
+                    <select value={createForm.marital_status} onChange={(event) => setCreateForm((current) => ({ ...current, marital_status: event.target.value }))}>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Divorced">Divorced</option>
+                      <option value="Widowed">Widowed</option>
+                    </select>
+                  </label>
+                  <label className="staff-edit-grid-span">
+                    Residential address
+                    <input value={createForm.residential_address} onChange={(event) => setCreateForm((current) => ({ ...current, residential_address: event.target.value }))} />
+                  </label>
+                  <label>
+                    Emergency contact name
+                    <input value={createForm.emergency_contact_name} onChange={(event) => setCreateForm((current) => ({ ...current, emergency_contact_name: event.target.value }))} />
+                  </label>
+                  <label>
+                    Emergency contact phone
+                    <input value={createForm.emergency_contact_phone} onChange={(event) => setCreateForm((current) => ({ ...current, emergency_contact_phone: event.target.value }))} />
+                  </label>
+                  <label>
+                    Employment type
+                    <select value={createForm.employment_type} onChange={(event) => setCreateForm((current) => ({ ...current, employment_type: event.target.value }))}>
+                      <option value="Full-Time">Full-Time</option>
+                      <option value="Part-Time">Part-Time</option>
+                      <option value="Contract">Contract</option>
+                    </select>
+                  </label>
+                  <label>
+                    Date employed
+                    <input type="date" value={createForm.date_employed} onChange={(event) => setCreateForm((current) => ({ ...current, date_employed: event.target.value }))} />
+                  </label>
+                  <label>
+                    SSNIT number
+                    <input value={createForm.ssnit_number} onChange={(event) => setCreateForm((current) => ({ ...current, ssnit_number: event.target.value }))} />
+                  </label>
+                  <label>
+                    TIN number
+                    <input value={createForm.tin_number} onChange={(event) => setCreateForm((current) => ({ ...current, tin_number: event.target.value }))} />
+                  </label>
+                  <label>
+                    Bank name
+                    <input value={createForm.bank_name} onChange={(event) => setCreateForm((current) => ({ ...current, bank_name: event.target.value }))} />
+                  </label>
+                  <label>
+                    Bank branch
+                    <input value={createForm.bank_branch} onChange={(event) => setCreateForm((current) => ({ ...current, bank_branch: event.target.value }))} />
+                  </label>
+                  <label>
+                    Other bank info
+                    <input value={createForm.bank_other} onChange={(event) => setCreateForm((current) => ({ ...current, bank_other: event.target.value }))} />
+                  </label>
+                  <label>
+                    Account name
+                    <input value={createForm.account_name} onChange={(event) => setCreateForm((current) => ({ ...current, account_name: event.target.value }))} />
+                  </label>
+                  <label>
+                    Account number
+                    <input value={createForm.account_number} onChange={(event) => setCreateForm((current) => ({ ...current, account_number: event.target.value }))} />
+                  </label>
+                  <label>
+                    Salary
+                    <input type="number" step="0.01" value={createForm.salary} onChange={(event) => setCreateForm((current) => ({ ...current, salary: event.target.value }))} />
+                  </label>
+                  <label>
+                    Qualification
+                    <input value={createForm.qualification} onChange={(event) => setCreateForm((current) => ({ ...current, qualification: event.target.value }))} />
+                  </label>
+                  <label>
+                    Institution
+                    <input value={createForm.institution} onChange={(event) => setCreateForm((current) => ({ ...current, institution: event.target.value }))} />
+                  </label>
+                  <label>
+                    Year completed
+                    <input type="number" min="1900" max="2100" value={createForm.year_completed} onChange={(event) => setCreateForm((current) => ({ ...current, year_completed: event.target.value }))} />
+                  </label>
+                  <label className="staff-edit-grid-span">
+                    Professional license
+                    <input value={createForm.professional_license} onChange={(event) => setCreateForm((current) => ({ ...current, professional_license: event.target.value }))} />
+                  </label>
+                  <div className="modal-actions staff-edit-actions staff-edit-grid-span">
+                    <button type="button" className="ghost-button" onClick={closeModal}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="primary-button" disabled={isSaving}>
+                      {isSaving ? 'Creating staff...' : 'Register staff'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             ) : employee ? (
               <div className="staff-profile-modal-body">
                 {error ? <div className="message-banner error">{error}</div> : null}

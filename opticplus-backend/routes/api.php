@@ -136,6 +136,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::put('/manager/database-admin/{resource}/{recordId}', [DatabaseAdminController::class, 'update']);
         Route::delete('/manager/database-admin/{resource}/{recordId}', [DatabaseAdminController::class, 'destroy']);
         Route::get('/manager/employees', [ManagerController::class, 'employees']);
+        Route::post('/manager/employees', [ManagerController::class, 'storeEmployee']);
         Route::get('/manager/employees/{employeeId}', [ManagerController::class, 'employeeDetail']);
         Route::post('/manager/employees/{employeeId}', [ManagerController::class, 'updateEmployee']);
         Route::get('/memos/meta', [MemoController::class, 'meta']);

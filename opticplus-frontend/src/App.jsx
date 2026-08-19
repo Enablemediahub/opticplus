@@ -25,7 +25,7 @@ import OptometristDashboardSection from './components/OptometristDashboardSectio
 import OptometristPrescriptionsSection from './components/OptometristPrescriptionsSection.jsx'
 import MedicalReportSection from './components/MedicalReportSection.jsx'
 import MessengerWidget from './components/MessengerWidget.jsx'
-import PatientsSection, { defaultPatientFilters, patientFiltersForView, patientFormDefaults, PatientIntakeModal } from './components/PatientsSection.jsx'
+import PatientsSection, { defaultPatientFilters, patientFiltersForView, patientFormDefaults, PatientIntakeModal, PatientManagementModal, PatientRecordsModal } from './components/PatientsSection.jsx'
 import PayrollSection from './components/PayrollSection.jsx'
 import PortalIcon from './components/PortalIcon.jsx'
 import ReportsSection from './components/ReportsSection.jsx'
@@ -80,6 +80,7 @@ const managerNavSections = [
     title: 'Inventory & Products',
     items: [
       { label: 'Inventory', navLabel: 'Products', icon: 'inventory' },
+      { label: 'Lens Orders', navLabel: 'Lens Orders', icon: 'receipt' },
       { label: 'Assets Register', navLabel: 'Company Assets', icon: 'briefcase' },
       { label: 'Memos', navLabel: 'Memos', icon: 'message' },
     ],
@@ -406,7 +407,6 @@ const defaultFinanceSalesFilters = () => ({
 
 const defaultFinanceExpenseFilters = () => ({
   filter: 'all',
-  month: 'all',
   start_date: '',
   end_date: '',
   category: 'all',
@@ -417,7 +417,6 @@ const defaultFinanceExpenseFilters = () => ({
 
 const defaultReceptionistExpenseFilters = () => ({
   ...defaultFinanceExpenseFilters(),
-  month: currentMonthKey(),
   ...currentMonthDateRange(),
 })
 
@@ -506,10 +505,11 @@ const defaultLensTrackerFilters = () => ({
 })
 
 const defaultLensOrdersFilters = () => ({
-  month: currentMonthKey(),
-  date_from: currentMonthDateRange().start_date,
-  date_to: currentMonthDateRange().end_date,
+  month: 'custom',
+  date_from: todayIso(),
+  date_to: todayIso(),
   search: '',
+  pickup_status: 'all',
 })
 
 const defaultCustomerServiceFilters = () => ({
@@ -612,6 +612,8 @@ function App() {
   const [patientMeta, setPatientMeta] = useState(null)
   const [patientData, setPatientData] = useState(null)
   const [patientFilters, setPatientFilters] = useState(defaultPatientFilters())
+  const [dashboardManagementModalPatient, setDashboardManagementModalPatient] = useState(null)
+  const [dashboardRecordsModalPatient, setDashboardRecordsModalPatient] = useState(null)
   const [patientQuery, setPatientQuery] = useState(defaultPatientFilters())
   const [isLoadingPatients, setIsLoadingPatients] = useState(false)
   const [patientError, setPatientError] = useState('')
@@ -1529,8 +1531,11 @@ function App() {
     setCustomerServiceSuccess('')
     setFinanceSalesFilters(defaultFinanceSalesFilters())
     setFinanceSalesQuery(defaultFinanceSalesFilters())
-    setFinanceExpenseFilters(defaultFinanceExpenseFilters())
-    setFinanceExpenseQuery(defaultFinanceExpenseFilters())
+    const defaultExpenseFilters = session?.role === 'receptionist'
+      ? defaultReceptionistExpenseFilters()
+      : defaultFinanceExpenseFilters()
+    setFinanceExpenseFilters(defaultExpenseFilters)
+    setFinanceExpenseQuery(defaultExpenseFilters)
     setFinancePaymentFilters(defaultFinancePaymentFilters())
     setFinancePaymentQuery(defaultFinancePaymentFilters())
     setExpenseForm(defaultExpenseForm())
@@ -1960,7 +1965,7 @@ function App() {
             : financeExpenseQuery
 
         for (const [key, value] of Object.entries(effectiveExpenseQuery)) {
-          if ((value === '' || value == null) || value === 'all') continue
+          if (key === 'refresh_token' || (value === '' || value == null) || value === 'all') continue
           params.set(key, value)
         }
         const response = await apiFetch(`/finance/expenses?${params.toString()}`, { token })
@@ -2114,6 +2119,7 @@ function App() {
           month: query.month,
           date_from: query.date_from,
           date_to: query.date_to,
+          pickup_status: query.pickup_status,
         })
         if (query.search) params.set('search', query.search)
         const response = await apiFetch(`/inventory/lens-orders?${params.toString()}`, { token })
@@ -2175,7 +2181,8 @@ function App() {
           current.month === nextQuery.month &&
           current.date_from === nextQuery.date_from &&
           current.date_to === nextQuery.date_to &&
-          current.search === nextQuery.search
+          current.search === nextQuery.search &&
+          current.pickup_status === nextQuery.pickup_status
         ) {
           return current
         }
@@ -4108,7 +4115,43 @@ function App() {
     }
   }
 
-  function syncPickupStatusState(billingIds, nextStatus) {
+  function normalizePickupIds(value) {
+    return [...new Set((Array.isArray(value) ? value : [value])
+      .map((item) => (item === null || item === undefined ? '' : String(item)))
+      .filter(Boolean))]
+  }
+
+  function isNumericPickupId(value) {
+    return /^\d+$/.test(String(value))
+  }
+
+  function matchesPickupId(order, pickupId) {
+    const candidateIds = [
+      order?.billing_id,
+      order?.prescription_id,
+      order?.form_id,
+    ]
+      .map((item) => (item === null || item === undefined ? '' : String(item)))
+      .filter(Boolean)
+
+    return candidateIds.includes(String(pickupId))
+  }
+
+  function syncPickupStatusState(pickupIds, nextStatus) {
+    const normalizedIds = normalizePickupIds(pickupIds)
+    setLensOrdersData((current) => {
+      if (!current) return current
+
+      return {
+        ...current,
+        orders: (current.orders ?? []).map((order) => (
+          normalizedIds.some((pickupId) => matchesPickupId(order, pickupId))
+            ? { ...order, pickup_status: nextStatus }
+            : order
+        )),
+      }
+    })
+
     setCustomerServiceData((current) => {
       if (!current) return current
 
@@ -4119,13 +4162,13 @@ function App() {
       }[nextStatus] ?? 'Not Ready'
 
       const nextPickupRecords = (current.pickup_records ?? []).map((record) => (
-        billingIds.includes(record.billing_id)
+        normalizedIds.includes(String(record.billing_id))
           ? { ...record, pickup_status: nextStatus, pickup_status_display: statusDisplay }
           : record
       ))
 
       const updatedReadyEntries = nextPickupRecords
-        .filter((record) => billingIds.includes(record.billing_id) && ['ready', 'notified'].includes(record.pickup_status))
+        .filter((record) => normalizedIds.includes(String(record.billing_id)) && ['ready', 'notified'].includes(record.pickup_status))
         .map((record) => ({
           billing_id: record.billing_id,
           branch_id: record.branch_id,
@@ -4143,7 +4186,7 @@ function App() {
 
       const readyLookup = new Map(
         (current.ready_for_pickup ?? [])
-          .filter((record) => !billingIds.includes(record.billing_id))
+          .filter((record) => !normalizedIds.includes(String(record.billing_id)))
           .map((record) => [record.billing_id, record]),
       )
 
@@ -4160,31 +4203,35 @@ function App() {
   }
 
   async function updatePickupStatus(billingIdOrIds, action) {
-    const billingIds = [...new Set((Array.isArray(billingIdOrIds) ? billingIdOrIds : [billingIdOrIds]).filter(Boolean))]
-    if (!billingIds.length) return
+    const pickupIds = normalizePickupIds(billingIdOrIds)
+    if (!pickupIds.length) return
 
-    setPickupBusyIds(billingIds)
+    setPickupBusyIds(pickupIds)
     setCustomerServiceError('')
     setCustomerServiceSuccess('')
 
     try {
       const branchId = session.is_admin ? selectedBranchId : session.branch_id
-      await Promise.all(
-        billingIds.map((billingId) => apiFetch(`/customer-service/pickups/${billingId}/${action}`, {
-          method: 'POST',
-          token,
-          body: { branch_id: branchId },
-        })),
-      )
+      const persistableIds = pickupIds.filter(isNumericPickupId)
+
+      if (persistableIds.length) {
+        await Promise.all(
+          persistableIds.map((billingId) => apiFetch(`/customer-service/pickups/${billingId}/${action}`, {
+            method: 'POST',
+            token,
+            body: { branch_id: branchId },
+          })),
+        )
+      }
 
       const nextStatus = action === 'ready'
         ? 'ready'
         : action === 'not-ready'
           ? 'pending'
           : 'picked_up'
-      syncPickupStatusState(billingIds, nextStatus)
+      syncPickupStatusState(pickupIds, nextStatus)
 
-      const plural = billingIds.length > 1
+      const plural = pickupIds.length > 1
       setCustomerServiceSuccess(
         action === 'ready'
           ? (plural ? 'Selected records marked as ready for pickup.' : 'Marked as ready for pickup.')
@@ -4192,6 +4239,13 @@ function App() {
             ? (plural ? 'Selected records marked as not ready.' : 'Marked as not ready.')
             : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
       )
+          setLensOrdersSuccess(
+            action === 'ready'
+              ? (plural ? 'Selected lens orders marked as ready for pickup.' : 'Lens order marked as ready for pickup.')
+              : action === 'not-ready'
+            ? (plural ? 'Selected lens orders marked as not ready.' : 'Lens order marked as not ready.')
+            : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
+          )
       setCustomerServiceQuery((current) => ({ ...current }))
     } catch (error) {
       setCustomerServiceError(error.message)
@@ -4550,14 +4604,14 @@ function App() {
                   </div>
 
                   <div className="header-actions portal-hero-actions">
-                    {session.is_admin || session.role === 'technician' ? (
+                    {session.is_admin ? (
                       <label className="branch-select">
                         Branch
                         <select
                           value={selectedBranchId}
                           onChange={(event) => setSelectedBranchId(Number(event.target.value))}
                         >
-                          {(session.role === 'technician' ? branchOptions.filter((branch) => branch.id !== 0) : branchOptions).map((branch) => (
+                          {branchOptions.map((branch) => (
                             <option key={branch.id} value={branch.id}>
                               {branch.name}
                             </option>
@@ -4689,6 +4743,8 @@ function App() {
                   rowBusyId={rowBusyId}
                   markAsSeen={markAsSeen}
                   setActiveView={setActiveView}
+                  onManagePatient={(patient) => setDashboardManagementModalPatient(patient)}
+                  onViewPatientRecord={(patient) => setDashboardRecordsModalPatient(patient)}
                 />
               ) : isTechnician ? (
                 <TechnicianDashboardSection
@@ -5256,6 +5312,10 @@ function App() {
                 lensOrdersSuccess={lensOrdersSuccess}
                 setLensOrdersError={setLensOrdersError}
                 setLensOrdersSuccess={setLensOrdersSuccess}
+                updatePickupStatus={updatePickupStatus}
+                pickupBusyIds={pickupBusyIds}
+                session={session}
+                companyName={companyProfileForm.company_name}
               />
             ) : null}
 
@@ -5433,6 +5493,43 @@ function App() {
             if (ok) setDashboardIntakeModalOpen(false)
           }}
           submitLabel={isSavingPatient ? 'Saving patient...' : 'Save patient record'}
+        />
+      ) : null}
+
+      {dashboardManagementModalPatient ? (
+        <PatientManagementModal
+          patient={dashboardManagementModalPatient}
+          onClose={() => setDashboardManagementModalPatient(null)}
+          setActiveView={(view) => {
+            setDashboardManagementModalPatient(null)
+            setActiveView(view)
+          }}
+          updatePatientDetails={updatePatientDetails}
+          deletePatientRecord={deletePatientRecord}
+          fetchPatientPrescriptions={fetchPatientPrescriptions}
+          fetchPatientExamForm={fetchPatientExamForm}
+          savePatientExamForm={savePatientExamForm}
+          addPatientPrescription={addPatientPrescription}
+          fetchMedicalReport={fetchMedicalReport}
+          onDeleted={() => setDashboardManagementModalPatient(null)}
+          onPatientUpdated={(updatedPatient) => setDashboardManagementModalPatient(updatedPatient)}
+        />
+      ) : null}
+
+      {dashboardRecordsModalPatient ? (
+        <PatientRecordsModal
+          patient={dashboardRecordsModalPatient}
+          onClose={() => setDashboardRecordsModalPatient(null)}
+          setActiveView={(view) => {
+            setDashboardRecordsModalPatient(null)
+            setActiveView(view)
+          }}
+          openExamWorkspace={() => {
+            setDashboardRecordsModalPatient(null)
+            setActiveView('Patient Form')
+          }}
+          fetchPatientPrescriptions={fetchPatientPrescriptions}
+          fetchPatientExamForm={fetchPatientExamForm}
         />
       ) : null}
 

@@ -67,7 +67,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return in_array($this->normalized_role, ['ceo', 'manager', 'accountant'], true);
+        return in_array($this->normalized_role, ['ceo', 'manager', 'accountant', 'technician'], true);
     }
 
     public function getNormalizedRoleAttribute(): string

@@ -243,6 +243,8 @@ class ManagerController extends Controller
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
         }
+        $requestedRole = trim($request->string('role')->toString());
+        $userBranchId = $this->usesMergedBranch($requestedRole) ? 0 : $branchId;
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -250,7 +252,7 @@ class ManagerController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('users', 'username')->where(fn ($query) => $query->where('branch_id', $branchId)),
+                Rule::unique('users', 'username')->where(fn ($query) => $query->where('branch_id', $userBranchId)),
             ],
             'password' => ['required', 'string', 'min:8'],
             'role' => ['required', 'string', 'max:100'],
@@ -260,20 +262,22 @@ class ManagerController extends Controller
                 'nullable',
                 'email',
                 'max:255',
-                Rule::unique('users', 'email')->where(fn ($query) => $query->where('branch_id', $branchId)),
+                Rule::unique('users', 'email')->where(fn ($query) => $query->where('branch_id', $userBranchId)),
             ],
         ]);
+
+        $role = $validated['role'];
 
         $userId = DB::table('users')->insertGetId([
             'name' => $validated['name'],
             'username' => $validated['username'],
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
+            'role' => $role,
             'employee_status' => $validated['employee_status'] ?? 'active',
             'phone' => $validated['phone'] ?? null,
             'email' => $validated['email'] ?? null,
-            'branch_id' => $branchId,
-            'branch' => $this->branchName($branchId),
+            'branch_id' => $userBranchId,
+            'branch' => $this->branchName($userBranchId),
             'profile_image' => 'default_profile.png',
         ]);
 
@@ -294,6 +298,8 @@ class ManagerController extends Controller
         $user = DB::table('users')->where('id', $userId)->where('branch_id', $branchId)->first();
 
         abort_if(! $user, 404, 'User not found.');
+        $requestedRole = trim($request->string('role')->toString());
+        $userBranchId = $this->usesMergedBranch($requestedRole) ? 0 : $branchId;
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -303,7 +309,7 @@ class ManagerController extends Controller
                 'max:255',
                 Rule::unique('users', 'username')
                     ->ignore($userId)
-                    ->where(fn ($query) => $query->where('branch_id', $branchId)),
+                    ->where(fn ($query) => $query->where('branch_id', $userBranchId)),
             ],
             'role' => ['required', 'string', 'max:100'],
             'password' => ['nullable', 'string', 'min:8'],
@@ -315,19 +321,22 @@ class ManagerController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')
                     ->ignore($userId)
-                    ->where(fn ($query) => $query->where('branch_id', $branchId)),
+                    ->where(fn ($query) => $query->where('branch_id', $userBranchId)),
             ],
             'profile_image' => ['nullable', 'image', 'max:4096'],
         ]);
 
+        $role = $validated['role'];
+
         $updates = [
             'name' => $validated['name'],
             'username' => $validated['username'],
-            'role' => $validated['role'],
+            'role' => $role,
             'employee_status' => $validated['employee_status'] ?? 'active',
             'phone' => $validated['phone'] ?? null,
             'email' => $validated['email'] ?? null,
-            'branch' => $this->branchName($branchId),
+            'branch_id' => $userBranchId,
+            'branch' => $this->branchName($userBranchId),
         ];
 
         if (! empty($validated['password'])) {
@@ -482,6 +491,168 @@ class ManagerController extends Controller
             ],
             'records' => $records->map(fn ($employee) => $this->serializeEmployee($employee)),
         ]);
+    }
+
+    public function storeEmployee(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => [
+                'nullable',
+                'email',
+                'max:100',
+                Rule::unique('employees_comprehensive', 'email'),
+            ],
+            'phone' => ['required', 'string', 'max:20'],
+            'job_title' => ['nullable', 'string', 'max:100'],
+            'department' => ['nullable', 'string', 'max:100'],
+            'date_of_birth' => ['nullable', 'date'],
+            'gender' => ['nullable', Rule::in(['Male', 'Female', 'Other'])],
+            'marital_status' => ['nullable', Rule::in(['Single', 'Married', 'Divorced', 'Widowed'])],
+            'residential_address' => ['nullable', 'string'],
+            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
+            'emergency_contact_phone' => ['nullable', 'string', 'max:20'],
+            'employment_type' => ['nullable', Rule::in(['Full-Time', 'Part-Time', 'Contract'])],
+            'date_employed' => ['nullable', 'date'],
+            'ssnit_number' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('employees_comprehensive', 'ssnit_number'),
+            ],
+            'tin_number' => ['nullable', 'string', 'max:50'],
+            'bank_name' => ['nullable', 'string', 'max:100'],
+            'bank_branch' => ['nullable', 'string', 'max:100'],
+            'bank_other' => ['nullable', 'string', 'max:100'],
+            'account_name' => ['nullable', 'string', 'max:255'],
+            'account_number' => ['nullable', 'string', 'max:50'],
+            'salary' => ['nullable', 'numeric'],
+            'qualification' => ['nullable', 'string', 'max:100'],
+            'institution' => ['nullable', 'string', 'max:255'],
+            'year_completed' => ['nullable', 'integer', 'min:1900', 'max:2100'],
+            'professional_license' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', Rule::in(['active', 'inactive', 'terminated'])],
+            'photo' => ['nullable', 'image', 'max:4096'],
+        ]);
+
+        $staffId = $this->generateStaffId($branchId);
+        $branchName = $this->branchName($branchId);
+        $safeDateEmployed = ! empty($validated['date_employed'])
+            ? Carbon::parse($validated['date_employed'])
+            : Carbon::today();
+        $safeDateOfBirth = ! empty($validated['date_of_birth'])
+            ? $validated['date_of_birth']
+            : $safeDateEmployed->toDateString();
+        $safeEmail = $this->nullableString($validated['email'] ?? null) ?? strtolower($staffId).'@local.invalid';
+        $safeSsnit = $this->nullableString($validated['ssnit_number'] ?? null) ?? 'SSNIT-'.$staffId;
+        $safeJobTitle = $this->nullableString($validated['job_title'] ?? null) ?? 'Staff';
+        $safeDepartment = $this->nullableString($validated['department'] ?? null) ?? 'General';
+        $safeResidentialAddress = $this->nullableString($validated['residential_address'] ?? null) ?? 'N/A';
+        $safeEmergencyName = $this->nullableString($validated['emergency_contact_name'] ?? null) ?? trim($validated['name']);
+        $safeEmergencyPhone = $this->nullableString($validated['emergency_contact_phone'] ?? null) ?? trim($validated['phone']);
+        $safeEmploymentType = $validated['employment_type'] ?? 'Full-Time';
+        $safeBankName = $this->nullableString($validated['bank_name'] ?? null) ?? 'N/A';
+        $safeBankBranch = $this->nullableString($validated['bank_branch'] ?? null) ?? 'N/A';
+        $safeAccountName = $this->nullableString($validated['account_name'] ?? null) ?? trim($validated['name']);
+        $safeAccountNumber = $this->nullableString($validated['account_number'] ?? null) ?? trim($validated['phone']);
+        $safeSalary = array_key_exists('salary', $validated) && $validated['salary'] !== null && $validated['salary'] !== ''
+            ? $validated['salary']
+            : 0;
+        $safeQualification = $this->nullableString($validated['qualification'] ?? null) ?? 'N/A';
+        $safeInstitution = $this->nullableString($validated['institution'] ?? null) ?? 'N/A';
+        $safeYearCompleted = (int) ($validated['year_completed'] ?? now()->year);
+        $safeGender = $validated['gender'] ?? 'Other';
+        $safeMaritalStatus = $validated['marital_status'] ?? 'Single';
+
+        $employeeId = DB::transaction(function () use (
+            $validated,
+            $branchId,
+            $branchName,
+            $safeDateEmployed,
+            $safeDateOfBirth,
+            $safeEmail,
+            $safeSsnit,
+            $safeJobTitle,
+            $safeDepartment,
+            $safeResidentialAddress,
+            $safeEmergencyName,
+            $safeEmergencyPhone,
+            $safeEmploymentType,
+            $safeBankName,
+            $safeBankBranch,
+            $safeAccountName,
+            $safeAccountNumber,
+            $safeSalary,
+            $safeQualification,
+            $safeInstitution,
+            $safeYearCompleted,
+            $safeGender,
+            $safeMaritalStatus,
+            $staffId,
+            $request
+        ) {
+            $employeeId = DB::table('employees_comprehensive')->insertGetId([
+                'staff_id' => $staffId,
+                'branch_id' => $branchId,
+                'ghana_card_name' => trim($validated['name']),
+                'ghana_card_number' => 'GC-'.$staffId,
+                'date_of_birth' => $safeDateOfBirth,
+                'gender' => $safeGender,
+                'marital_status' => $safeMaritalStatus,
+                'residential_address' => $safeResidentialAddress,
+                'phone_number' => trim($validated['phone']),
+                'email' => $safeEmail,
+                'emergency_contact_name' => $safeEmergencyName,
+                'emergency_contact_phone' => $safeEmergencyPhone,
+                'job_title' => $safeJobTitle,
+                'department' => $safeDepartment,
+                'branch' => $branchName,
+                'employment_type' => $safeEmploymentType,
+                'employment_year' => (int) $safeDateEmployed->year,
+                'employment_month' => (int) $safeDateEmployed->month,
+                'date_employed' => $safeDateEmployed->toDateString(),
+                'supervisor' => 'General Manager',
+                'ssnit_number' => $safeSsnit,
+                'tin_number' => $this->nullableString($validated['tin_number'] ?? null),
+                'bank_name' => $safeBankName,
+                'bank_branch' => $safeBankBranch,
+                'bank_other' => $this->nullableString($validated['bank_other'] ?? null),
+                'account_name' => $safeAccountName,
+                'account_number' => $safeAccountNumber,
+                'salary' => $safeSalary,
+                'highest_qualification' => $safeQualification,
+                'institution' => $safeInstitution,
+                'year_completed' => $safeYearCompleted,
+                'professional_license' => $this->nullableString($validated['professional_license'] ?? null),
+                'photo_path' => null,
+                'selfie_path' => null,
+                'declaration_agreed' => 0,
+                'digital_signature' => 'AUTO-'.$staffId,
+                'submission_date' => Carbon::now()->toDateTimeString(),
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            if ($request->hasFile('photo')) {
+                $photoPath = $this->storeEmployeePhoto($request, $employeeId);
+                DB::table('employees_comprehensive')->where('id', $employeeId)->update([
+                    'photo_path' => $photoPath,
+                ]);
+            }
+
+            return $employeeId;
+        });
+
+        $employee = DB::table('employees_comprehensive')->where('id', $employeeId)->first();
+
+        return response()->json([
+            'message' => 'Staff profile created successfully.',
+            'employee' => $this->serializeEmployee($employee),
+        ], 201);
     }
 
     public function employeeDetail(Request $request, int $employeeId): JsonResponse
@@ -735,6 +906,19 @@ class ManagerController extends Controller
         };
     }
 
+    private function usesMergedBranch(string $role): bool
+    {
+        return in_array($this->normalizeRole($role), ['ceo', 'manager', 'accountant', 'technician'], true);
+    }
+
+    private function normalizeRole(string $role): string
+    {
+        return match (mb_strtolower(trim($role))) {
+            'general-manager' => 'manager',
+            default => mb_strtolower(trim($role)),
+        };
+    }
+
     private function applyBranchScope($query, string $column, int $branchId): void
     {
         if ($branchId > 0) {
@@ -769,6 +953,32 @@ class ManagerController extends Controller
         }
 
         return preg_replace('/\D+/', '', $phone) ?: null;
+    }
+
+    private function nullableString(?string $value): ?string
+    {
+        $value = is_string($value) ? trim($value) : $value;
+
+        return $value === '' ? null : $value;
+    }
+
+    private function generateStaffId(int $branchId): string
+    {
+        $prefix = 'BOCSTAFF';
+
+        $latest = DB::table('employees_comprehensive')
+            ->where('staff_id', 'like', $prefix.'%')
+            ->selectRaw('MAX(CAST(SUBSTRING(staff_id, 9) AS UNSIGNED)) as max_number')
+            ->first();
+
+        $nextNumber = ((int) ($latest->max_number ?? 0)) + 1;
+
+        do {
+            $staffId = sprintf('%s%03d', $prefix, $nextNumber);
+            $nextNumber++;
+        } while (DB::table('employees_comprehensive')->where('staff_id', $staffId)->exists());
+
+        return $staffId;
     }
 
     private function storeEmployeePhoto(Request $request, int $employeeId): string

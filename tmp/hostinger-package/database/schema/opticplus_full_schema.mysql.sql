@@ -308,7 +308,9 @@ CREATE TABLE IF NOT EXISTS `expenses` (
   `category` varchar(50) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 ALTER TABLE `expenses` ADD PRIMARY KEY (`expense_id`),
-  ADD KEY `idx_category_date` (`category`,`date`);
+  ADD KEY `idx_category_date` (`category`,`date`),
+  ADD KEY `idx_branch_date` (`branch_id`,`date`),
+  ADD KEY `idx_branch_category_date` (`branch_id`,`category`,`date`);
 ALTER TABLE `expenses` MODIFY `expense_id` int(11) NOT NULL AUTO_INCREMENT;
 
 CREATE TABLE IF NOT EXISTS `glasses_prescriptions` (
@@ -431,7 +433,8 @@ ALTER TABLE `lens_costs` ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `unique_billing_lens` (`billing_id`),
   ADD KEY `idx_date` (`entered_at`),
   ADD KEY `idx_folder_id` (`folder_id`),
-  ADD KEY `entered_by` (`entered_by`);
+  ADD KEY `entered_by` (`entered_by`),
+  ADD KEY `idx_branch_id` (`branch_id`);
 ALTER TABLE `lens_costs` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 CREATE TABLE IF NOT EXISTS `manufacturers` (

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Schema\Blueprint;
@@ -687,6 +688,234 @@ class InventoryController extends Controller
         ]);
     }
 
+    public function lensOrders(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        $month = $request->string('month')->toString() ?: null;
+        $dateFrom = $request->string('date_from')->toString();
+        $dateTo = $request->string('date_to')->toString();
+        $search = trim($request->string('search')->toString());
+        $pickupStatus = $request->string('pickup_status')->toString() ?: 'all';
+
+        if ($dateFrom === '' || $dateTo === '') {
+            [$dateFrom, $dateTo] = $this->lensOrdersDateRange($month);
+        }
+
+        $legacyQuery = DB::table('glasses_prescriptions as gp')
+            ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id')
+            ->leftJoin('users as assigned', 'assigned.id', '=', 'pr.assigned_optometrist_id');
+        $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
+        $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
+        $legacyQuery
+            ->whereDate('gp.date', '>=', $dateFrom)
+            ->whereDate('gp.date', '<=', $dateTo);
+
+        if ($search !== '') {
+            $searchTerm = '%'.$search.'%';
+            $legacyQuery->where(function ($query) use ($searchTerm): void {
+                $query
+                    ->where('pr.folder_id', 'like', $searchTerm)
+                    ->orWhere('pr.surname', 'like', $searchTerm)
+                    ->orWhere('pr.firstname', 'like', $searchTerm)
+                    ->orWhere('pr.othernames', 'like', $searchTerm)
+                    ->orWhere('assigned.name', 'like', $searchTerm);
+            });
+        }
+
+        $legacyPrescriptions = $legacyQuery
+            ->orderByDesc('gp.date')
+            ->orderByDesc('gp.created_at')
+            ->get([
+                'gp.prescription_id as billing_id',
+                'gp.prescription_id',
+                'gp.patient_id',
+                'gp.folder_id',
+                'gp.date',
+                'gp.sph_od',
+                'gp.sph_os',
+                'gp.cyl_od',
+                'gp.cyl_os',
+                'gp.axis_od',
+                'gp.axis_os',
+                'gp.add_od',
+                'gp.add_os',
+                'gp.ipd',
+                'gp.lens_type',
+                'gp.lens_material',
+                'gp.color',
+                'gp.notes',
+                'gp.status',
+                'gp.created_at',
+                'gp.status as pickup_status',
+                'pr.surname',
+                'pr.firstname',
+                'pr.othernames',
+                'pr.name',
+                'pr.status as patient_status',
+                'pr.assigned_optometrist_id',
+                'assigned.name as assigned_optometrist_name',
+            ])
+            ->map(function ($item): array {
+                return [
+                    'patient_id' => $item->patient_id,
+                    'folder_id' => $item->folder_id,
+                    'date' => $item->date,
+                    'sph_od' => $item->sph_od,
+                    'sph_os' => $item->sph_os,
+                    'cyl_od' => $item->cyl_od,
+                    'cyl_os' => $item->cyl_os,
+                    'axis_od' => $item->axis_od,
+                    'axis_os' => $item->axis_os,
+                    'add_od' => $item->add_od,
+                    'add_os' => $item->add_os,
+                    'ipd' => $item->ipd,
+                    'lens_type' => $item->lens_type,
+                    'lens_material' => $item->lens_material,
+                    'color' => $item->color,
+                    'notes' => $item->notes,
+                    'status' => $item->status,
+                    'created_at' => $item->created_at,
+                    'billing_id' => $item->billing_id,
+                    'pickup_status' => $item->pickup_status,
+                    'prescription_id' => $item->prescription_id,
+                    'source' => 'legacy',
+                    'surname' => $item->surname,
+                    'firstname' => $item->firstname,
+                    'othernames' => $item->othernames,
+                    'name' => $item->name,
+                    'patient_status' => $item->patient_status,
+                    'assigned_optometrist_id' => $item->assigned_optometrist_id,
+                    'assigned_optometrist_name' => $item->assigned_optometrist_name,
+                ];
+            })
+            ->values();
+
+        $formQuery = DB::table('patient_form_data as pfd')
+            ->join('patient_records as pr', 'pfd.folder_id', '=', 'pr.folder_id')
+            ->leftJoin('users as assigned', 'assigned.id', '=', 'pr.assigned_optometrist_id');
+        $this->applyBranchScope($formQuery, 'pfd.branch_id', $branchId);
+        $this->applyBranchScope($formQuery, 'pr.branch_id', $branchId);
+        $formQuery
+            ->whereDate('pfd.updated_at', '>=', $dateFrom)
+            ->whereDate('pfd.updated_at', '<=', $dateTo);
+
+        if ($search !== '') {
+            $searchTerm = '%'.$search.'%';
+            $formQuery->where(function ($query) use ($searchTerm): void {
+                $query
+                    ->where('pr.folder_id', 'like', $searchTerm)
+                    ->orWhere('pr.surname', 'like', $searchTerm)
+                    ->orWhere('pr.firstname', 'like', $searchTerm)
+                    ->orWhere('pr.othernames', 'like', $searchTerm)
+                    ->orWhere('assigned.name', 'like', $searchTerm);
+            });
+        }
+
+        $formPrescriptions = $formQuery
+            ->orderByDesc('pfd.version')
+            ->orderByDesc('pfd.updated_at')
+            ->get([
+                'pfd.id as form_id',
+                'pfd.folder_id',
+                'pfd.version',
+                'pfd.status as form_status',
+                'pfd.updated_at',
+                'pfd.form_data',
+                'pr.id as patient_id',
+                'pr.surname',
+                'pr.firstname',
+                'pr.othernames',
+                'pr.name',
+                'pr.status as patient_status',
+                'pr.assigned_optometrist_id',
+                'assigned.name as assigned_optometrist_name',
+            ])
+            ->map(function ($item) {
+                $record = (object) [
+                    'id' => $item->patient_id,
+                    'folder_id' => $item->folder_id,
+                    'surname' => $item->surname,
+                    'firstname' => $item->firstname,
+                    'othernames' => $item->othernames,
+                    'name' => $item->name,
+                    'status' => $item->patient_status,
+                    'assigned_optometrist_id' => $item->assigned_optometrist_id,
+                    'assigned_optometrist_name' => $item->assigned_optometrist_name,
+                ];
+
+                $form = (object) [
+                    'id' => $item->form_id,
+                    'version' => $item->version,
+                    'status' => $item->form_status,
+                    'updated_at' => $item->updated_at,
+                    'form_data' => $item->form_data,
+                ];
+
+                return $this->formatExamFormPrescriptionRow($record, $form);
+            })
+            ->filter()
+            ->values();
+
+        $combined = $formPrescriptions
+            ->concat($legacyPrescriptions)
+            ->map(function (array $item): array {
+                $patientName = trim((string) ($item['name'] ?? implode(' ', array_filter([
+                    $item['surname'] ?? '',
+                    $item['firstname'] ?? '',
+                    $item['othernames'] ?? '',
+                ]))));
+                $patientStatus = strtolower((string) ($item['patient_status'] ?? $item['status'] ?? ''));
+
+                return [
+                    ...$item,
+                    'patient_name' => $patientName !== '' ? $patientName : ($item['folder_id'] ?? 'Unknown patient'),
+                    'order_date' => (string) ($item['date'] ?? $item['created_at'] ?? ''),
+                    'pickup_status' => in_array(strtolower((string) ($item['pickup_status'] ?? '')), ['ready', 'notified', 'picked_up'], true)
+                        ? strtolower((string) $item['pickup_status'])
+                        : 'pending',
+                    'ready_for_order' => in_array($patientStatus, ['seen', 'completed', 'ready'], true)
+                        || in_array(strtolower((string) ($item['status'] ?? '')), ['seen', 'completed', 'ready'], true),
+                    'prescription_summary' => $this->buildLensOrderPrescriptionSummary($item),
+                ];
+            })
+            ->filter(function (array $item) use ($pickupStatus): bool {
+                return match ($pickupStatus) {
+                    'ready' => in_array($item['pickup_status'] ?? 'pending', ['ready', 'notified'], true),
+                    'not_ready' => ($item['pickup_status'] ?? 'pending') === 'pending',
+                    default => true,
+                };
+            })
+            ->sortByDesc(fn (array $item) => ($item['order_date'] ?? '').'|'.($item['created_at'] ?? '').'|'.($item['prescription_id'] ?? ''))
+            ->values();
+
+        $orders = $combined->values();
+        $readyOrders = $orders->filter(fn ($item) => (bool) ($item['ready_for_order'] ?? false));
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'filters' => [
+                'month' => $month ?? now()->format('Y-m'),
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'search' => $search,
+                'pickup_status' => $pickupStatus,
+            ],
+            'summary' => [
+                'total_orders' => $orders->count(),
+                'ready_orders' => $readyOrders->count(),
+                'pending_orders' => $orders->count() - $readyOrders->count(),
+                'today_orders' => $orders->filter(fn ($item) => ($item['order_date'] ?? '') === now()->toDateString())->count(),
+                'assigned_optometrists' => $orders
+                    ->pluck('assigned_optometrist_id')
+                    ->filter(fn ($value) => filled($value))
+                    ->unique()
+                    ->count(),
+            ],
+            'orders' => $orders->values(),
+        ]);
+    }
+
     public function bsmiTracker(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
@@ -1235,14 +1464,19 @@ class InventoryController extends Controller
     private function resolveBranchId(Request $request): int
     {
         $user = $request->user();
-
-        if (! $user->isAdmin()) {
-            return (int) $user->branch_id;
-        }
-
         $requestedBranchId = (int) $request->integer('branch_id');
 
-        return in_array($requestedBranchId, [0, 1, 2], true) ? $requestedBranchId : 1;
+        if ($user->isAdmin()) {
+            return in_array($requestedBranchId, [0, 1, 2], true) ? $requestedBranchId : 1;
+        }
+
+        if (($user->role ?? null) === 'technician') {
+            return in_array($requestedBranchId, [1, 2], true)
+                ? $requestedBranchId
+                : (int) ($user->branch_id ?: 1);
+        }
+
+        return (int) $user->branch_id;
     }
 
     private function branchName(int $branchId): string
@@ -1327,6 +1561,167 @@ class InventoryController extends Controller
             'stock' => (int) round((float) $validated['stock']),
             'min_price' => round((float) $validated['min_price'], 2),
             'max_price' => round((float) $validated['max_price'], 2),
+        ];
+    }
+
+    private function lensOrdersDateRange(?string $monthKey = null): array
+    {
+        $monthKey = $monthKey ?: now()->format('Y-m');
+        $parts = explode('-', $monthKey);
+        $year = isset($parts[0]) ? (int) $parts[0] : (int) now()->format('Y');
+        $month = isset($parts[1]) ? (int) $parts[1] : (int) now()->format('m');
+        $month = $month >= 1 && $month <= 12 ? $month : (int) now()->format('m');
+        $anchor = Carbon::createFromDate($year, $month, 1);
+
+        return [$anchor->copy()->startOfMonth()->toDateString(), $anchor->copy()->endOfMonth()->toDateString()];
+    }
+
+    private function buildLensOrderPrescriptionSummary(array $row): string
+    {
+        $lines = [];
+
+        foreach (['od' => 'OD', 'os' => 'OS'] as $eye => $label) {
+            $parts = array_filter([
+                $row["sph_{$eye}"] ?? '',
+                $row["cyl_{$eye}"] ?? '',
+                ! empty($row["axis_{$eye}"] ?? '') ? 'x '.($row["axis_{$eye}"] ?? '') : '',
+                ! empty($row["add_{$eye}"] ?? '') ? 'ADD '.($row["add_{$eye}"] ?? '') : '',
+            ], fn ($value) => filled($value));
+
+            if ($parts !== []) {
+                $lines[] = $label.': '.implode(' ', $parts);
+            }
+        }
+
+        if (filled($row['lens_type'] ?? null)) {
+            $lines[] = 'Lens: '.$row['lens_type'];
+        }
+
+        if (filled($row['lens_material'] ?? null)) {
+            $lines[] = 'Material: '.$row['lens_material'];
+        }
+
+        if (filled($row['color'] ?? null)) {
+            $lines[] = 'Color: '.$row['color'];
+        }
+
+        if (filled($row['ipd'] ?? null)) {
+            $lines[] = 'IPD: '.$row['ipd'];
+        }
+
+        if (filled($row['notes'] ?? null)) {
+            $lines[] = 'Notes: '.$row['notes'];
+        }
+
+        return implode(' | ', array_filter($lines, fn ($value) => filled($value)));
+    }
+
+    private function formatExamFormPrescriptionRow(object $record, object $form): ?array
+    {
+        $prescription = $this->extractPrescriptionFromFormData($form->form_data ?? null);
+
+        if (! $prescription) {
+            return null;
+        }
+
+        return [
+            'patient_id' => $record->id,
+            'folder_id' => $record->folder_id,
+            'date' => $form->updated_at ? substr((string) $form->updated_at, 0, 10) : null,
+            'sph_od' => $prescription['od']['sphere'] ?? '',
+            'sph_os' => $prescription['os']['sphere'] ?? '',
+            'cyl_od' => $prescription['od']['cylinder'] ?? '',
+            'cyl_os' => $prescription['os']['cylinder'] ?? '',
+            'axis_od' => $prescription['od']['axis'] ?? '',
+            'axis_os' => $prescription['os']['axis'] ?? '',
+            'add_od' => $prescription['od']['add'] ?? '',
+            'add_os' => $prescription['os']['add'] ?? '',
+            'ipd' => '',
+            'lens_type' => $prescription['od']['lens_type'] ?? ($prescription['os']['lens_type'] ?? ''),
+            'lens_material' => null,
+            'color' => null,
+            'notes' => $prescription['prescription_notes'] ?? '',
+            'status' => $form->status ?? 'completed',
+            'created_at' => $form->updated_at,
+            'billing_id' => null,
+            'pickup_status' => null,
+            'prescription_id' => 'FORM-'.$record->id.'-'.$form->version,
+            'source' => 'exam_form',
+            'form_version' => $form->version,
+            'surname' => $record->surname ?? null,
+            'firstname' => $record->firstname ?? null,
+            'othernames' => $record->othernames ?? null,
+            'name' => $record->name ?? null,
+            'patient_status' => property_exists($record, 'status') ? ($record->status ?? null) : null,
+            'assigned_optometrist_id' => property_exists($record, 'assigned_optometrist_id') ? ($record->assigned_optometrist_id ?? null) : null,
+            'assigned_optometrist_name' => property_exists($record, 'assigned_optometrist_name') ? ($record->assigned_optometrist_name ?? null) : null,
+        ];
+    }
+
+    private function extractPrescriptionFromFormData(?string $formData): ?array
+    {
+        if (! $formData) {
+            return null;
+        }
+
+        $decoded = json_decode($formData, true);
+
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        $spectacleRx = $decoded['spectacle_rx'] ?? [];
+        $refraction = $decoded['refraction']['subjective'] ?? [];
+        $eyes = [];
+
+        foreach (['od', 'os'] as $eyeKey) {
+            $primary = $spectacleRx[$eyeKey] ?? [];
+            $fallback = $refraction[$eyeKey] ?? [];
+            $eye = array_filter([
+                $primary['sphere'] ?? $fallback['sphere'] ?? '',
+                $primary['cylinder'] ?? $fallback['cylinder'] ?? '',
+                $primary['axis'] ?? $fallback['axis'] ?? '',
+                $primary['add'] ?? $fallback['add'] ?? '',
+                $primary['va'] ?? $fallback['va'] ?? '',
+                $primary['lens_type'] ?? $fallback['lens_type'] ?? '',
+            ], fn ($value) => filled($value));
+
+            $eyes[$eyeKey] = [
+                'sphere' => (string) ($primary['sphere'] ?? $fallback['sphere'] ?? ''),
+                'cylinder' => (string) ($primary['cylinder'] ?? $fallback['cylinder'] ?? ''),
+                'axis' => (string) ($primary['axis'] ?? $fallback['axis'] ?? ''),
+                'add' => (string) ($primary['add'] ?? $fallback['add'] ?? ''),
+                'va' => (string) ($primary['va'] ?? $fallback['va'] ?? ''),
+                'lens_type' => (string) ($primary['lens_type'] ?? $fallback['lens_type'] ?? ''),
+            ];
+        }
+
+        $diagnosis = $decoded['diagnosis'] ?? [];
+        $hasContent = array_filter([
+            $eyes['od']['sphere'] ?? '',
+            $eyes['od']['cylinder'] ?? '',
+            $eyes['od']['axis'] ?? '',
+            $eyes['od']['add'] ?? '',
+            $eyes['od']['va'] ?? '',
+            $eyes['od']['lens_type'] ?? '',
+            $eyes['os']['sphere'] ?? '',
+            $eyes['os']['cylinder'] ?? '',
+            $eyes['os']['axis'] ?? '',
+            $eyes['os']['add'] ?? '',
+            $eyes['os']['va'] ?? '',
+            $eyes['os']['lens_type'] ?? '',
+            $diagnosis['prescription'] ?? null,
+            $diagnosis['diagnosis'] ?? null,
+        ], fn ($value) => filled($value));
+
+        if (! $hasContent) {
+            return null;
+        }
+
+        return [
+            'od' => $eyes['od'] ?? ['sphere' => '', 'cylinder' => '', 'axis' => '', 'add' => '', 'va' => '', 'lens_type' => ''],
+            'os' => $eyes['os'] ?? ['sphere' => '', 'cylinder' => '', 'axis' => '', 'add' => '', 'va' => '', 'lens_type' => ''],
+            'prescription_notes' => (string) ($diagnosis['prescription'] ?? $diagnosis['notes'] ?? ''),
         ];
     }
 

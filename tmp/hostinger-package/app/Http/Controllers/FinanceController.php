@@ -2596,6 +2596,8 @@ class FinanceController extends Controller
                 $table->unsignedBigInteger('created_by')->nullable()->index();
             });
         }
+
+        $this->ensureExpensePerformanceIndexes();
     }
 
     private function ensureExpenseIdAutoIncrement(): void
@@ -2610,6 +2612,52 @@ class FinanceController extends Controller
 
         if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
             DB::statement('ALTER TABLE expenses MODIFY expense_id INT NOT NULL AUTO_INCREMENT');
+        }
+    }
+
+    private function ensureExpensePerformanceIndexes(): void
+    {
+        if (! Schema::hasTable('expenses')) {
+            return;
+        }
+
+        if (! $this->hasIndex('expenses', 'idx_branch_date')) {
+            try {
+                Schema::table('expenses', function (Blueprint $table): void {
+                    $table->index(['branch_id', 'date'], 'idx_branch_date');
+                });
+            } catch (\Throwable) {
+                // Ignore index races on existing deployments.
+            }
+        }
+
+        if (! $this->hasIndex('expenses', 'idx_branch_category_date')) {
+            try {
+                Schema::table('expenses', function (Blueprint $table): void {
+                    $table->index(['branch_id', 'category', 'date'], 'idx_branch_category_date');
+                });
+            } catch (\Throwable) {
+                // Ignore index races on existing deployments.
+            }
+        }
+
+        if (Schema::hasTable('lens_costs') && Schema::hasColumn('lens_costs', 'branch_id') && ! $this->hasIndex('lens_costs', 'idx_branch_id')) {
+            try {
+                Schema::table('lens_costs', function (Blueprint $table): void {
+                    $table->index(['branch_id'], 'idx_branch_id');
+                });
+            } catch (\Throwable) {
+                // Ignore index races on existing deployments.
+            }
+        }
+    }
+
+    private function hasIndex(string $table, string $indexName): bool
+    {
+        try {
+            return collect(DB::select("SHOW INDEX FROM {$table} WHERE Key_name = ?", [$indexName]))->isNotEmpty();
+        } catch (\Throwable) {
+            return false;
         }
     }
 

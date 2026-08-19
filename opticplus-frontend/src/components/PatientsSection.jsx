@@ -3097,8 +3097,8 @@ function PrescriptionReferencePanel({ prescriptions, isLoadingPrescriptions }) {
           <p className="muted-copy">Loading prescription history...</p>
         ) : prescriptions.length ? (
           <div className="optometrist-prescription-history">
-            {prescriptions.map((item) => (
-              <article key={`${item.prescription_id}-${item.patient_id}`} className="optometrist-prescription-card">
+            {prescriptions.map((item, index) => (
+              <article key={getPrescriptionRowKey(item, index)} className="optometrist-prescription-card">
                 <div className="patient-record-top">
                   <div>
                     <strong>{item.date || 'No date'}</strong>
@@ -3192,7 +3192,7 @@ function PatientPrescriptionsView({ record, setActiveView, fetchPatientPrescript
   }, [fetchPatientPrescriptions, record.id])
 
   const sortedPrescriptions = useMemo(
-    () => [...prescriptions].sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime()),
+    () => [...prescriptions].sort(comparePrescriptionRecency),
     [prescriptions],
   )
 
@@ -3217,8 +3217,8 @@ function PatientPrescriptionsView({ record, setActiveView, fetchPatientPrescript
           <p className="muted-copy">Loading saved prescriptions...</p>
         ) : sortedPrescriptions.length ? (
           <div className="optometrist-prescription-history">
-            {sortedPrescriptions.map((item) => (
-              <article key={`${item.prescription_id}-${item.date}-${item.patient_id}`} className="optometrist-prescription-card">
+            {sortedPrescriptions.map((item, index) => (
+              <article key={getPrescriptionRowKey(item, index)} className="optometrist-prescription-card">
                 <div className="patient-record-top">
                   <div>
                     <strong>{item.date || 'No date'}</strong>
@@ -3303,7 +3303,7 @@ function PrescriptionReferenceModal({ patient, onClose, fetchPatientPrescription
   )
 }
 
-function PatientManagementModal({
+export function PatientManagementModal({
   patient,
   onClose,
   setActiveView,
@@ -3500,48 +3500,6 @@ function PatientManagementModal({
             </div>
           </form>
         </div>
-
-        <section className="optometrist-workspace-card is-compact patient-payment-history-card">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Past Payments</p>
-              <h4>Billing and payment history</h4>
-            </div>
-            <span className="panel-tag">{payments?.summary?.transaction_count ?? 0} payments</span>
-          </div>
-          {isLoadingPayments ? (
-            <p className="muted-copy">Loading payment history...</p>
-          ) : payments ? (
-            <>
-              <div className="patient-payment-summary">
-                <div><span>Bills</span><strong>{payments.summary?.billing_count ?? 0}</strong></div>
-                <div><span>Total billed</span><strong>{patientCurrency.format(Number(payments.summary?.total_billed ?? 0))}</strong></div>
-                <div><span>Total paid</span><strong>{patientCurrency.format(Number(payments.summary?.total_paid ?? 0))}</strong></div>
-                <div><span>Balance</span><strong>{patientCurrency.format(Number(payments.summary?.total_balance ?? 0))}</strong></div>
-              </div>
-              {payments.transactions?.length ? (
-                <div className="patient-payment-list">
-                  {payments.transactions.slice(0, 10).map((payment) => (
-                    <article key={payment.id} className="patient-payment-row">
-                      <div>
-                        <strong>{patientCurrency.format(Number(payment.amount_paid ?? 0))}</strong>
-                        <span>{payment.payment_method || 'Payment'} - {payment.date || 'No date'}</span>
-                      </div>
-                      <div>
-                        <strong>{payment.status || 'paid'}</strong>
-                        <span>{payment.reference || payment.description || `Bill #${payment.billing_id}`}</span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted-copy">No payments were found for this patient yet.</p>
-              )}
-            </>
-          ) : (
-            <p className="muted-copy">Payment history could not be loaded.</p>
-          )}
-        </section>
 
         <OptometristManagementView
           record={currentPatient}
@@ -4130,8 +4088,8 @@ function OptometristRecordsView({ record, setActiveView, openExamModal, openExam
               <p className="muted-copy">Loading older prescriptions...</p>
             ) : prescriptions.length ? (
               <div className="optometrist-prescription-history">
-                {prescriptions.slice(0, 4).map((item) => (
-                  <article key={`${item.prescription_id}-${item.patient_id}`} className="optometrist-prescription-card">
+                {prescriptions.slice(0, 4).map((item, index) => (
+                  <article key={getPrescriptionRowKey(item, index)} className="optometrist-prescription-card">
                     <div className="patient-record-top">
                       <div>
                         <strong>{item.date || 'No date'}</strong>
@@ -4175,7 +4133,7 @@ function OptometristRecordsView({ record, setActiveView, openExamModal, openExam
   )
 }
 
-function PatientRecordsModal({ patient, onClose, setActiveView, openExamModal, openExamWorkspace, fetchPatientPrescriptions, fetchPatientExamForm }) {
+export function PatientRecordsModal({ patient, onClose, setActiveView, openExamModal, openExamWorkspace, fetchPatientPrescriptions, fetchPatientExamForm }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <article className="modal-panel patient-records-modal" onClick={(event) => event.stopPropagation()}>
@@ -4454,7 +4412,7 @@ function PatientPrescriptionWorkspace({
   const featuredPrescription = useMemo(() => {
     if (!prescriptions.length) return null
     return [...prescriptions]
-      .sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime())[0]
+      .sort(comparePrescriptionRecency)[0]
   }, [prescriptions])
   const hasDraftPrescriptionValues = useMemo(
     () => Object.values(newPrescription || {}).some((value) => String(value ?? '').trim() !== ''),
@@ -6150,6 +6108,39 @@ function buildPrefilledPrescriptionFromExamForm(response) {
     lens_type: od?.lens_type || os?.lens_type || '',
     notes: diagnosis?.prescription || '',
   }
+}
+
+function comparePrescriptionRecency(left, right) {
+  return buildPrescriptionRecencyStamp(right).localeCompare(buildPrescriptionRecencyStamp(left))
+}
+
+function buildPrescriptionRecencyStamp(record) {
+  return [
+    String(record?.date || record?.latest_form_updated_at || record?.updated_at || record?.created_at || ''),
+    String(record?.created_at || record?.latest_form_updated_at || record?.updated_at || ''),
+    String(record?.prescription_id || record?.form_id || record?.billing_id || ''),
+  ].join('|')
+}
+
+function getPrescriptionRowKey(record, index = 0) {
+  const directKey = meaningfulKeyPart(record?.prescription_id) || meaningfulKeyPart(record?.form_id) || meaningfulKeyPart(record?.billing_id)
+  if (directKey) {
+    return directKey
+  }
+
+  return [
+    'prescription',
+    meaningfulKeyPart(record?.patient_id) || meaningfulKeyPart(record?.id) || 'patient',
+    meaningfulKeyPart(record?.folder_id) || 'folder',
+    meaningfulKeyPart(record?.date) || meaningfulKeyPart(record?.latest_form_updated_at) || meaningfulKeyPart(record?.created_at) || 'nodate',
+    meaningfulKeyPart(record?.created_at) || meaningfulKeyPart(record?.latest_form_updated_at) || `row-${index}`,
+  ].join('-')
+}
+
+function meaningfulKeyPart(value) {
+  if (value === null || value === undefined) return ''
+  const stringValue = String(value).trim()
+  return stringValue && stringValue !== '0' ? stringValue : ''
 }
 
 function createPatientEditForm(record) {

@@ -586,6 +586,12 @@ class CustomerServiceController extends Controller
             $prescriptionTable->insert($payload);
         }
 
+        AuditLog::logManual($request, 'edit', 'pickup', 'billing_id: '.$billingId, [
+            'status' => 'ready',
+            'patient_id' => $billing->patient_id,
+            'folder_id' => $billing->folder_id,
+        ]);
+
         return response()->json([
             'message' => 'Marked as ready for pickup.',
         ]);
@@ -611,6 +617,10 @@ class CustomerServiceController extends Controller
         }
 
         $updateQuery->update($payload);
+
+        AuditLog::logManual($request, 'edit', 'pickup', 'billing_id: '.$billingId, [
+            'status' => 'picked_up',
+        ]);
 
         return response()->json([
             'message' => 'Pickup confirmed successfully.',
@@ -643,6 +653,10 @@ class CustomerServiceController extends Controller
                 'message' => 'Only ready or notified pickup entries can be changed back to not ready.',
             ], 422);
         }
+
+        AuditLog::logManual($request, 'edit', 'pickup', 'billing_id: '.$billingId, [
+            'status' => 'pending',
+        ]);
 
         return response()->json([
             'message' => 'Marked as not ready.',

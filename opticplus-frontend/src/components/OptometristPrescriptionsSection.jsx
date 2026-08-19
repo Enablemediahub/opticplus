@@ -20,6 +20,10 @@ export default function OptometristPrescriptionsSection({
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [selectedPrescription, setSelectedPrescription] = useState(null)
+  const sortedRecords = useMemo(
+    () => [...records].sort(comparePrescriptionRecency),
+    [records],
+  )
 
   const stats = [
     {
@@ -186,8 +190,8 @@ export default function OptometristPrescriptionsSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record) => (
-                    <tr key={`${record.prescription_id || record.id}-${record.patient_id || record.id}-${record.date || record.latest_form_updated_at || 'nodate'}`}>
+                  {sortedRecords.map((record, index) => (
+                    <tr key={getPrescriptionRowKey(record, index)}>
                       <td>{formatDate(record.date)}</td>
                       <td><strong>{formatPatientName(record)}</strong></td>
                       <td>{record.folder_id || 'N/A'}</td>
@@ -383,4 +387,39 @@ function formatEye(sph, cyl, axis, add) {
 function fallbackValue(value) {
   if (value === null || value === undefined || value === '') return 'N/A'
   return String(value)
+}
+
+function comparePrescriptionRecency(left, right) {
+  const leftDate = buildPrescriptionRecencyStamp(left)
+  const rightDate = buildPrescriptionRecencyStamp(right)
+  return rightDate.localeCompare(leftDate)
+}
+
+function buildPrescriptionRecencyStamp(record) {
+  return [
+    String(record?.date || record?.latest_form_updated_at || record?.updated_at || record?.created_at || ''),
+    String(record?.created_at || record?.latest_form_updated_at || record?.updated_at || ''),
+    String(record?.prescription_id || record?.form_id || record?.billing_id || ''),
+  ].join('|')
+}
+
+function getPrescriptionRowKey(record, index = 0) {
+  const directKey = meaningfulKeyPart(record?.prescription_id) || meaningfulKeyPart(record?.form_id) || meaningfulKeyPart(record?.billing_id)
+  if (directKey) {
+    return directKey
+  }
+
+  return [
+    'prescription',
+    meaningfulKeyPart(record?.patient_id) || meaningfulKeyPart(record?.id) || 'patient',
+    meaningfulKeyPart(record?.folder_id) || 'folder',
+    meaningfulKeyPart(record?.date) || meaningfulKeyPart(record?.latest_form_updated_at) || meaningfulKeyPart(record?.created_at) || 'nodate',
+    meaningfulKeyPart(record?.created_at) || meaningfulKeyPart(record?.latest_form_updated_at) || `row-${index}`,
+  ].join('-')
+}
+
+function meaningfulKeyPart(value) {
+  if (value === null || value === undefined) return ''
+  const stringValue = String(value).trim()
+  return stringValue && stringValue !== '0' ? stringValue : ''
 }

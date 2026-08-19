@@ -400,7 +400,9 @@ return [
     'post' => 
     array (
       0 => 'ALTER TABLE `expenses` ADD PRIMARY KEY (`expense_id`),
-  ADD KEY `idx_category_date` (`category`,`date`);',
+  ADD KEY `idx_category_date` (`category`,`date`),
+  ADD KEY `idx_branch_date` (`branch_id`,`date`),
+  ADD KEY `idx_branch_category_date` (`branch_id`,`category`,`date`);',
       1 => 'ALTER TABLE `expenses` MODIFY `expense_id` int(11) NOT NULL AUTO_INCREMENT;',
     ),
   ),
@@ -565,7 +567,8 @@ return [
   ADD UNIQUE KEY `unique_billing_lens` (`billing_id`),
   ADD KEY `idx_date` (`entered_at`),
   ADD KEY `idx_folder_id` (`folder_id`),
-  ADD KEY `entered_by` (`entered_by`);',
+  ADD KEY `entered_by` (`entered_by`),
+  ADD KEY `idx_branch_id` (`branch_id`);',
       1 => 'ALTER TABLE `lens_costs` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;',
     ),
   ),
