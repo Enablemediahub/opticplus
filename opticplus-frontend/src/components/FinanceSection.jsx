@@ -123,10 +123,13 @@ export default function FinanceSection(props) {
       ['Sales + Insurance', props.financeSummary?.stats.sales_with_insurance_month, 'Full monthly sales value including insurance-backed bills', 'total', 'finance'],
     ],
     sales: [
-      ['Total Sales', props.financeSales?.stats.total_sales, 'All realized sales in the current filter scope', 'seen', 'money'],
-      ['Sales + Insurance', Number(props.financeSales?.stats.total_sales ?? 0) + Number(props.financeSales?.stats.insurance_billed_value ?? 0), 'Normal sales plus insurance-backed sales in the same scope', 'today', 'receipt'],
+      ['Total Sales', props.financeSales?.stats.total_sales, 'Realized collections only: cash, mobile money, and Paystack in the current filter scope', 'seen', 'money'],
+      ['Sales + Insurance', Number(props.financeSales?.stats.total_sales ?? 0) + Number(props.financeSales?.stats.insurance_billed_value ?? 0), 'Realized collections plus insurance-billed value in the same scope', 'today', 'receipt'],
       ['Loan Revenue', props.financeSales?.stats.loan_revenue_total, 'Collected sales not tied to a billing record', 'pending', 'finance'],
-      ['Insurance Value', props.financeSales?.stats.insurance_billed_value, 'Insurance value in the same date and search scope', 'total', 'shield'],
+      ['Consultation (Allocated)', props.financeSales?.stats.allocated_consultation_total ?? props.financeSales?.stats.consultation_total, 'Payments applied first to consultation in billing priority order', 'today', 'money'],
+      ['Lenses (Allocated)', props.financeSales?.stats.allocated_lens_total ?? props.financeSales?.stats.lens_total, 'Payments applied after consultation and before frames', 'today', 'receipt'],
+      ['Frames (Allocated)', props.financeSales?.stats.allocated_frame_total ?? props.financeSales?.stats.frame_total, 'Payments applied after consultation and lenses', 'total', 'finance'],
+      ['Other Allocated', props.financeSales?.stats.allocated_other_total, 'Residual billed revenue after consultation, lenses, and frames', 'pending', 'shield'],
     ],
     expenses: expenseSummaryCards,
     debt: [
@@ -206,9 +209,9 @@ function RevenueTrackingView(props) {
   const summaryStats = props.financeSummary?.stats ?? {}
   const salesTotal = Number(salesStats.total_sales ?? 0)
   const insuranceValue = Number(salesStats.insurance_billed_value ?? summaryStats.insurance_billed_month ?? 0)
-  const combinedRevenue = Number(salesStats.sales_with_insurance ?? salesTotal + insuranceValue)
+  const combinedRevenue = salesTotal + insuranceValue
   const expenseTotal = Number(expenseStats.filtered_total ?? expenseStats.total ?? 0)
-  const grossProfit = combinedRevenue - expenseTotal
+  const grossProfit = salesTotal - expenseTotal
   const netCollected = salesTotal - expenseTotal
   const collectionRate = combinedRevenue > 0 ? (salesTotal / combinedRevenue) * 100 : 0
   const grossProfitClassName = grossProfit < 0 ? 'finance-loss' : 'finance-profit'
@@ -317,10 +320,10 @@ function RevenueTrackingView(props) {
       {props.financeSuccess ? <div className="message-banner success">{props.financeSuccess}</div> : null}
 
       <section className="stats-grid patient-stats-grid">
-        <StatWidget label="Collected Revenue" value={props.isLoadingFinanceSales && !props.financeSales ? '...' : currency.format(salesTotal)} note="Realized sales from cash, MoMo, Paystack, and other posted payments" icon="money" className="seen" />
-        <StatWidget label="Insurance Revenue" value={props.isLoadingFinanceSales && !props.financeSales ? '...' : currency.format(insuranceValue)} note="Insured billing value tracked alongside collected sales" icon="shield" className="pending" />
+        <StatWidget label="Collected Revenue" value={props.isLoadingFinanceSales && !props.financeSales ? '...' : currency.format(salesTotal)} note="Money already at hand from cash, MoMo, Paystack, and other posted payments" icon="money" className="seen" />
+        <StatWidget label="Insurance Revenue" value={props.isLoadingFinanceSales && !props.financeSales ? '...' : currency.format(insuranceValue)} note="Insurance-billed value tracked separately until claimed" icon="shield" className="pending" />
         <StatWidget label="Total Expenses" value={props.isLoadingFinanceExpenses && !props.financeExpenses ? '...' : currency.format(expenseTotal)} note="Expenses in the currently selected expense window" icon="alert" className="today" />
-        <StatWidget label="Gross Profit" value={currency.format(grossProfit)} note="Sales plus insurance value minus tracked expenses" icon="trend" className="total" valueClassName={grossProfitClassName} />
+        <StatWidget label="Cash Position" value={currency.format(netCollected)} note="Collected revenue minus tracked expenses" icon="trend" className="total" valueClassName={grossProfitClassName} />
       </section>
 
       <section className="finance-layout">
@@ -616,20 +619,18 @@ function AccountantSalesView(props) {
   }
 
   function exportSalesCsv() {
-    const headers = ['Date', 'Transactions', 'Collected Sales', 'Insurance Value', 'Sales + Insurance', 'Billed Total', 'Consultation', 'Frames', 'Lenses', 'Cases', 'Discount', 'Tax']
+    const headers = ['Date', 'Transactions', 'Collected Sales', 'Insurance Value', 'Sales + Insurance', 'Loan Revenue', 'Consultation Allocated', 'Lenses Allocated', 'Frames Allocated', 'Other Allocated']
     const rows = dailyBreakdown.map((day) => [
       day.sale_date || '',
       Number(day.transaction_count ?? 0),
       Number(day.collected_sales ?? 0).toFixed(2),
       Number(day.insurance_total ?? 0).toFixed(2),
       Number(day.sales_with_insurance ?? 0).toFixed(2),
-      Number(day.billed_total ?? 0).toFixed(2),
+      Number(day.loan_revenue_total ?? 0).toFixed(2),
       Number(day.consultation_total ?? 0).toFixed(2),
-      Number(day.frame_total ?? 0).toFixed(2),
       Number(day.lens_total ?? 0).toFixed(2),
-      Number(day.case_total ?? 0).toFixed(2),
-      Number(day.discount_total ?? 0).toFixed(2),
-      Number(day.tax_total ?? 0).toFixed(2),
+      Number(day.frame_total ?? 0).toFixed(2),
+      Number(day.other_total ?? 0).toFixed(2),
     ])
 
     const csv = [headers, ...rows]
@@ -746,11 +747,15 @@ function AccountantSalesView(props) {
             <Metric label="Total Sales" value={salesStats.total_sales} />
             <Metric label="Sales + Insurance" value={Number(salesStats.total_sales ?? 0) + Number(salesStats.insurance_billed_value ?? 0)} />
             <Metric label="Loan Revenue" value={salesStats.loan_revenue_total} />
-            <Metric label="Consultation" value={salesStats.consultation_total} />
-            <Metric label="Frames" value={salesStats.frame_total} />
-            <Metric label="Lenses" value={salesStats.lens_total} />
+            <Metric label="Consultation (Allocated)" value={salesStats.allocated_consultation_total ?? salesStats.consultation_total} />
+            <Metric label="Lenses (Allocated)" value={salesStats.allocated_lens_total ?? salesStats.lens_total} />
+            <Metric label="Frames (Allocated)" value={salesStats.allocated_frame_total ?? salesStats.frame_total} />
+            <Metric label="Other Allocated" value={salesStats.allocated_other_total} />
             <Metric label="Average Sale" value={salesStats.average_sale} />
           </div>
+          <p className="muted-copy sales-summary-note">
+            Total Sales is the realized collection total. Consultation, Lenses, and Frames are allocated in payment order from consultation to lenses to frames, with loan revenue and any residual billed amount tracked separately.
+          </p>
         </article>
 
         <article className="panel panel-wide">
@@ -771,13 +776,11 @@ function AccountantSalesView(props) {
                   <th className="sales-daily-breakdown-table__sales-column">Sales</th>
                   <th className="sales-daily-breakdown-table__insurance-column">Insurance</th>
                   <th className="sales-daily-breakdown-table__combined-column">Sales + Insurance</th>
-                  <th>Billed Total</th>
+                  <th>Loan Revenue</th>
                   <th>Consultation</th>
                   <th>Lenses</th>
                   <th>Frames</th>
-                  <th>Cases</th>
-                  <th>Discount</th>
-                  <th>Tax</th>
+                  <th>Other</th>
                 </tr>
               </thead>
               <tbody>
@@ -788,17 +791,15 @@ function AccountantSalesView(props) {
                     <td className="sales-daily-breakdown-table__sales-column">{currency.format(Number(day.collected_sales ?? 0))}</td>
                     <td className="sales-daily-breakdown-table__insurance-column">{currency.format(Number(day.insurance_total ?? 0))}</td>
                     <td className="sales-daily-breakdown-table__combined-column">{currency.format(Number(day.sales_with_insurance ?? 0))}</td>
-                    <td>{currency.format(Number(day.billed_total ?? 0))}</td>
+                    <td>{currency.format(Number(day.loan_revenue_total ?? 0))}</td>
                     <td>{currency.format(Number(day.consultation_total ?? 0))}</td>
                     <td>{currency.format(Number(day.lens_total ?? 0))}</td>
                     <td>{currency.format(Number(day.frame_total ?? 0))}</td>
-                    <td>{currency.format(Number(day.case_total ?? 0))}</td>
-                    <td>{currency.format(Number(day.discount_total ?? 0))}</td>
-                    <td>{currency.format(Number(day.tax_total ?? 0))}</td>
+                    <td>{currency.format(Number(day.other_total ?? 0))}</td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="12">No daily sales matched the current filters.</td>
+                    <td colSpan="9">No daily sales matched the current filters.</td>
                   </tr>
                 )}
               </tbody>

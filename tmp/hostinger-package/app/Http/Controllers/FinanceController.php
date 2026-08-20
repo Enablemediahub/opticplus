@@ -629,17 +629,154 @@ class FinanceController extends Controller
         $this->applySalesFilters($query, $request);
 
         $total = (clone $query)->count('s.id');
-        $totalAmount = (float) (clone $query)->sum('s.amount_paid');
-        $todaySales = (float) (clone $query)->whereDate('s.date', $today)->sum('s.amount_paid');
-        $loanRevenueTotal = (float) (clone $query)->whereNull('s.billing_id')->sum('s.amount_paid');
-        $billingRevenueTotal = (float) (clone $query)->whereNotNull('s.billing_id')->sum('s.amount_paid');
-        $consultationTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.consultation_price, 0)'));
-        $frameTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.frame_price, 0)'));
-        $lensTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.lens_price, 0)'));
-        $caseTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.case_price, 0)'));
-        $discountTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.discount, 0)'));
-        $taxTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.tax, 0) + COALESCE(b.nhil_amount, 0) + COALESCE(b.getfund_amount, 0) + COALESCE(b.covid_levy_amount, 0) + COALESCE(b.vat_amount, 0) + COALESCE(b.vat_flat_rate_amount, 0)'));
-        $billingTotal = (float) (clone $query)->sum(DB::raw('COALESCE(b.total_amount, 0)'));
+        $totalAmount = 0.0;
+        $todaySales = 0.0;
+        $loanRevenueTotal = 0.0;
+        $billingRevenueTotal = 0.0;
+        $consultationTotal = 0.0;
+        $frameTotal = 0.0;
+        $lensTotal = 0.0;
+        $caseTotal = 0.0;
+        $discountTotal = 0.0;
+        $taxTotal = 0.0;
+        $billingTotal = 0.0;
+        $allocatedConsultationTotal = 0.0;
+        $allocatedLensTotal = 0.0;
+        $allocatedFrameTotal = 0.0;
+        $allocatedOtherTotal = 0.0;
+        $salesRows = (clone $query)
+            ->orderBy('s.date')
+            ->orderBy('s.id')
+            ->get([
+                's.id',
+                's.date',
+                's.amount_paid',
+                's.billing_id',
+                's.folder_id',
+                's.payment_method',
+                's.reference',
+                's.transaction_id',
+                's.created_at',
+                'b.consultation_price',
+                'b.frame_price',
+                'b.lens_price',
+                'b.case_price',
+                'b.discount',
+                'b.tax',
+                'b.nhil_amount',
+                'b.getfund_amount',
+                'b.covid_levy_amount',
+                'b.vat_amount',
+                'b.vat_flat_rate_amount',
+                'b.total_amount as billing_total',
+            ]);
+        $billingAllocationState = [];
+        $seenBillingIds = [];
+        $dailyBreakdownByDate = [];
+        foreach ($salesRows as $row) {
+            $amountPaid = round((float) ($row->amount_paid ?? 0), 2);
+            $saleDate = (string) $row->date;
+            $totalAmount += $amountPaid;
+
+            if (! isset($dailyBreakdownByDate[$saleDate])) {
+                $dailyBreakdownByDate[$saleDate] = [
+                    'sale_date' => $saleDate,
+                    'transaction_count' => 0,
+                    'collected_sales' => 0.0,
+                    'loan_revenue_total' => 0.0,
+                    'consultation_total' => 0.0,
+                    'frame_total' => 0.0,
+                    'lens_total' => 0.0,
+                    'other_total' => 0.0,
+                ];
+            }
+
+            $dailyBreakdownByDate[$saleDate]['transaction_count'] += 1;
+            $dailyBreakdownByDate[$saleDate]['collected_sales'] += $amountPaid;
+
+            if ($saleDate === $today) {
+                $todaySales += $amountPaid;
+            }
+
+            if ($row->billing_id === null) {
+                $loanRevenueTotal += $amountPaid;
+                $dailyBreakdownByDate[$saleDate]['loan_revenue_total'] += $amountPaid;
+                continue;
+            }
+
+            $billingRevenueTotal += $amountPaid;
+            $billingId = (int) $row->billing_id;
+
+            if (! isset($seenBillingIds[$billingId])) {
+                $seenBillingIds[$billingId] = true;
+                $consultationTotal += max(0.0, (float) ($row->consultation_price ?? 0));
+                $frameTotal += max(0.0, (float) ($row->frame_price ?? 0));
+                $lensTotal += max(0.0, (float) ($row->lens_price ?? 0));
+                $caseTotal += max(0.0, (float) ($row->case_price ?? 0));
+                $discountTotal += max(0.0, (float) ($row->discount ?? 0));
+                $taxTotal += max(0.0, (float) ($row->tax ?? 0))
+                    + max(0.0, (float) ($row->nhil_amount ?? 0))
+                    + max(0.0, (float) ($row->getfund_amount ?? 0))
+                    + max(0.0, (float) ($row->covid_levy_amount ?? 0))
+                    + max(0.0, (float) ($row->vat_amount ?? 0))
+                    + max(0.0, (float) ($row->vat_flat_rate_amount ?? 0));
+                $billingTotal += max(0.0, (float) ($row->billing_total ?? 0));
+
+                $billingAllocationState[$billingId] = [
+                    'consultation' => max(0.0, (float) ($row->consultation_price ?? 0)),
+                    'lens' => max(0.0, (float) ($row->lens_price ?? 0)),
+                    'frame' => max(0.0, (float) ($row->frame_price ?? 0)),
+                    'other' => max(0.0, (float) ($row->billing_total ?? 0))
+                        - max(0.0, (float) ($row->consultation_price ?? 0))
+                        - max(0.0, (float) ($row->lens_price ?? 0))
+                        - max(0.0, (float) ($row->frame_price ?? 0)),
+                ];
+            }
+
+            $remainingAmount = $amountPaid;
+            $allocatedConsultation = 0.0;
+            $allocatedLens = 0.0;
+            $allocatedFrame = 0.0;
+            $allocatedOther = 0.0;
+            foreach (['consultation', 'lens', 'frame'] as $bucket) {
+                if ($remainingAmount <= 0) {
+                    break;
+                }
+
+                $bucketRemaining = $billingAllocationState[$billingId][$bucket] ?? 0.0;
+                $allocated = min($remainingAmount, $bucketRemaining);
+                $billingAllocationState[$billingId][$bucket] = max(0.0, $bucketRemaining - $allocated);
+                $remainingAmount -= $allocated;
+
+                match ($bucket) {
+                    'consultation' => $allocatedConsultation += $allocated,
+                    'lens' => $allocatedLens += $allocated,
+                    'frame' => $allocatedFrame += $allocated,
+                };
+            }
+
+            if ($remainingAmount > 0) {
+                $otherRemaining = $billingAllocationState[$billingId]['other'] ?? 0.0;
+                $allocatedToOtherBucket = min($remainingAmount, $otherRemaining);
+                $billingAllocationState[$billingId]['other'] = max(0.0, $otherRemaining - $allocatedToOtherBucket);
+                $allocatedOther += $allocatedToOtherBucket;
+                $remainingAmount -= $allocatedToOtherBucket;
+            }
+
+            if ($remainingAmount > 0) {
+                $allocatedOther += $remainingAmount;
+            }
+
+            $allocatedConsultationTotal += $allocatedConsultation;
+            $allocatedLensTotal += $allocatedLens;
+            $allocatedFrameTotal += $allocatedFrame;
+            $allocatedOtherTotal += $allocatedOther;
+
+            $dailyBreakdownByDate[$saleDate]['consultation_total'] += $allocatedConsultation;
+            $dailyBreakdownByDate[$saleDate]['lens_total'] += $allocatedLens;
+            $dailyBreakdownByDate[$saleDate]['frame_total'] += $allocatedFrame;
+            $dailyBreakdownByDate[$saleDate]['other_total'] += $allocatedOther;
+        }
         $insuranceBilledQuery = tap(
             DB::table('insurance_claims as ic')
                 ->leftJoin('billing as b', function ($join): void {
@@ -765,47 +902,27 @@ class FinanceController extends Controller
             ->limit(14)
             ->get();
 
-        $dailySalesRows = (clone $query)
-            ->selectRaw('
-                DATE(s.date) as sale_date,
-                COUNT(s.id) as transaction_count,
-                SUM(s.amount_paid) as collected_sales,
-                SUM(COALESCE(b.consultation_price, 0)) as consultation_total,
-                SUM(COALESCE(b.frame_price, 0)) as frame_total,
-                SUM(COALESCE(b.lens_price, 0)) as lens_total,
-                SUM(COALESCE(b.case_price, 0)) as case_total,
-                SUM(COALESCE(b.discount, 0)) as discount_total,
-                SUM(COALESCE(b.tax, 0) + COALESCE(b.nhil_amount, 0) + COALESCE(b.getfund_amount, 0) + COALESCE(b.covid_levy_amount, 0) + COALESCE(b.vat_amount, 0) + COALESCE(b.vat_flat_rate_amount, 0)) as tax_total,
-                SUM(COALESCE(b.total_amount, 0)) as billed_total
-            ')
-            ->groupBy(DB::raw('DATE(s.date)'))
-            ->orderByDesc('sale_date')
-            ->get();
-
-        $dailySalesByDate = $dailySalesRows->keyBy('sale_date');
         $dailyInsuranceByDate = $dailyInsuranceRows->keyBy('sale_date');
-        $allDates = $dailySalesByDate->keys()
+        $allDates = collect(array_keys($dailyBreakdownByDate))
             ->merge($dailyInsuranceByDate->keys())
             ->unique()
             ->sortDesc()
             ->values();
         $dailyBreakdown = $allDates
-            ->map(function ($saleDate) use ($dailySalesByDate, $dailyInsuranceByDate) {
-                $salesRow = $dailySalesByDate->get($saleDate);
+            ->map(function ($saleDate) use ($dailyBreakdownByDate, $dailyInsuranceByDate) {
+                $salesRow = $dailyBreakdownByDate[$saleDate] ?? null;
                 $insuranceRow = $dailyInsuranceByDate->get($saleDate);
-                $collectedSales = (float) ($salesRow->collected_sales ?? 0);
+                $collectedSales = (float) ($salesRow['collected_sales'] ?? 0);
                 $insuranceTotal = (float) ($insuranceRow->insurance_total ?? 0);
 
                 return [
                     'sale_date' => $saleDate,
-                    'transaction_count' => (int) ($salesRow->transaction_count ?? 0),
-                    'consultation_total' => round((float) ($salesRow->consultation_total ?? 0), 2),
-                    'frame_total' => round((float) ($salesRow->frame_total ?? 0), 2),
-                    'lens_total' => round((float) ($salesRow->lens_total ?? 0), 2),
-                    'case_total' => round((float) ($salesRow->case_total ?? 0), 2),
-                    'discount_total' => round((float) ($salesRow->discount_total ?? 0), 2),
-                    'tax_total' => round((float) ($salesRow->tax_total ?? 0), 2),
-                    'billed_total' => round((float) ($salesRow->billed_total ?? 0), 2),
+                    'transaction_count' => (int) ($salesRow['transaction_count'] ?? 0),
+                    'loan_revenue_total' => round((float) ($salesRow['loan_revenue_total'] ?? 0), 2),
+                    'consultation_total' => round((float) ($salesRow['consultation_total'] ?? 0), 2),
+                    'frame_total' => round((float) ($salesRow['frame_total'] ?? 0), 2),
+                    'lens_total' => round((float) ($salesRow['lens_total'] ?? 0), 2),
+                    'other_total' => round((float) ($salesRow['other_total'] ?? 0), 2),
                     'collected_sales' => round($collectedSales, 2),
                     'insurance_total' => round($insuranceTotal, 2),
                     'sales_with_insurance' => round($collectedSales + $insuranceTotal, 2),
@@ -871,6 +988,10 @@ class FinanceController extends Controller
                 'case_total' => $caseTotal,
                 'discount_total' => $discountTotal,
                 'tax_total' => $taxTotal,
+                'allocated_consultation_total' => round($allocatedConsultationTotal, 2),
+                'allocated_lens_total' => round($allocatedLensTotal, 2),
+                'allocated_frame_total' => round($allocatedFrameTotal, 2),
+                'allocated_other_total' => round($allocatedOtherTotal, 2),
                 'insurance_billed_value' => $insuranceBilledValue,
                 'sales_with_insurance' => $totalAmount + $insuranceBilledValue,
                 'transaction_count' => $total,
