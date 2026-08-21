@@ -53,6 +53,9 @@ const COMPARISON_METRICS = [
 ]
 
 const COMPARISON_METRIC_MAP = new Map(COMPARISON_METRICS.map((metric) => [metric.key, metric]))
+const EXTRACT_DECISIONS_STORAGE_KEY = 'opticplus-tax-review-decisions'
+const EXTRACT_SALARY_DECLARATION_STORAGE_KEY = 'opticplus-extract-salary-declarations'
+const PAYROLL_DECLARATION_STORAGE_KEY = 'opticplus-payroll-declarations-v1'
 
 function currentYear() {
   return new Date().getFullYear()
@@ -192,6 +195,229 @@ function sheetSafeName(value) {
     .replace(/[\\/?*\[\]:]/g, ' ')
     .trim()
     .slice(0, 31) || 'Report'
+}
+
+function readStoredJson(key) {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    return JSON.parse(window.localStorage.getItem(key) ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+function readExtractDecisions() {
+  return readStoredJson(EXTRACT_DECISIONS_STORAGE_KEY)
+}
+
+function readExtractSalaryDeclarations() {
+  return readStoredJson(EXTRACT_SALARY_DECLARATION_STORAGE_KEY)
+}
+
+function readPayrollDeclarations() {
+  return readStoredJson(PAYROLL_DECLARATION_STORAGE_KEY)
+}
+
+function buildRevenueKey(record) {
+  return `sales-${record.id}`
+}
+
+function buildExpenseKey(record) {
+  return `expense-${record.expense_id}`
+}
+
+function isPayrollProcessedSalaryExpense(expense) {
+  const category = String(expense.category ?? '').toLowerCase()
+  const description = String(expense.description ?? '').toLowerCase()
+  return category.includes('payroll') || description.includes('payroll')
+}
+
+function buildAuditYearMonthKey(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function buildAuditDeclaredExpenseAmount(expense, salaryDeclarations) {
+  if (!isPayrollProcessedSalaryExpense(expense)) {
+    return toNumber(expense.amount ?? 0)
+  }
+
+  const key = buildExpenseKey(expense)
+  const salaryDeclaration = salaryDeclarations[key] ?? {}
+  if (salaryDeclaration.declared !== '' && salaryDeclaration.declared != null) {
+    return toNumber(salaryDeclaration.declared)
+  }
+  return toNumber(expense.amount ?? 0)
+}
+
+function normalizeAuditText(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function payrollDeclarationKey(branchId, periodKey, employeeId) {
+  return `${branchId}:${periodKey}:${employeeId}`
+}
+
+function getPayrollDeclaredSalary({ branchId, year, month, employeeId, fallback }) {
+  const payrollDeclarations = readPayrollDeclarations()
+  const periodKey = `${year}-${String(month).padStart(2, '0')}`
+  const declaration = payrollDeclarations[payrollDeclarationKey(branchId, periodKey, employeeId)] ?? {}
+  const declaredSalary = Number(declaration.declared_salary)
+  return Number.isFinite(declaredSalary) && declaredSalary >= 0
+    ? declaredSalary
+    : toNumber(fallback)
+}
+
+function buildDeclaredSalaryRows(report, selectedMonths) {
+  return (report?.salary_rows ?? []).map((row) => ({
+    ...row,
+    months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+  }))
+}
+
+function buildAuditMonthIndexMap(selectedMonths) {
+  return new Map(selectedMonths.map((month, index) => [String(month).padStart(2, '0'), index]))
+}
+
+function buildAuditAdjustments({ financeSales, financeExpenses, selectedMonths }) {
+  const decisions = readExtractDecisions()
+  const salaryDeclarations = readExtractSalaryDeclarations()
+  const monthIndexMap = buildAuditMonthIndexMap(selectedMonths)
+  const revenueAdjustments = Array(selectedMonths.length).fill(0)
+  const expenseAdjustments = Array(selectedMonths.length).fill(0)
+  const dailyRevenueAdjustments = new Map()
+
+  for (const record of financeSales?.records ?? []) {
+    const decision = decisions[buildRevenueKey(record)] ?? {}
+    if (decision.classification !== 'non_taxable' || decision.includeInAudit === false) continue
+
+    const monthKey = buildAuditYearMonthKey(record.date)?.slice(5)
+    const monthIndex = monthIndexMap.get(monthKey)
+    if (monthIndex == null) continue
+
+    const amount = toNumber(record.amount_paid ?? 0)
+    revenueAdjustments[monthIndex] += amount
+
+    const dateKey = String(record.date ?? '')
+    dailyRevenueAdjustments.set(dateKey, toNumber(dailyRevenueAdjustments.get(dateKey)) + amount)
+  }
+
+  for (const expense of financeExpenses?.records ?? []) {
+    const decision = decisions[buildExpenseKey(expense)] ?? {}
+    if (decision.classification !== 'non_deductible' || decision.includeInAudit === false) continue
+
+    const monthKey = buildAuditYearMonthKey(expense.date)?.slice(5)
+    const monthIndex = monthIndexMap.get(monthKey)
+    if (monthIndex == null) continue
+
+    const amount = buildAuditDeclaredExpenseAmount(expense, salaryDeclarations)
+    expenseAdjustments[monthIndex] += amount
+  }
+
+  return { revenueAdjustments, expenseAdjustments, dailyRevenueAdjustments }
+}
+
+function cloneAuditReport(report, selectedMonths, revenueAdjustments, expenseAdjustments, dailyRevenueAdjustments) {
+  if (!report) return report
+
+  const monthIndexMap = buildAuditMonthIndexMap(selectedMonths)
+  const months = (report.months ?? []).map((month) => {
+    const monthKey = month?.month != null ? String(month.month).padStart(2, '0') : null
+    const monthIndex = monthKey != null ? monthIndexMap.get(monthKey) : null
+    if (monthIndex == null) return { ...month }
+
+    return {
+      ...month,
+      collected: toNumber(month.collected) - revenueAdjustments[monthIndex],
+      expenses: toNumber(month.expenses) - expenseAdjustments[monthIndex],
+    }
+  })
+
+  const daily_sales = (report.daily_sales ?? []).map((entry) => {
+    const dateKey = String(entry.date ?? '')
+    const adjustment = toNumber(dailyRevenueAdjustments.get(dateKey))
+    if (adjustment === 0) return { ...entry }
+    return {
+      ...entry,
+      total: toNumber(entry.total) - adjustment,
+    }
+  })
+
+  const adjustmentSources = revenueAdjustments.some((value) => value !== 0)
+    ? [{ label: 'ADJUSTMENTS', months: revenueAdjustments.map((value) => -value), isAuditAdjustment: true }]
+    : []
+  const adjustmentExpenses = expenseAdjustments.some((value) => value !== 0)
+    ? [{ label: 'ADJUSTMENTS', months: expenseAdjustments.map((value) => -value), isAuditAdjustment: true }]
+    : []
+
+  return {
+    ...report,
+    months,
+    daily_sales,
+    collection_sources: [
+      ...adjustmentSources,
+      ...(report.collection_sources ?? []),
+    ],
+    expense_categories: [
+      ...adjustmentExpenses,
+      ...(report.expense_categories ?? []),
+    ],
+  }
+}
+
+function buildAuditWorkbookSheets({ reportsByKey, primaryReport, mergedReport, selectedMonths, comparisonState, primaryPeriods, comparisonPeriods, financeSales, financeExpenses }) {
+  if (!primaryReport) {
+    return []
+  }
+
+  const { revenueAdjustments, expenseAdjustments, dailyRevenueAdjustments } = buildAuditAdjustments({
+    financeSales,
+    financeExpenses,
+    selectedMonths,
+  })
+
+  const adjustedPrimaryReport = cloneAuditReport(primaryReport, selectedMonths, revenueAdjustments, expenseAdjustments, dailyRevenueAdjustments)
+  const adjustedMergedReport = cloneAuditReport(mergedReport ?? primaryReport, selectedMonths, revenueAdjustments, expenseAdjustments, dailyRevenueAdjustments)
+  const adjustedReportsByKey = {
+    ...reportsByKey,
+    [`${primaryReport.branch_id}:${primaryReport.year}`]: adjustedPrimaryReport,
+    [`0:${primaryReport.year}`]: adjustedMergedReport,
+  }
+
+  return buildWorkbookSheets({
+    reportsByKey: adjustedReportsByKey,
+    primaryReport: adjustedPrimaryReport,
+    mergedReport: adjustedMergedReport,
+    selectedMonths,
+    comparisonState: { ...comparisonState, mode: 'previous_year' },
+    primaryPeriods,
+    comparisonPeriods,
+  }, {
+    auditMode: true,
+    includeComparisonBranchSheet: false,
+  })
+}
+
+function exportAuditWorkbook({ reportsByKey, primaryReport, mergedReport, selectedMonths, comparisonState, primaryPeriods, comparisonPeriods, financeSales, financeExpenses, comparisonScope }) {
+  const sheets = buildAuditWorkbookSheets({
+    reportsByKey,
+    primaryReport,
+    mergedReport,
+    selectedMonths,
+    comparisonState,
+    primaryPeriods,
+    comparisonPeriods,
+    financeSales,
+    financeExpenses,
+  })
+
+  exportWorkbook(sheets, primaryReport, selectedMonths, comparisonScope)
 }
 
 function buildMonthMap(report) {
@@ -474,14 +700,15 @@ function financialLineKey(prefix, label) {
   return `${prefix}:${slugify(label)}`
 }
 
-function buildFinancialSheet(report, selectedMonths, branchLabel) {
+function buildFinancialSheet(report, selectedMonths, branchLabel, options = {}) {
+  const { auditMode = false } = options
   const months = buildSelectedMonths(report, selectedMonths)
   const monthsWide = months.map((item) => item.short)
   const budgets = report?.budgets ?? {}
   const columnCount = 2 + 5 + monthsWide.length + 1
   const monthsCount = monthsWide.length
-  const title = `${String(branchLabel).toUpperCase()} REC & PAYMENT`
-  const subtitle = `FINANCIAL DETAILS FOR THE PERIOD ${months[0]?.long ?? 'JANUARY'} TO ${months[months.length - 1]?.long ?? 'DECEMBER'} ${report?.year ?? currentYear()}`
+  const title = `${String(branchLabel).toUpperCase()}${auditMode ? ' AUDIT' : ''} REC & PAYMENT`
+  const subtitle = `${auditMode ? 'AUDIT ' : ''}FINANCIAL DETAILS FOR THE PERIOD ${months[0]?.long ?? 'JANUARY'} TO ${months[months.length - 1]?.long ?? 'DECEMBER'} ${report?.year ?? currentYear()}`
   const monthRows = months.map((item) => item.data)
   const receiptRows = [
     { sn: '1.1', label: 'SALES OF FRAMES - NORMAL', key: 'receipt:frames-normal', months: monthRows.map((row) => toNumber(row.frames)) },
@@ -498,11 +725,12 @@ function buildFinancialSheet(report, selectedMonths, branchLabel) {
         label: String(row.label ?? '').toUpperCase(),
         key: financialLineKey('collection', row.label),
         months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+        isAdjustment: Boolean(row.isAuditAdjustment),
       }))
       .filter((row) => row.months.some((amount) => amount !== 0)),
   ]
 
-  const salaryRows = (report?.salary_rows ?? []).map((row) => ({
+  const salaryRows = buildDeclaredSalaryRows(report, selectedMonths).map((row) => ({
     label: `SALARY - ${String(row.label ?? row.name ?? '').toUpperCase()}`,
     key: financialLineKey('salary', row.employee_id ?? row.label ?? row.name),
     months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
@@ -511,6 +739,7 @@ function buildFinancialSheet(report, selectedMonths, branchLabel) {
     label: row.label.toUpperCase(),
     key: financialLineKey('expense', row.label),
     months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+    isAdjustment: Boolean(row.isAuditAdjustment),
   }))
   const paymentRowsSource = [...salaryRows, ...expenseRows]
   const paymentRows = paymentRowsSource.map((row, index) => ({
@@ -780,12 +1009,13 @@ function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
   }
 }
 
-function buildWorkbookSheets({ reportsByKey, primaryReport, mergedReport, selectedMonths, comparisonState, primaryPeriods, comparisonPeriods }) {
+function buildWorkbookSheets({ reportsByKey, primaryReport, mergedReport, selectedMonths, comparisonState, primaryPeriods, comparisonPeriods }, options = {}) {
   if (!primaryReport) return []
 
+  const { auditMode = false, includeComparisonBranchSheet = true } = options
   const sheets = []
-  sheets.push(buildFinancialSheet(primaryReport, selectedMonths, primaryReport.branch_name))
-  if (comparisonState.mode === 'branch' || comparisonState.mode === 'custom') {
+  sheets.push(buildFinancialSheet(primaryReport, selectedMonths, primaryReport.branch_name, { auditMode }))
+  if (includeComparisonBranchSheet && (comparisonState.mode === 'branch' || comparisonState.mode === 'custom')) {
     const comparisonBranchId = Number(comparisonState.branch_id || primaryReport.branch_id)
     const comparisonYear = comparisonPeriods[0]?.year ?? primaryReport.year
     const comparisonReport = reportsByKey[`${comparisonBranchId}:${comparisonYear}`] ?? null
@@ -1087,6 +1317,13 @@ const XLSX_STYLES = {
     numFmt: '#,##0.00',
     border: XLSX_BORDER,
   },
+  adjustment: {
+    font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '1D4ED8' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'DBEAFE' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    numFmt: '#,##0.00',
+    border: XLSX_BORDER,
+  },
   totalLabel: {
     font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: '0F172A' } },
     fill: { patternType: 'solid', fgColor: { rgb: 'FEF3C7' } },
@@ -1186,6 +1423,7 @@ function buildWorkbookSheet(sheet) {
   for (let rowIndex = 0; rowIndex < aoa.length; rowIndex += 1) {
     const rowValues = aoa[rowIndex]
     const rowKind = resolveWorkbookRowKind(sheet, rowIndex)
+    const sheetRow = sheet.rows[rowIndex] ?? {}
 
     for (let columnIndex = 0; columnIndex < rowValues.length; columnIndex += 1) {
       const value = rowValues[columnIndex]
@@ -1197,31 +1435,30 @@ function buildWorkbookSheet(sheet) {
       const isMoneyColumn = sheet.key.startsWith('financial-')
         ? (columnIndex === totalIndex || columnIndex === balanceIndex || columnIndex === monthlyBudgetIndex || (columnIndex >= 4 && columnIndex < totalIndex))
         : isNumeric
-      const style = rowKind === 'title'
-        ? rowIndex === 0
+      let style
+      if (rowKind === 'title') {
+        style = rowIndex === 0
           ? XLSX_STYLES.title
           : rowIndex === 1
             ? XLSX_STYLES.subtitle
             : XLSX_STYLES.section
-        : rowKind === 'section'
-          ? XLSX_STYLES.section
-          : rowKind === 'header'
-            ? XLSX_STYLES.header
-            : rowKind === 'total'
-              ? isFirstColumn
-                ? XLSX_STYLES.totalLabel
-                : isPercentColumn
-                  ? XLSX_STYLES.percent
-                  : XLSX_STYLES.total
-              : isNumeric
-                ? (isPercentColumn ? XLSX_STYLES.percent : isMoneyColumn ? XLSX_STYLES.dataNumber : XLSX_STYLES.dataNumber)
-                : isFirstColumn
-                  ? XLSX_STYLES.dataText
-                  : isDetailColumn
-                    ? XLSX_STYLES.dataText
-                    : isPercentColumn
-                      ? XLSX_STYLES.percent
-                      : XLSX_STYLES.dataNumber
+      } else if (rowKind === 'section') {
+        style = XLSX_STYLES.section
+      } else if (rowKind === 'header') {
+        style = XLSX_STYLES.header
+      } else if (rowKind === 'total') {
+        style = isFirstColumn
+          ? XLSX_STYLES.totalLabel
+          : isPercentColumn
+            ? XLSX_STYLES.percent
+            : XLSX_STYLES.total
+      } else if (sheetRow.kind === 'data' && sheetRow.isAdjustment) {
+        style = XLSX_STYLES.adjustment
+      } else if (isNumeric) {
+        style = isPercentColumn ? XLSX_STYLES.percent : XLSX_STYLES.dataNumber
+      } else {
+        style = isFirstColumn || isDetailColumn ? XLSX_STYLES.dataText : isPercentColumn ? XLSX_STYLES.percent : XLSX_STYLES.dataNumber
+      }
 
       setCellStyle(worksheet, rowIndex, columnIndex, style, value)
     }
@@ -1426,7 +1663,7 @@ function buildSheetMerges(sheet) {
 }
 
 function buildSummaryCards(primaryReport, mergedReport, selectedMonths) {
-  const selected = buildSelectedMonths(mergedReport ?? primaryReport, selectedMonths)
+  const selected = buildSelectedMonths(primaryReport ?? mergedReport, selectedMonths)
   const receipts = selected.reduce((total, item) => total + toNumber(item.data.collected), 0)
   const expenses = selected.reduce((total, item) => total + toNumber(item.data.expenses), 0)
   const insurance = selected.reduce((total, item) => total + toNumber(item.data.insurance_received), 0)
@@ -1438,6 +1675,27 @@ function buildSummaryCards(primaryReport, mergedReport, selectedMonths) {
     ['Insurance Received', insurance, 'Insurance settlements posted in the range', 'today', 'shield'],
     ['Working Position', workingCapital, 'Operating cash proxy plus trade debtors', 'total', 'finance'],
   ]
+}
+
+function buildAuditNonTaxableRevenueTotal(financeSales) {
+  const decisions = readExtractDecisions()
+
+  return (financeSales?.records ?? []).reduce((total, record) => {
+    const decision = decisions[buildRevenueKey(record)] ?? {}
+    if (decision.classification !== 'non_taxable' || decision.includeInAudit === false) return total
+    return total + toNumber(record.amount_paid ?? 0)
+  }, 0)
+}
+
+function buildAuditNonDeductibleTotal(financeExpenses) {
+  const decisions = readExtractDecisions()
+  const salaryDeclarations = readExtractSalaryDeclarations()
+
+  return (financeExpenses?.records ?? []).reduce((total, expense) => {
+    const decision = decisions[buildExpenseKey(expense)] ?? {}
+    if (decision.classification !== 'non_deductible' || decision.includeInAudit === false) return total
+    return total + buildAuditDeclaredExpenseAmount(expense, salaryDeclarations)
+  }, 0)
 }
 
 function workbookFileName(primaryReport, selectedMonths, comparisonScope) {
@@ -1478,7 +1736,8 @@ function exportWorkbook(sheets, primaryReport, selectedMonths, comparisonScope) 
   URL.revokeObjectURL(url)
 }
 
-export default function ReportsSection({ apiFetch, token, session, selectedBranchId }) {
+export default function ReportsSection(props) {
+  const { apiFetch, token, session, selectedBranchId, financeSales, financeExpenses } = props
   const isExecutive = ['ceo', 'director'].includes(session?.role)
   const isManager = session?.role === 'manager'
   const isAccountant = session?.role === 'accountant'
@@ -1505,6 +1764,8 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [budgetMessage, setBudgetMessage] = useState('')
+  const [auditPreviewOpen, setAuditPreviewOpen] = useState(false)
+  const [auditExportMessage, setAuditExportMessage] = useState('')
   const [savingBudgetKey, setSavingBudgetKey] = useState('')
   const [activeSheet, setActiveSheet] = useState('primary')
 
@@ -1649,9 +1910,34 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     primaryPeriods,
     comparisonPeriods,
   }), [comparisonPeriods, comparisonScope, mergedReport, primaryPeriods, primaryReport, reportsByKey, selectedMonths])
+  const auditSheets = useMemo(() => {
+    if (!primaryReport) return []
+
+    return buildAuditWorkbookSheets({
+      reportsByKey,
+      primaryReport,
+      mergedReport,
+      selectedMonths,
+      comparisonState: comparisonScope,
+      primaryPeriods,
+      comparisonPeriods,
+      financeSales,
+      financeExpenses,
+    })
+  }, [comparisonPeriods, comparisonScope, financeExpenses, financeSales, mergedReport, primaryPeriods, primaryReport, reportsByKey, selectedMonths])
   const activeSheetModel = sheets.find((sheet) => sheet.key === activeSheet) ?? sheets[0] ?? null
+  const auditActiveSheetModel = auditSheets.find((sheet) => sheet.key === activeSheet) ?? auditSheets[0] ?? null
   const activeFinancialBudgets = activeSheetModel?.budgets ?? {}
-  const summaryCards = useMemo(() => buildSummaryCards(primaryReport, mergedReport, selectedMonths), [mergedReport, primaryReport, selectedMonths])
+  const auditNonTaxableRevenueTotal = useMemo(() => buildAuditNonTaxableRevenueTotal(financeSales), [financeSales])
+  const auditNonDeductibleTotal = useMemo(() => buildAuditNonDeductibleTotal(financeExpenses), [financeExpenses])
+  const summaryCards = useMemo(
+    () => [
+      ...buildSummaryCards(primaryReport, mergedReport, selectedMonths),
+      ['Non-taxable Revenue', auditNonTaxableRevenueTotal, 'Revenue excluded from the taxable working view', 'today', 'shield'],
+      ['Non-deductible Expenses', auditNonDeductibleTotal, 'Expenses excluded from the claimable view', 'alert', 'finance'],
+    ],
+    [auditNonDeductibleTotal, auditNonTaxableRevenueTotal, primaryReport, selectedMonths],
+  )
   const availableYears = useMemo(() => {
     const now = currentYear()
     return Array.from({ length: 6 }, (_, index) => now - 3 + index)
@@ -1695,6 +1981,13 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     }
   }, [activeSheetModel, sheets])
 
+  useEffect(() => {
+    if (!auditPreviewOpen) return
+    if (auditSheets.length && !auditActiveSheetModel) {
+      setActiveSheet(auditSheets[0].key)
+    }
+  }, [auditActiveSheetModel, auditPreviewOpen, auditSheets])
+
   function updateReportBudget(branchId, lineKey, amount) {
     const reportKey = `${branchId}:${filters.year}`
     setReportsByKey((current) => {
@@ -1736,6 +2029,46 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     }
   }
 
+  function openAuditPreview() {
+    setError('')
+    setAuditExportMessage('')
+    setAuditPreviewOpen(true)
+    if (auditSheets.length) {
+      const currentAuditSheet = auditSheets.find((sheet) => sheet.key === activeSheet) ?? auditSheets[0]
+      if (currentAuditSheet) {
+        setActiveSheet(currentAuditSheet.key)
+      }
+    }
+  }
+
+  function closeAuditPreview() {
+    setAuditPreviewOpen(false)
+    setAuditExportMessage('')
+  }
+
+  function handleAuditReportExport() {
+    try {
+      setError('')
+      setAuditExportMessage('')
+      exportAuditWorkbook({
+        reportsByKey,
+        primaryReport,
+        mergedReport,
+        selectedMonths,
+        comparisonState,
+        primaryPeriods,
+        comparisonPeriods,
+        financeSales,
+        financeExpenses,
+        comparisonScope,
+      })
+      setAuditExportMessage('Audit workbook download started.')
+    } catch (requestError) {
+      setAuditExportMessage('')
+      setError(requestError instanceof Error ? requestError.message : 'Unable to export the audit workbook right now.')
+    }
+  }
+
   if (isExecutive) {
     return (
       <ReportWorkflowSection
@@ -1755,6 +2088,79 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
     )
   }
 
+  if (auditPreviewOpen) {
+    return (
+      <section className="finance-section report-workbook-shell">
+        <header className="report-workbook-hero">
+          <div>
+            <p className="eyebrow">Audit Preview</p>
+            <h3>Review the audit workbook before exporting</h3>
+            <p className="header-copy">
+              This preview mirrors the workbook layout so you can inspect the sheets and totals before downloading the Excel file.
+            </p>
+          </div>
+          <div className="report-workbook-actions">
+            <button type="button" className="ghost-button" onClick={closeAuditPreview}>Back to reports page</button>
+            <button type="button" className="primary-button" onClick={handleAuditReportExport} disabled={!primaryReport}>Export to Excel</button>
+          </div>
+        </header>
+
+        {error ? <div className="message-banner error">{error}</div> : null}
+        {auditExportMessage ? <div className="message-banner success">{auditExportMessage}</div> : null}
+        {isLoading ? <div className="message-banner">Refreshing workbook data for the selected year and branches...</div> : null}
+
+        <nav className="report-tab-strip" aria-label="Audit workbook sheets">
+          {auditSheets.map((sheet) => (
+            <button
+              key={sheet.key}
+              type="button"
+              className={activeSheet === sheet.key ? 'report-tab-button is-active' : 'report-tab-button'}
+              onClick={() => setActiveSheet(sheet.key)}
+            >
+              {sheet.title}
+            </button>
+          ))}
+        </nav>
+
+        <article className="panel report-sheet workbook-sheet-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">{auditActiveSheetModel?.title ?? 'Audit Workbook'}</p>
+              <h3>{auditActiveSheetModel?.subtitle ?? 'Select a sheet to preview'}</h3>
+            </div>
+            <span className="panel-tag">
+              {selectedMonths.length ? `${monthName(selectedMonths[0], false)} - ${monthName(selectedMonths[selectedMonths.length - 1], false)} ${filters.year}` : filters.year}
+            </span>
+          </div>
+
+          {!primaryReport ? (
+            <div className="message-banner">Loading workbook data...</div>
+          ) : auditActiveSheetModel ? (
+            auditActiveSheetModel.kind === 'financial'
+              ? (
+                <FinancialWorkbookPreview
+                  sheet={auditActiveSheetModel}
+                  budgets={auditActiveSheetModel.budgets ?? {}}
+                  onBudgetChange={(lineKey, amount, save = false) => {
+                    updateReportBudget(auditActiveSheetModel.branchId ?? filters.primary_branch_id, lineKey, amount)
+                    if (save) {
+                      saveReportBudget(auditActiveSheetModel.branchId ?? filters.primary_branch_id, lineKey, amount)
+                    }
+                  }}
+                  savingBudgetKey={savingBudgetKey}
+                />
+              )
+              : auditActiveSheetModel.key.startsWith('daily-')
+                ? <DailySalesPreview sheet={auditActiveSheetModel} />
+                : <WorkbookPreviewTable sheet={auditActiveSheetModel} />
+          ) : (
+            <div className="message-banner">No workbook sheet is available for the current selection.</div>
+          )}
+        </article>
+      </section>
+    )
+  }
+
   return (
     <section className="finance-section report-workbook-shell">
       <header className="report-workbook-hero">
@@ -1762,17 +2168,19 @@ export default function ReportsSection({ apiFetch, token, session, selectedBranc
           <p className="eyebrow">Reports</p>
           <h3>Workbook-style branch reporting</h3>
           <p className="header-copy">
-            This page mirrors the attached Excel workbook structure, keeps the sheet tabs visible on screen, and exports a real `.xlsx` file with the same tab order.
+            This page mirrors the attached Excel workbook structure, keeps the sheet tabs visible on screen, and lets you preview the audit workbook before exporting a real `.xlsx` file.
           </p>
         </div>
         <div className="report-workbook-actions">
           <button type="button" className="ghost-button" onClick={() => window.print()} disabled={!activeSheetModel}>Print / Save PDF</button>
           <button type="button" className="primary-button" onClick={() => exportWorkbook(sheets, primaryReport, selectedMonths, comparisonScope)} disabled={!canExport}>Export Excel workbook</button>
+          <button type="button" className="ghost-button" onClick={openAuditPreview} disabled={!canExport}>Audit Report</button>
         </div>
       </header>
 
       {error ? <div className="message-banner error">{error}</div> : null}
       {budgetMessage ? <div className="message-banner success">{budgetMessage}</div> : null}
+      {auditExportMessage ? <div className="message-banner success">{auditExportMessage}</div> : null}
       {isLoading ? <div className="message-banner">Refreshing workbook data for the selected year and branches...</div> : null}
 
       <section className="report-toolbar-grid report-workbook-toolbar">

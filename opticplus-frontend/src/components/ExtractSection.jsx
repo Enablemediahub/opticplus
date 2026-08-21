@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx-js-style/dist/xlsx.min.js'
 import StatWidget from './StatWidget.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
@@ -76,10 +77,10 @@ function sumBy(items, selector) {
   return items.reduce((total, item) => total + Number(selector(item) ?? 0), 0)
 }
 
-function isSalaryExpense(expense) {
+function isPayrollProcessedSalaryExpense(expense) {
   const category = String(expense.category ?? '').toLowerCase()
   const description = String(expense.description ?? '').toLowerCase()
-  return category.includes('salary') || description.includes('salary')
+  return category.includes('payroll') || description.includes('payroll')
 }
 
 function sanitizeNumber(value) {
@@ -87,7 +88,342 @@ function sanitizeNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function createExtractAuditorReportHtml({ companyName, branchName, taxableRevenue, deductibleExpenses, thresholdHeadroom, salaryDeclaredTotal, salaryCoverage, rows, includeNotes }) {
+function getExtractRowYear(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.getFullYear()
+}
+
+function getExtractRowMonthIndex(value, fallbackYear = null) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  if (fallbackYear != null && date.getFullYear() !== Number(fallbackYear)) return null
+  return date.getMonth()
+}
+
+function getWorkbookYear(rows) {
+  const years = rows
+    .map((row) => getExtractRowYear(row.date))
+    .filter((year) => year != null)
+
+  return years.length ? Math.max(...years) : new Date().getFullYear()
+}
+
+function workbookCellAddress(rowIndex, columnIndex) {
+  return XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })
+}
+
+function cloneWorkbookStyle(style) {
+  return JSON.parse(JSON.stringify(style))
+}
+
+const WORKBOOK_STYLES = {
+  title: {
+    font: { bold: true, sz: 16, color: { rgb: '102033' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    fill: { patternType: 'solid', fgColor: { rgb: 'EAF3FB' } },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D7E6' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D7E6' } },
+      left: { style: 'thin', color: { rgb: 'C7D7E6' } },
+      right: { style: 'thin', color: { rgb: 'C7D7E6' } },
+    },
+  },
+  subtitle: {
+    font: { italic: true, sz: 11, color: { rgb: '516072' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+  },
+  header: {
+    font: { bold: true, sz: 10, color: { rgb: '102033' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    fill: { patternType: 'solid', fgColor: { rgb: 'DCEBF7' } },
+    border: {
+      top: { style: 'thin', color: { rgb: 'C7D7E6' } },
+      bottom: { style: 'thin', color: { rgb: 'C7D7E6' } },
+      left: { style: 'thin', color: { rgb: 'C7D7E6' } },
+      right: { style: 'thin', color: { rgb: 'C7D7E6' } },
+    },
+  },
+  section: {
+    font: { bold: true, sz: 12, color: { rgb: '102033' } },
+    fill: { patternType: 'solid', fgColor: { rgb: 'F5FAFE' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  },
+  dataText: {
+    alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+    border: {
+      top: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      bottom: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      left: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      right: { style: 'thin', color: { rgb: 'D7E1EA' } },
+    },
+  },
+  dataNumber: {
+    numFmt: '#,##0.00',
+    alignment: { horizontal: 'right', vertical: 'top' },
+    border: {
+      top: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      bottom: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      left: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      right: { style: 'thin', color: { rgb: 'D7E1EA' } },
+    },
+  },
+  percent: {
+    numFmt: '0.0%',
+    alignment: { horizontal: 'right', vertical: 'top' },
+    border: {
+      top: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      bottom: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      left: { style: 'thin', color: { rgb: 'D7E1EA' } },
+      right: { style: 'thin', color: { rgb: 'D7E1EA' } },
+    },
+  },
+  totalLabel: {
+    font: { bold: true },
+    fill: { patternType: 'solid', fgColor: { rgb: 'EAF3FB' } },
+    border: {
+      top: { style: 'thin', color: { rgb: 'B7CFE2' } },
+      bottom: { style: 'thin', color: { rgb: 'B7CFE2' } },
+      left: { style: 'thin', color: { rgb: 'B7CFE2' } },
+      right: { style: 'thin', color: { rgb: 'B7CFE2' } },
+    },
+  },
+  total: {
+    font: { bold: true },
+    fill: { patternType: 'solid', fgColor: { rgb: 'F4F9FD' } },
+    numFmt: '#,##0.00',
+    alignment: { horizontal: 'right', vertical: 'top' },
+    border: {
+      top: { style: 'thin', color: { rgb: 'B7CFE2' } },
+      bottom: { style: 'thin', color: { rgb: 'B7CFE2' } },
+      left: { style: 'thin', color: { rgb: 'B7CFE2' } },
+      right: { style: 'thin', color: { rgb: 'B7CFE2' } },
+    },
+  },
+}
+
+function setWorkbookCell(worksheet, rowIndex, columnIndex, style, value) {
+  const address = workbookCellAddress(rowIndex, columnIndex)
+  const isNumeric = typeof value === 'number' && Number.isFinite(value)
+  worksheet[address] = worksheet[address] ?? {}
+  worksheet[address].t = isNumeric ? 'n' : 's'
+  worksheet[address].v = isNumeric ? value : String(value ?? '')
+  worksheet[address].s = cloneWorkbookStyle(style)
+}
+
+function sheetSafeName(value) {
+  return String(value ?? 'Extract')
+    .replace(/[\\/?*\[\]:]/g, ' ')
+    .trim()
+    .slice(0, 31) || 'Extract'
+}
+
+function slugify(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'extract'
+}
+
+function formatWorkbookDate(value) {
+  if (!value) return 'No date'
+  return new Date(value).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function buildExtractWorkbookSheets({ companyName, branchName, preparedAt, taxableRevenue, nonTaxableRevenue, deductibleExpenses, nonDeductibleExpenses, thresholdHeadroom, salaryDeclaredTotal, salaryCoverage, auditIncludedTotal, reviewCount, revenueRows, expenseRows }) {
+  const allRows = [...revenueRows, ...expenseRows]
+  const extractedYear = getWorkbookYear(allRows)
+  const monthNames = [
+    'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+  ]
+
+  function monthValuesFromRows(rows) {
+    return monthNames.map((_, index) => rows
+      .filter((row) => (getExtractRowMonthIndex(row.date, extractedYear) ?? 0) === index)
+      .reduce((total, row) => total + toNumber(row.amount), 0))
+  }
+
+  function buildDetailRows(rows, prefix) {
+    return rows.map((row, index) => {
+      const rowMonthIndex = getExtractRowMonthIndex(row.date, extractedYear) ?? 0
+      const monthlyValues = Array.from({ length: 12 }, (_, monthIndex) => (
+        rowMonthIndex === monthIndex ? toNumber(row.amount) : 0
+      ))
+
+      return {
+        kind: 'data',
+        cells: [
+          `${prefix}.${index + 1}`,
+          row.label,
+          ...monthlyValues,
+          sumArray(monthlyValues),
+        ],
+      }
+    })
+  }
+
+  const receiptRows = buildDetailRows(revenueRows, '1')
+  const paymentRows = buildDetailRows(expenseRows, '2')
+  const receiptTotals = monthValuesFromRows(revenueRows)
+  const paymentTotals = monthValuesFromRows(expenseRows)
+  const profitTotals = receiptTotals.map((value, index) => value - paymentTotals[index])
+
+  const recPaymentSheet = {
+    key: 'rec-payment',
+    title: 'REC & PAYMENT',
+    rows: [
+      ['BEALET OPTICALS'],
+      [`${String(branchName).toUpperCase()} REC & PAYMENT`],
+      [`FINANCIAL DETAILS FOR THE PERIOD JANUARY TO DECEMBER ${extractedYear}`],
+      [`PREPARED ${preparedAt}`],
+      ['SN', 'DETAILS', ...monthNames.map((month) => month.slice(0, 3)), 'TOTAL'],
+      ['RECEIPTS'],
+      ...receiptRows.map((row) => row.cells),
+      ['', 'TOTAL RECEIPTS', ...receiptTotals, sumArray(receiptTotals)],
+      ['PAYMENTS'],
+      ...paymentRows.map((row) => row.cells),
+      ['', 'TOTAL PAYMENTS', ...paymentTotals, sumArray(paymentTotals)],
+      ['', 'PROFIT / LOSS', ...profitTotals, sumArray(profitTotals)],
+    ],
+    columnCount: 15,
+    widths: [8, 36, ...Array.from({ length: 12 }, () => 12), 14],
+    freeze: { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' },
+  }
+
+  const summaryRows = [
+    ['BEALET OPTICALS'],
+    ['AUDITOR EXTRACT WORKBOOK'],
+    [`${companyName} | ${branchName}`],
+    [`Prepared ${preparedAt}`],
+    [''],
+    ['SUMMARY METRICS'],
+    ['Metric', 'Value', 'Description'],
+    ['Revenue marked for filing', taxableRevenue, 'Rows currently classified for declaration'],
+    ['Revenue outside filing scope', nonTaxableRevenue, 'Rows currently classified as excluded'],
+    ['Expenses marked for filing', deductibleExpenses, 'Rows currently allowed in the working extract'],
+    ['Expenses outside filing scope', nonDeductibleExpenses, 'Rows currently excluded from the extract'],
+    ['Threshold headroom', thresholdHeadroom, 'Remaining room under the annual benchmark'],
+    ['Declared salaries', salaryDeclaredTotal, 'Salary totals included in the extract'],
+    ['Coverage after expenses', salaryCoverage, 'Revenue less deductible expenses'],
+    ['Audit pack value', auditIncludedTotal, 'Total value currently marked for audit-facing output'],
+    ['Rows needing review', reviewCount, 'Entries still awaiting confirmation'],
+  ]
+
+  return [
+    {
+      key: 'summary',
+      title: 'Extract Summary',
+      rows: summaryRows,
+      columnCount: 3,
+      widths: [28, 18, 56],
+      freeze: { xSplit: 0, ySplit: 6, topLeftCell: 'A7', activePane: 'bottomLeft', state: 'frozen' },
+    },
+    recPaymentSheet,
+  ]
+}
+
+function buildExtractWorkbookSheet(sheet) {
+  const worksheet = XLSX.utils.aoa_to_sheet(sheet.rows)
+  worksheet['!cols'] = sheet.widths.map((wch) => ({ wch }))
+  worksheet['!freeze'] = sheet.freeze
+  const mergeLimit = Math.max(0, sheet.columnCount - 1)
+  worksheet['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: mergeLimit } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: mergeLimit } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: mergeLimit } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: mergeLimit } },
+  ]
+
+  for (let rowIndex = 0; rowIndex < sheet.rows.length; rowIndex += 1) {
+    const row = sheet.rows[rowIndex]
+    const isTitleRow = rowIndex < 4
+    const isHeaderRow = rowIndex === 4
+    const isSectionRow = row.length === 1 && typeof row[0] === 'string' && ['RECEIPTS', 'PAYMENTS'].includes(row[0])
+    const isSummaryHeader = sheet.key === 'summary' && rowIndex === 6
+    const isDataStart = sheet.key === 'summary' ? rowIndex >= 7 : rowIndex >= 6
+
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const value = row[colIndex]
+      const style = isTitleRow
+        ? rowIndex === 0
+          ? WORKBOOK_STYLES.title
+          : rowIndex === 1
+            ? WORKBOOK_STYLES.subtitle
+            : WORKBOOK_STYLES.section
+        : isHeaderRow || isSummaryHeader
+          ? WORKBOOK_STYLES.header
+          : rowIndex === 5 && sheet.key === 'summary'
+            ? WORKBOOK_STYLES.section
+            : isSectionRow
+              ? WORKBOOK_STYLES.section
+            : isDataStart
+              ? (typeof value === 'number' && Number.isFinite(value) ? WORKBOOK_STYLES.dataNumber : WORKBOOK_STYLES.dataText)
+              : WORKBOOK_STYLES.dataText
+
+      if (sheet.key === 'summary' && rowIndex >= 7 && colIndex === 1 && typeof value === 'number') {
+        setWorkbookCell(worksheet, rowIndex, colIndex, WORKBOOK_STYLES.dataNumber, value)
+      } else if (sheet.key === 'summary' && rowIndex >= 7 && colIndex === 0) {
+        setWorkbookCell(worksheet, rowIndex, colIndex, WORKBOOK_STYLES.dataText, value)
+      } else if (sheet.key === 'rec-payment' && rowIndex >= 6 && colIndex >= 2) {
+        setWorkbookCell(worksheet, rowIndex, colIndex, WORKBOOK_STYLES.dataNumber, value)
+      } else {
+        setWorkbookCell(worksheet, rowIndex, colIndex, style, value)
+      }
+    }
+  }
+
+  if (sheet.key === 'summary') {
+    for (let rowIndex = 7; rowIndex < sheet.rows.length; rowIndex += 1) {
+      setWorkbookCell(worksheet, rowIndex, 1, WORKBOOK_STYLES.dataNumber, sheet.rows[rowIndex][1])
+    }
+  }
+
+  return worksheet
+}
+
+function extractWorkbookFileName(branchName, preparedAt) {
+  return `bealet-extract-${slugify(branchName)}-${slugify(preparedAt)}.xlsx`
+}
+
+function exportExtractWorkbook(sheets, branchName, preparedAt) {
+  const workbook = XLSX.utils.book_new()
+
+  for (const sheet of sheets) {
+    const worksheet = buildExtractWorkbookSheet(sheet)
+    worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 4, c: 0 }, e: { r: sheet.rows.length - 1, c: sheet.columnCount - 1 } }) }
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetSafeName(sheet.title))
+  }
+
+  workbook.Workbook = {
+    Views: [{ activeTab: 0 }],
+    CalcPr: { fullCalcOnLoad: true, forceFullCalc: true },
+  }
+
+  const fileName = extractWorkbookFileName(branchName, preparedAt)
+
+  if (typeof XLSX.writeFile === 'function') {
+    XLSX.writeFile(workbook, fileName, { cellStyles: true, bookType: 'xlsx' })
+    return
+  }
+
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', cellStyles: true })
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.style.display = 'none'
+  document.body.appendChild(anchor)
+  anchor.click()
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url)
+    anchor.remove()
+  }, 1000)
+}
+
+function createExtractAuditorReportHtml({ companyName, branchName, taxableRevenue, deductibleExpenses, thresholdHeadroom, salaryDeclaredTotal, salaryCoverage, rows, includeNotes, preparedAt }) {
   const showNotes = includeNotes && rows.some((row) => row.reason)
   const rowsHtml = rows.map((row, index) => `
     <tr>
@@ -125,6 +461,7 @@ function createExtractAuditorReportHtml({ companyName, branchName, taxableRevenu
         <h1>${escapeHtml(companyName)}</h1>
         <h2>Auditor Financial Extract</h2>
         <p>${escapeHtml(branchName)}</p>
+        <p class="meta-line">Prepared ${escapeHtml(preparedAt ?? new Date().toLocaleString())}</p>
       </div>
       <div class="summary">
         <div class="summary-card"><span>Taxable Revenue</span><strong>${escapeHtml(currency.format(taxableRevenue))}</strong></div>
@@ -170,7 +507,12 @@ export default function ExtractSection(props) {
   const [selectedExpenseKeys, setSelectedExpenseKeys] = useState([])
   const [salaryModalRow, setSalaryModalRow] = useState(null)
   const [salaryDraft, setSalaryDraft] = useState({ gross: '', allowance: '', declared: '', note: '' })
+  const [revenueClassificationFilter, setRevenueClassificationFilter] = useState('all')
+  const [expenseClassificationFilter, setExpenseClassificationFilter] = useState('all')
   const [auditorPreviewHtml, setAuditorPreviewHtml] = useState('')
+  const [auditorPreviewOpen, setAuditorPreviewOpen] = useState(false)
+  const [exportStatus, setExportStatus] = useState('')
+  const [exportError, setExportError] = useState('')
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(decisions))
@@ -231,7 +573,7 @@ export default function ExtractSection(props) {
       declaredAmount,
       note: expense.branch_name || '',
       decision,
-      isSalary: isSalaryExpense(expense),
+      isSalary: isPayrollProcessedSalaryExpense(expense),
       salaryDeclaration,
     }
   }), [decisions, expenseRecords, salaryDeclarations])
@@ -244,7 +586,10 @@ export default function ExtractSection(props) {
   const auditIncludedTotal = sumBy(allRows.filter((row) => row.decision.includeInAudit), (row) => row.amount)
   const reviewCount = allRows.filter((row) => row.decision.classification === 'review').length
   const incompleteReasons = allRows.filter((row) => !row.decision.reason.trim()).length
-  const visibleRows = activeTab === 'revenue' ? revenueRows : expenseRows
+  const visibleRows = (activeTab === 'revenue' ? revenueRows : expenseRows).filter((row) => {
+    const classificationFilter = activeTab === 'revenue' ? revenueClassificationFilter : expenseClassificationFilter
+    return classificationFilter === 'all' || row.decision.classification === classificationFilter
+  })
   const selectedKeys = activeTab === 'revenue' ? selectedRevenueKeys : selectedExpenseKeys
   const selectedCount = selectedKeys.length
   const salesFilters = props.financeSalesFilters
@@ -362,6 +707,7 @@ export default function ExtractSection(props) {
     }
     props.setFinanceSalesFilters(next)
     props.setFinanceSalesQuery(next)
+    setRevenueClassificationFilter('all')
   }
 
   function applyExpenseFilters(event) {
@@ -381,6 +727,7 @@ export default function ExtractSection(props) {
     }
     props.setFinanceExpenseFilters(next)
     props.setFinanceExpenseQuery(next)
+    setExpenseClassificationFilter('all')
   }
 
   function openSalaryDeclaration(row) {
@@ -409,8 +756,8 @@ export default function ExtractSection(props) {
     setSalaryModalRow(null)
   }
 
-  function previewAuditorReport() {
-    setAuditorPreviewHtml(createExtractAuditorReportHtml({
+  function buildAuditorReportHtml() {
+    return createExtractAuditorReportHtml({
       companyName: props.companyProfile?.company_name || 'Bealet Optical Center',
       branchName: props.branchName || 'Active branch',
       taxableRevenue,
@@ -420,31 +767,66 @@ export default function ExtractSection(props) {
       salaryCoverage,
       rows: auditorRows,
       includeNotes: auditorRows.some((row) => String(row.reason ?? '').trim()),
-    }))
+      preparedAt: new Date().toLocaleString(),
+    })
+  }
+
+  function openAuditorPreview() {
+    const html = buildAuditorReportHtml()
+    setAuditorPreviewHtml(html)
+    setAuditorPreviewOpen(true)
+    return html
+  }
+
+  function previewAuditorReport() {
+    openAuditorPreview()
   }
 
   function printAuditorReport() {
-    if (!auditorPreviewHtml) return
+    const html = auditorPreviewHtml || openAuditorPreview()
+    setAuditorPreviewOpen(true)
     const printWindow = window.open('', '_blank', 'width=1200,height=900')
     if (!printWindow) return
     printWindow.document.open()
-    printWindow.document.write(auditorPreviewHtml)
+    printWindow.document.write(html)
     printWindow.document.close()
     printWindow.focus()
     setTimeout(() => printWindow.print(), 300)
   }
 
   function exportAuditorExcel() {
-    if (!auditorPreviewHtml) return
-    const blob = new Blob([auditorPreviewHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `auditor-extract-${(props.branchName || 'branch').toLowerCase().replace(/\s+/g, '-')}.xls`
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    URL.revokeObjectURL(url)
+    try {
+      setExportError('')
+      setExportStatus('Preparing workbook download...')
+      const preparedAt = new Date().toLocaleString()
+      const workbookSheets = buildExtractWorkbookSheets({
+        companyName: props.companyProfile?.company_name || 'Bealet Optical Center',
+        branchName: props.branchName || 'Active branch',
+        preparedAt,
+        taxableRevenue,
+        nonTaxableRevenue,
+        deductibleExpenses,
+        nonDeductibleExpenses,
+        thresholdHeadroom,
+        salaryDeclaredTotal,
+        salaryCoverage,
+        auditIncludedTotal,
+        reviewCount,
+        revenueRows,
+        expenseRows,
+      })
+      exportExtractWorkbook(workbookSheets, props.branchName || 'branch', preparedAt)
+      setExportStatus('Workbook download started.')
+    } catch (error) {
+      setExportStatus('')
+      const message = error instanceof Error ? error.message : 'Unable to export the workbook right now.'
+      setExportError(message)
+      props.setFinanceError?.(message)
+    }
+  }
+
+  function closeAuditorPreview() {
+    setAuditorPreviewOpen(false)
   }
 
   return (
@@ -460,6 +842,8 @@ export default function ExtractSection(props) {
       </div>
 
       {props.financeError ? <div className="message-banner error">{props.financeError}</div> : null}
+      {exportError ? <div className="message-banner error">{exportError}</div> : null}
+      {exportStatus ? <div className="message-banner success">{exportStatus}</div> : null}
       <div className="message-banner">
         This workspace supports accountant review for lawful tax classification. Each decision is stored locally in this browser until backend persistence is added.
       </div>
@@ -468,6 +852,7 @@ export default function ExtractSection(props) {
         <StatWidget label="Taxable Revenue" value={currency.format(taxableRevenue)} note="Revenue currently marked for statutory declaration" icon="money" className="seen" />
         <StatWidget label="Non-taxable Revenue" value={currency.format(nonTaxableRevenue)} note="Revenue marked exempt or outside taxable scope" icon="shield" className="today" />
         <StatWidget label="Deductible Expenses" value={currency.format(deductibleExpenses)} note="Expenses currently allowed in the working tax view" icon="finance" className="total" />
+        <StatWidget label="Non-deductible Expenses" value={currency.format(nonDeductibleExpenses)} note="Expenses currently held outside the working tax view" icon="alert" className="pending" />
         <StatWidget label="Needs Review" value={String(reviewCount)} note={`${incompleteReasons} entries still have no supporting reason`} icon="alert" className="pending" />
       </section>
 
@@ -552,14 +937,14 @@ export default function ExtractSection(props) {
             <button type="button" className="ghost-button" disabled={!auditorPreviewHtml} onClick={printAuditorReport}>
               Print / Save PDF
             </button>
-            <button type="button" className="ghost-button" disabled={!auditorPreviewHtml} onClick={exportAuditorExcel}>
-              Export Excel
+            <button type="button" className="primary-button" disabled={!(revenueRows.length || expenseRows.length)} onClick={exportAuditorExcel}>
+              Export Excel workbook
             </button>
           </div>
 
           {auditorPreviewHtml ? (
             <div className="extract-preview-banner">
-              Auditor preview is ready. Non-deductible expenses and excluded rows are not included in this version.
+              Auditor preview is ready. Open the report panel below to review the formatted extract before printing or exporting.
             </div>
           ) : null}
         </article>
@@ -620,6 +1005,18 @@ export default function ExtractSection(props) {
                   <option value={25}>25</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
+                </select>
+              </label>
+              <label>
+                Tax status
+                <select
+                  value={revenueClassificationFilter}
+                  onChange={(event) => setRevenueClassificationFilter(event.target.value)}
+                >
+                  <option value="all">All classifications</option>
+                  {revenueStatusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </label>
               <div className="extract-filter-actions">
@@ -687,6 +1084,18 @@ export default function ExtractSection(props) {
                   <option value={25}>25</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
+                </select>
+              </label>
+              <label>
+                Expense treatment
+                <select
+                  value={expenseClassificationFilter}
+                  onChange={(event) => setExpenseClassificationFilter(event.target.value)}
+                >
+                  <option value="all">All classifications</option>
+                  {expenseStatusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </label>
               <div className="extract-filter-actions">
@@ -808,22 +1217,52 @@ export default function ExtractSection(props) {
         </article>
       </section>
 
-      {auditorPreviewHtml ? (
-        <section className="panel extract-report-preview-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Auditor Report Preview</p>
-              <h3>Deductible-only financial extract</h3>
-            </div>
-            <span className="panel-tag">{auditorRows.length} included rows</span>
-          </div>
+      {auditorPreviewOpen && auditorPreviewHtml ? (
+        <div className="modal-overlay" onClick={closeAuditorPreview}>
+          <article className="modal-panel extract-report-preview-modal report-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <header className="report-workbook-hero extract-report-preview-hero">
+              <div>
+                <p className="eyebrow">Auditor Report Preview</p>
+                <h3>Formatted extract ready for print or export</h3>
+                <p className="header-copy">
+                  This preview matches the report-style presentation used elsewhere in the portal while preserving the classification and salary handling already entered in this workspace.
+                </p>
+              </div>
+              <div className="report-workbook-actions">
+                <button type="button" className="ghost-button" onClick={closeAuditorPreview}>Close</button>
+                <button type="button" className="ghost-button" onClick={printAuditorReport}>Print / Save PDF</button>
+                <button type="button" className="primary-button" onClick={exportAuditorExcel}>Export Excel workbook</button>
+              </div>
+            </header>
 
-          <iframe
-            title="Auditor report preview"
-            className="extract-report-preview-frame"
-            srcDoc={auditorPreviewHtml}
-          />
-        </section>
+            <section className="report-sheet extract-report-preview-sheet">
+              <div className="report-sheet-meta extract-report-preview-meta">
+                <div>
+                  <span>Company</span>
+                  <strong>{props.companyProfile?.company_name || 'Bealet Optical Center'}</strong>
+                </div>
+                <div>
+                  <span>Branch</span>
+                  <strong>{props.branchName || 'Active branch'}</strong>
+                </div>
+                <div>
+                  <span>Included Rows</span>
+                  <strong>{auditorRows.length}</strong>
+                </div>
+                <div>
+                  <span>Preview Mode</span>
+                  <strong>Report-style view</strong>
+                </div>
+              </div>
+
+              <iframe
+                title="Auditor report preview"
+                className="extract-report-preview-frame"
+                srcDoc={auditorPreviewHtml}
+              />
+            </section>
+          </article>
+        </div>
       ) : null}
 
       {salaryModalRow ? (

@@ -1677,22 +1677,27 @@ class InventoryController extends Controller
         foreach (['od', 'os'] as $eyeKey) {
             $primary = $spectacleRx[$eyeKey] ?? [];
             $fallback = $refraction[$eyeKey] ?? [];
+            $value = static function (string $field) use ($primary, $fallback): string {
+                $primaryValue = (string) ($primary[$field] ?? '');
+
+                return filled($primaryValue) ? $primaryValue : (string) ($fallback[$field] ?? '');
+            };
             $eye = array_filter([
-                $primary['sphere'] ?? $fallback['sphere'] ?? '',
-                $primary['cylinder'] ?? $fallback['cylinder'] ?? '',
-                $primary['axis'] ?? $fallback['axis'] ?? '',
-                $primary['add'] ?? $fallback['add'] ?? '',
-                $primary['va'] ?? $fallback['va'] ?? '',
-                $primary['lens_type'] ?? $fallback['lens_type'] ?? '',
+                $value('sphere'),
+                $value('cylinder'),
+                $value('axis'),
+                $value('add'),
+                $value('va'),
+                $value('lens_type'),
             ], fn ($value) => filled($value));
 
             $eyes[$eyeKey] = [
-                'sphere' => (string) ($primary['sphere'] ?? $fallback['sphere'] ?? ''),
-                'cylinder' => (string) ($primary['cylinder'] ?? $fallback['cylinder'] ?? ''),
-                'axis' => (string) ($primary['axis'] ?? $fallback['axis'] ?? ''),
-                'add' => (string) ($primary['add'] ?? $fallback['add'] ?? ''),
-                'va' => (string) ($primary['va'] ?? $fallback['va'] ?? ''),
-                'lens_type' => (string) ($primary['lens_type'] ?? $fallback['lens_type'] ?? ''),
+                'sphere' => $value('sphere'),
+                'cylinder' => $value('cylinder'),
+                'axis' => $value('axis'),
+                'add' => $value('add'),
+                'va' => $value('va'),
+                'lens_type' => $value('lens_type'),
             ];
         }
 

@@ -173,6 +173,34 @@ export default function LensOrdersSection(props) {
     }
   }
 
+  function openWhatsAppShare() {
+    const exportOrders = getSelectedOrders()
+    if (!exportOrders) return
+
+    try {
+      const draft = buildWhatsAppDraft({
+        companyName,
+        branchName,
+        rangeLabel,
+        technicianName,
+        orders: exportOrders,
+        commentMap,
+      })
+      const encodedDraft = encodeURIComponent(draft)
+      const whatsappAppUrl = `whatsapp://send?text=${encodedDraft}`
+      const whatsappWebUrl = `https://web.whatsapp.com/send?text=${encodedDraft}`
+      const popup = window.open(whatsappAppUrl, '_blank', 'noopener,noreferrer')
+      if (!popup) {
+        window.open(whatsappWebUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
+      popup.focus?.()
+      props.setLensOrdersSuccess?.(`${exportOrders.length} selected lens order${exportOrders.length === 1 ? '' : 's'} sent to WhatsApp.`)
+    } catch {
+      props.setLensOrdersError?.('Unable to open WhatsApp right now.')
+    }
+  }
+
   function downloadPdf() {
     const exportOrders = getSelectedOrders()
     if (!exportOrders) return
@@ -296,6 +324,9 @@ export default function LensOrdersSection(props) {
           <div className="filter-actions-row full-span lens-orders-actions">
             <button type="button" className="primary-button" onClick={copyDraft}>
               Copy WhatsApp Draft
+            </button>
+            <button type="button" className="whatsapp-button" onClick={openWhatsAppShare}>
+              Send to WhatsApp
             </button>
             <button type="button" className="nav-item" onClick={downloadPdf}>
               Download PDF

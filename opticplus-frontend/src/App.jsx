@@ -5355,6 +5355,7 @@ function App() {
                 companyProfile={companyProfileForm}
                 branchName={activeBranchName}
                 financeError={financeError}
+                setFinanceError={setFinanceError}
                 financeSalesFilters={financeSalesFilters}
                 setFinanceSalesFilters={setFinanceSalesFilters}
                 setFinanceSalesQuery={setFinanceSalesQuery}

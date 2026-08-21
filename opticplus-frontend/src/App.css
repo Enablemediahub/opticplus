@@ -1824,9 +1824,28 @@
   margin-top: 20px;
 }
 
+.extract-report-preview-modal {
+  width: min(1400px, calc(100vw - 32px));
+  display: grid;
+  gap: 18px;
+}
+
+.extract-report-preview-hero {
+  margin-bottom: 0;
+}
+
+.extract-report-preview-sheet {
+  display: grid;
+  gap: 16px;
+}
+
+.extract-report-preview-meta {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
 .extract-report-preview-frame {
   width: 100%;
-  min-height: 760px;
+  min-height: min(78vh, 860px);
   border: 1px solid var(--border-soft);
   border-radius: 18px;
   background: #ffffff;
@@ -5650,6 +5669,25 @@
 
 .lens-orders-actions .nav-item {
   border-radius: 14px;
+}
+
+.lens-orders-actions .whatsapp-button {
+  border-radius: 14px;
+  border: 1px solid rgba(37, 211, 102, 0.34);
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 800;
+  padding: 12px 16px;
+  box-shadow: 0 14px 28px rgba(18, 140, 126, 0.18);
+}
+
+.lens-orders-actions .whatsapp-button:hover:not(:disabled),
+.lens-orders-actions .whatsapp-button:focus-visible {
+  background: linear-gradient(135deg, #1fb85a, #0f766e);
+  border-color: rgba(37, 211, 102, 0.52);
+  box-shadow: 0 18px 32px rgba(18, 140, 126, 0.24);
+  transform: translateY(-1px);
 }
 
 .lens-orders-table-heading {
