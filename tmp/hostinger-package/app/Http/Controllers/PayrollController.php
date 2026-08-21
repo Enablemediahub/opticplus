@@ -337,60 +337,167 @@ class PayrollController extends Controller
             'pay_month' => ['required', 'integer', 'min:1', 'max:12'],
             'pay_year' => ['required', 'integer', 'min:2020'],
             'payment_method' => ['nullable', 'string', 'max:50'],
+            'declared_salary_payment_method' => ['nullable', 'string', 'max:50'],
+            'allowance_payment_method' => ['nullable', 'string', 'max:50'],
             'declarations' => ['nullable', 'array'],
+            'employee_ids' => ['required', 'array', 'min:1'],
+            'employee_ids.*' => ['integer'],
+            'bulk_mode' => ['nullable', 'string', 'in:full,declared,allowance'],
             'override_balance' => ['nullable', 'boolean'],
         ]);
 
         $month = (int) $validated['pay_month'];
         $year = (int) $validated['pay_year'];
-        $employees = collect($this->employeePayrollRows($branchId, $month, $year, '', 'unpaid'));
-        $totalPayroll = (float) $employees->sum('net_payable');
+        $selectedEmployeeIds = collect($validated['employee_ids'])
+            ->map(fn ($employeeId) => (int) $employeeId)
+            ->filter(fn (int $employeeId) => $employeeId > 0)
+            ->unique()
+            ->values();
+        $bulkMode = $validated['bulk_mode'] ?? 'full';
+        $selectedEmployees = collect($this->employeePayrollRows($branchId, $month, $year, '', 'unpaid'))
+            ->filter(fn (array $employee) => $selectedEmployeeIds->contains((int) $employee['id']))
+            ->values();
+
+        if ($selectedEmployees->isEmpty()) {
+            return response()->json(['message' => 'Select at least one unpaid employee before running bulk payroll.'], 422);
+        }
+
+        $bulkPlans = $selectedEmployees
+            ->map(function (array $employee) use ($validated, $branchId, $month, $year, $bulkMode): array {
+                $declaration = $validated['declarations'][$employee['id']] ?? $validated['declarations'][(string) $employee['id']] ?? [];
+                $grossSalary = (float) ($employee['salary'] ?? 0);
+                [$declaredSalary, $allowanceAmount] = $this->resolvePayrollSplit(
+                    $grossSalary,
+                    $declaration['declared_salary'] ?? null,
+                    $declaration['allowance_amount'] ?? null,
+                );
+                $existingPayroll = $this->payrollRecord($branchId, (int) $employee['id'], $month, $year);
+                $advanceDeduction = $this->pendingAdvanceAmount($branchId, (int) $employee['id'], $month, $year);
+                [$declaredDue, $allowanceDue] = $this->allocatePayrollSplitAfterDeduction($declaredSalary, $allowanceAmount, $advanceDeduction);
+                $existingDeclaredPaid = round((float) ($existingPayroll?->declared_paid ?? 0), 2);
+                $existingAllowancePaid = round((float) ($existingPayroll?->allowance_paid ?? 0), 2);
+                $remainingDeclared = round(max($declaredDue - $existingDeclaredPaid, 0), 2);
+                $remainingAllowance = round(max($allowanceDue - $existingAllowancePaid, 0), 2);
+                $payDeclared = in_array($bulkMode, ['full', 'declared'], true) && $remainingDeclared > 0;
+                $payAllowance = in_array($bulkMode, ['full', 'allowance'], true) && $remainingAllowance > 0;
+
+                $declaredPayment = $payDeclared ? $remainingDeclared : 0.0;
+                $allowancePayment = $payAllowance ? $remainingAllowance : 0.0;
+                $paymentAmount = round($declaredPayment + $allowancePayment, 2);
+
+                return [
+                    'employee' => $employee,
+                    'declaration' => $declaration,
+                    'existingPayroll' => $existingPayroll,
+                    'advanceDeduction' => $advanceDeduction,
+                    'declaredSalary' => $declaredSalary,
+                    'allowanceAmount' => $allowanceAmount,
+                    'declaredDue' => $declaredDue,
+                    'allowanceDue' => $allowanceDue,
+                    'existingDeclaredPaid' => $existingDeclaredPaid,
+                    'existingAllowancePaid' => $existingAllowancePaid,
+                    'remainingDeclared' => $remainingDeclared,
+                    'remainingAllowance' => $remainingAllowance,
+                    'payDeclared' => $payDeclared,
+                    'payAllowance' => $payAllowance,
+                    'declaredPayment' => $declaredPayment,
+                    'allowancePayment' => $allowancePayment,
+                    'paymentAmount' => $paymentAmount,
+                ];
+            })
+            ->filter(fn (array $plan) => $plan['paymentAmount'] > 0)
+            ->values();
+
+        if ($bulkPlans->isEmpty()) {
+            return response()->json(['message' => 'The selected employees have no remaining payroll or allowance to process.'], 422);
+        }
+
+        $totalPayroll = (float) $bulkPlans->sum('paymentAmount');
         $currentBalance = $this->currentBankBalance($branchId);
         $overrideBalance = (bool) ($validated['override_balance'] ?? false);
-
-        if ($employees->isEmpty()) {
-            return response()->json(['message' => 'No unpaid payroll records were found for the selected month.'], 422);
-        }
 
         if (! $overrideBalance && $currentBalance < $totalPayroll) {
             return response()->json(['message' => 'Insufficient bank balance for bulk payroll.'], 422);
         }
 
-        DB::transaction(function () use ($employees, $validated, $branchId, $month, $year, $totalPayroll, $currentBalance, $overrideBalance): void {
-            foreach ($employees as $employee) {
-                $declaration = $validated['declarations'][$employee['id']] ?? $validated['declarations'][(string) $employee['id']] ?? [];
-                [$declaredSalary, $allowanceAmount] = $this->resolvePayrollSplit(
-                    (float) $employee['salary'],
-                    $declaration['declared_salary'] ?? null,
-                    $declaration['allowance_amount'] ?? null,
-                );
-                [$declaredPaid, $allowancePaid] = $this->allocatePayrollSplitAfterDeduction($declaredSalary, $allowanceAmount, (float) $employee['pending_advances']);
-                $declaredPaymentMethod = $declaration['declared_salary_payment_method'] ?? $validated['payment_method'] ?? 'bank_transfer';
-                $allowancePaymentMethod = $declaration['allowance_payment_method'] ?? $validated['payment_method'] ?? 'cash';
+        DB::transaction(function () use ($bulkPlans, $validated, $branchId, $month, $year, $totalPayroll, $currentBalance, $overrideBalance, $bulkMode): void {
+            $declaredPaymentMethod = $validated['declared_salary_payment_method'] ?? $validated['payment_method'] ?? 'bank_transfer';
+            $allowancePaymentMethod = $validated['allowance_payment_method'] ?? $validated['payment_method'] ?? 'cash';
 
-                DB::table('payroll_history')->insert([
-                    'branch_id' => $branchId,
-                    'employee_id' => $employee['id'],
-                    'employee_name' => $employee['name'],
-                    'gross_salary' => $employee['salary'],
-                    'declared_salary' => $declaredSalary,
-                    'allowance_amount' => $allowanceAmount,
-                    'declared_paid' => $declaredPaid,
-                    'allowance_paid' => $allowancePaid,
-                    'advance_deduction' => $employee['pending_advances'],
-                    'net_salary' => $employee['net_payable'],
-                    'pay_month' => $month,
-                    'pay_year' => $year,
-                    'payment_date' => now(),
-                    'notes' => trim(($declaration['notes'] ?? '').' Bulk payroll processing'),
-                    'payment_method' => $validated['payment_method'] ?? 'bank_transfer',
-                    'declared_payment_method' => $declaredPaymentMethod,
-                    'allowance_payment_method' => $allowancePaymentMethod,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+            foreach ($bulkPlans as $plan) {
+                $employee = $plan['employee'];
+                $existingPayroll = $plan['existingPayroll'];
+                $advanceDeduction = $plan['advanceDeduction'];
+                $declaredSalary = $plan['declaredSalary'];
+                $allowanceAmount = $plan['allowanceAmount'];
+                $declaredDue = $plan['declaredDue'];
+                $allowanceDue = $plan['allowanceDue'];
+                $existingDeclaredPaid = $plan['existingDeclaredPaid'];
+                $existingAllowancePaid = $plan['existingAllowancePaid'];
+                $payDeclared = $plan['payDeclared'];
+                $payAllowance = $plan['payAllowance'];
+                $declaredPayment = $plan['declaredPayment'];
+                $allowancePayment = $plan['allowancePayment'];
+                $paymentLabel = $this->describePayrollPayment($payDeclared, $payAllowance);
+                $paymentMethod = match ($bulkMode) {
+                    'declared' => $declaredPaymentMethod,
+                    'allowance' => $allowancePaymentMethod,
+                    default => $declaredPaymentMethod === $allowancePaymentMethod
+                        ? $declaredPaymentMethod
+                        : 'split',
+                };
+                $notesPrefix = match ($bulkMode) {
+                    'declared' => 'Bulk declared salary payroll processing',
+                    'allowance' => 'Bulk allowance payroll processing',
+                    default => 'Bulk payroll processing',
+                };
+                $existingNotes = trim((string) ($plan['declaration']['notes'] ?? ''));
+                $combinedNotes = trim($existingNotes.' '.$notesPrefix);
 
-                if ($employee['pending_advances'] > 0) {
+                if ($existingPayroll) {
+                    DB::table('payroll_history')
+                        ->where('id', $existingPayroll->id)
+                        ->update([
+                            'employee_name' => $employee['name'],
+                            'gross_salary' => $employee['salary'],
+                            'declared_salary' => $declaredSalary,
+                            'allowance_amount' => $allowanceAmount,
+                            'declared_paid' => round($existingDeclaredPaid + $declaredPayment, 2),
+                            'allowance_paid' => round($existingAllowancePaid + $allowancePayment, 2),
+                            'advance_deduction' => $advanceDeduction,
+                            'net_salary' => round($declaredDue + $allowanceDue, 2),
+                            'payment_date' => now(),
+                            'notes' => $combinedNotes,
+                            'payment_method' => $paymentMethod,
+                            'declared_payment_method' => $payDeclared ? $declaredPaymentMethod : ($existingPayroll->declared_payment_method ?? $declaredPaymentMethod),
+                            'allowance_payment_method' => $payAllowance ? $allowancePaymentMethod : ($existingPayroll->allowance_payment_method ?? $allowancePaymentMethod),
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    DB::table('payroll_history')->insert([
+                        'branch_id' => $branchId,
+                        'employee_id' => $employee['id'],
+                        'employee_name' => $employee['name'],
+                        'gross_salary' => $employee['salary'],
+                        'declared_salary' => $declaredSalary,
+                        'allowance_amount' => $allowanceAmount,
+                        'declared_paid' => $declaredPayment,
+                        'allowance_paid' => $allowancePayment,
+                        'advance_deduction' => $advanceDeduction,
+                        'net_salary' => round($declaredDue + $allowanceDue, 2),
+                        'pay_month' => $month,
+                        'pay_year' => $year,
+                        'payment_date' => now(),
+                        'notes' => $combinedNotes,
+                        'payment_method' => $paymentMethod,
+                        'declared_payment_method' => $payDeclared ? $declaredPaymentMethod : 'bank_transfer',
+                        'allowance_payment_method' => $payAllowance ? $allowancePaymentMethod : 'cash',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                if ($advanceDeduction > 0) {
                     DB::table('salary_advances')
                         ->where('branch_id', $branchId)
                         ->where('employee_id', $employee['id'])
@@ -402,6 +509,30 @@ class PayrollController extends Controller
                             'updated_at' => now(),
                         ]);
                 }
+
+                if ($declaredPayment > 0) {
+                    DB::table('expenses')->insert([
+                        'branch_id' => $branchId,
+                        'description' => 'Bulk Declared Salary Payroll Processing - '.$employee['name'].' - '.$this->monthLabel($month, $year),
+                        'amount' => round($declaredPayment, 2),
+                        'date' => now()->toDateString(),
+                        'category' => 'Salary',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                if ($allowancePayment > 0) {
+                    DB::table('expenses')->insert([
+                        'branch_id' => $branchId,
+                        'description' => 'Bulk Allowance Payroll Processing - '.$employee['name'].' - '.$this->monthLabel($month, $year),
+                        'amount' => round($allowancePayment, 2),
+                        'date' => now()->toDateString(),
+                        'category' => 'Allowance',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
             }
 
             if (! $overrideBalance) {
@@ -410,26 +541,23 @@ class PayrollController extends Controller
                     'branch_id' => $branchId,
                     'amount' => -$totalPayroll,
                     'date' => now()->toDateString(),
-                    'description' => 'Bulk payroll for '.$this->monthLabel($month, $year).' ('.$employees->count().' employees)',
+                    'description' => $bulkMode === 'allowance'
+                        ? 'Bulk allowance payroll for '.$this->monthLabel($month, $year).' ('.$bulkPlans->count().' employees)'
+                        : 'Bulk payroll for '.$this->monthLabel($month, $year).' ('.$bulkPlans->count().' employees)',
                     'type' => 'withdrawal',
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             }
 
-            DB::table('expenses')->insert([
-                'branch_id' => $branchId,
-                'description' => 'Bulk Payroll Processing - '.$this->monthLabel($month, $year),
-                'amount' => $totalPayroll,
-                'date' => now()->toDateString(),
-                'category' => 'Payroll',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
         });
 
         return response()->json([
-            'message' => 'Bulk payroll processed successfully.',
+            'message' => match ($bulkMode) {
+                'declared' => 'Bulk declared salary payroll processed successfully.',
+                'allowance' => 'Bulk allowance payroll processed successfully.',
+                default => 'Bulk payroll processed successfully.',
+            },
         ], 201);
     }
 

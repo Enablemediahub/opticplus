@@ -43,8 +43,11 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   const [filters, setFilters] = useState(defaultFilters())
   const [query, setQuery] = useState(defaultFilters())
   const [advanceForm, setAdvanceForm] = useState(defaultAdvanceForm())
-  const [bulkPaymentMethod, setBulkPaymentMethod] = useState('bank_transfer')
+  const [bulkDeclaredPaymentMethod, setBulkDeclaredPaymentMethod] = useState('bank_transfer')
+  const [bulkAllowancePaymentMethod, setBulkAllowancePaymentMethod] = useState('cash')
+  const [bulkMode, setBulkMode] = useState('full')
   const [bulkOverrideBalance, setBulkOverrideBalance] = useState(false)
+  const [bulkSelectedEmployeeIds, setBulkSelectedEmployeeIds] = useState([])
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -86,7 +89,8 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         const response = await apiFetch(`/payroll/meta?branch_id=${branchId}`, { token })
         if (!cancelled) {
           setMeta(response)
-          setBulkPaymentMethod(response.payment_methods?.[0] ?? 'bank_transfer')
+          setBulkDeclaredPaymentMethod(response.payment_methods?.[0] ?? 'bank_transfer')
+          setBulkAllowancePaymentMethod(response.payment_methods?.[1] ?? response.payment_methods?.[0] ?? 'cash')
         }
       } catch (loadError) {
         if (!cancelled) setError(loadError.message)
@@ -98,6 +102,10 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
       cancelled = true
     }
   }, [apiFetch, branchId, session, token])
+
+  useEffect(() => {
+    setBulkSelectedEmployeeIds([])
+  }, [branchId, query.month, query.year, query.search, query.status])
 
   useEffect(() => {
     let cancelled = false
@@ -174,6 +182,42 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
     }
   }, [data?.employees, employeeDeclarations])
 
+  const bulkSelectedEmployeeIdSet = useMemo(
+    () => new Set(bulkSelectedEmployeeIds.map((employeeId) => String(employeeId))),
+    [bulkSelectedEmployeeIds],
+  )
+
+  const selectablePayrollEmployees = useMemo(
+    () => (data?.employees ?? []).filter((employee) => !employee.is_paid),
+    [data?.employees],
+  )
+
+  const selectedBulkEmployees = useMemo(
+    () => selectablePayrollEmployees.filter((employee) => bulkSelectedEmployeeIdSet.has(String(employee.id))),
+    [bulkSelectedEmployeeIdSet, selectablePayrollEmployees],
+  )
+
+  const bulkPayrollSummary = useMemo(() => {
+    return selectedBulkEmployees.reduce((summary, employee) => {
+      const declaration = employeeDeclarations[employee.id]
+      const amount = calculateBulkPayrollAmount(employee, declaration, bulkMode)
+      return {
+        selected_count: summary.selected_count + 1,
+        total_amount: summary.total_amount + amount,
+        allowance_total: summary.allowance_total + Number(declaration?.allowance_amount ?? 0),
+        salary_total: summary.salary_total + Number(declaration?.declared_salary ?? employee.salary ?? 0),
+      }
+    }, {
+      selected_count: 0,
+      total_amount: 0,
+      allowance_total: 0,
+      salary_total: 0,
+    })
+  }, [bulkMode, employeeDeclarations, selectedBulkEmployees])
+
+  const isBulkSelectionComplete = selectablePayrollEmployees.length > 0
+    && selectablePayrollEmployees.every((employee) => bulkSelectedEmployeeIdSet.has(String(employee.id)))
+
   async function refreshPayroll() {
     setQuery((current) => ({ ...current }))
   }
@@ -181,6 +225,26 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   function showAllPayrollCandidates() {
     setFilters((current) => ({ ...current, status: 'all' }))
     setQuery((current) => ({ ...current, status: 'all' }))
+  }
+
+  function toggleBulkEmployee(employeeId) {
+    const normalizedEmployeeId = String(employeeId)
+    setBulkSelectedEmployeeIds((current) => (
+      current.includes(normalizedEmployeeId)
+        ? current.filter((value) => value !== normalizedEmployeeId)
+        : [...current, normalizedEmployeeId]
+    ))
+  }
+
+  function toggleAllBulkEmployees() {
+    const eligibleEmployeeIds = selectablePayrollEmployees.map((employee) => String(employee.id))
+    const allSelected = eligibleEmployeeIds.length > 0 && eligibleEmployeeIds.every((employeeId) => bulkSelectedEmployeeIdSet.has(employeeId))
+
+    setBulkSelectedEmployeeIds(allSelected ? [] : eligibleEmployeeIds)
+  }
+
+  function clearBulkSelection() {
+    setBulkSelectedEmployeeIds([])
   }
 
   async function submitAdvance(event) {
@@ -252,13 +316,19 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   }
 
   async function processBulk() {
+    if (!selectedBulkEmployees.length) {
+      setError('Select at least one employee before running bulk payroll.')
+      return
+    }
+
     setIsProcessingBulk(true)
     setError('')
     setSuccess('')
 
     try {
-      const declarations = Object.entries(employeeDeclarations).reduce((collection, [employeeId, declaration]) => {
-        collection[employeeId] = {
+      const declarations = selectedBulkEmployees.reduce((collection, employee) => {
+        const declaration = employeeDeclarations[employee.id] ?? {}
+        collection[employee.id] = {
           declared_salary: Number(declaration.declared_salary ?? 0),
           allowance_amount: Number(declaration.allowance_amount ?? 0),
           notes: declaration.note ?? '',
@@ -272,14 +342,20 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         body: {
           pay_month: Number(query.month),
           pay_year: Number(query.year),
-          payment_method: bulkPaymentMethod,
+          payment_method: bulkDeclaredPaymentMethod,
+          declared_salary_payment_method: bulkDeclaredPaymentMethod,
+          allowance_payment_method: bulkAllowancePaymentMethod,
+          bulk_mode: bulkMode,
           override_balance: bulkOverrideBalance,
+          employee_ids: bulkSelectedEmployeeIds,
           declarations,
         },
       })
 
       setSuccess(response.message)
+      clearBulkSelection()
       showAllPayrollCandidates()
+      setQuery((current) => ({ ...current }))
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -338,7 +414,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
     setProcessDraft({
       pay_declared_salary: remainingDeclared > 0,
       pay_allowance: remainingAllowance > 0,
-      payment_method: bulkPaymentMethod,
+      payment_method: declaration.declared_salary_payment_method ?? 'bank_transfer',
       declared_salary_payment_method: declaration.declared_salary_payment_method ?? 'bank_transfer',
       allowance_payment_method: declaration.allowance_payment_method ?? 'cash',
       override_balance: bulkOverrideBalance,
@@ -386,7 +462,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   }
 
   return (
-    <section className="finance-section">
+    <section className="finance-section payroll-page">
       <div className="patients-header">
         <div>
           <p className="eyebrow">Payroll</p>
@@ -405,8 +481,8 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         <StatWidget label="Processed Staff" value={String(Number(data?.stats?.processed_count ?? 0))} note="Already paid for the selected payroll month" icon="receipt" className="today" />
       </section>
 
-      <section className="content-grid">
-        <article className="panel panel-wide">
+      <section className="content-grid payroll-content-grid">
+        <article className="panel panel-wide payroll-controls-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Payroll Controls</p>
@@ -454,47 +530,167 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
               </div>
             </form>
 
-            <div className="payroll-controls-side">
-              <div className="payroll-control-summary">
-                <div className="payroll-control-summary-card">
-                  <span>Declared salary pool</span>
-                  <strong>{currency.format(payrollSummary.declared_total)}</strong>
-                  <p>Salary portion currently marked as declared for {monthLabel(query.month, query.year)}.</p>
+            <div className="payroll-bulk-hero">
+              <div className="payroll-bulk-hero-header">
+                <div>
+                  <p className="eyebrow">Bulk Payroll</p>
+                  <h4>Tick employees, then set the salary and allowance tracks</h4>
+                  <p>Declared salary and allowance can carry different payment methods in the same bulk run.</p>
                 </div>
-                <div className="payroll-control-summary-card">
-                  <span>Allowance pool</span>
-                  <strong>{currency.format(payrollSummary.allowance_total)}</strong>
-                  <p>The remaining payroll value that will be treated as allowance for selected staff.</p>
-                </div>
-                <div className="payroll-control-summary-card">
-                  <span>Net payout after advances</span>
-                  <strong>{currency.format(payrollSummary.net_total)}</strong>
-                  <p>{payrollSummary.employee_count} unpaid staff in the current payroll batch.</p>
+                <div className="payroll-bulk-badge">
+                  <span>Selected staff</span>
+                  <strong>{bulkPayrollSummary.selected_count}</strong>
                 </div>
               </div>
 
-              <div className="payroll-bulk-bar">
-                <label>
-                  Bulk payment method
-                  <select value={bulkPaymentMethod} onChange={(event) => setBulkPaymentMethod(event.target.value)}>
-                    {(meta?.payment_methods ?? []).map((method) => <option key={method} value={method}>{titleize(method)}</option>)}
-                  </select>
-                </label>
-                <label className="memo-checkbox">
+              <div className="payroll-bulk-hero-grid">
+                <div className="payroll-bulk-summary">
+                  <div>
+                    <span>Batch scope</span>
+                    <strong>{bulkMode === 'full' ? 'Declared + allowance' : bulkMode === 'declared' ? 'Declared salary' : 'Allowance pool'}</strong>
+                  </div>
+                  <div>
+                    <span>Selected payout</span>
+                    <strong>{currency.format(bulkPayrollSummary.total_amount)}</strong>
+                  </div>
+                  <div>
+                    <span>Allowance pool</span>
+                    <strong>{currency.format(bulkPayrollSummary.allowance_total)}</strong>
+                  </div>
+                  <div>
+                    <span>Payroll month</span>
+                    <strong>{monthLabel(query.month, query.year)}</strong>
+                  </div>
+                  <div>
+                    <span>Advance deductions</span>
+                    <strong>{currency.format(selectedBulkEmployees.reduce((total, employee) => total + Number(employee.pending_advances ?? 0), 0))}</strong>
+                  </div>
+                  <div>
+                    <span>Selection total</span>
+                    <strong>{currency.format(bulkMode === 'allowance' ? bulkPayrollSummary.allowance_total : bulkPayrollSummary.total_amount)}</strong>
+                  </div>
+                </div>
+
+                <div className="payroll-bulk-scope-group" role="group" aria-label="Bulk payroll scope">
+                  <button type="button" className={`payroll-bulk-method-pill${bulkMode === 'full' ? ' is-active' : ''}`} onClick={() => setBulkMode('full')}>
+                    <span>Declared + allowance</span>
+                    <small>Process both payment paths</small>
+                  </button>
+                  <button type="button" className={`payroll-bulk-method-pill${bulkMode === 'declared' ? ' is-active' : ''}`} onClick={() => setBulkMode('declared')}>
+                    <span>Declared salary</span>
+                    <small>Salary only, allowance untouched</small>
+                  </button>
+                  <button type="button" className={`payroll-bulk-method-pill${bulkMode === 'allowance' ? ' is-active' : ''}`} onClick={() => setBulkMode('allowance')}>
+                    <span>Allowance pool</span>
+                    <small>Allowance only, expense recorded</small>
+                  </button>
+                </div>
+              </div>
+
+              <div className="payroll-bulk-methods-rail">
+                <div className="payroll-bulk-method-panel">
+                  <span>Declared salary payment method</span>
+                  <div className="payroll-bulk-method-group" role="group" aria-label="Declared salary payment method">
+                    {(meta?.payment_methods ?? []).length ? (
+                      (meta?.payment_methods ?? []).map((method) => (
+                        <button
+                          key={`declared-${method}`}
+                          type="button"
+                          className={`payroll-bulk-method-pill${bulkDeclaredPaymentMethod === method ? ' is-active' : ''}`}
+                          onClick={() => setBulkDeclaredPaymentMethod(method)}
+                        >
+                          <span>{titleize(method)}</span>
+                          <small>{bulkDeclaredPaymentMethod === method ? 'Selected' : 'Tap to select'}</small>
+                        </button>
+                      ))
+                    ) : (
+                      <label className="payroll-bulk-method-select">
+                        <span>Declared salary payment method</span>
+                        <select value={bulkDeclaredPaymentMethod} onChange={(event) => setBulkDeclaredPaymentMethod(event.target.value)}>
+                          <option value="bank_transfer">Bank Transfer</option>
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div className="payroll-bulk-method-panel">
+                  <span>Allowance payment method</span>
+                  <div className="payroll-bulk-method-group" role="group" aria-label="Allowance payment method">
+                    {(meta?.payment_methods ?? []).length ? (
+                      (meta?.payment_methods ?? []).map((method) => (
+                        <button
+                          key={`allowance-${method}`}
+                          type="button"
+                          className={`payroll-bulk-method-pill${bulkAllowancePaymentMethod === method ? ' is-active' : ''}`}
+                          onClick={() => setBulkAllowancePaymentMethod(method)}
+                        >
+                          <span>{titleize(method)}</span>
+                          <small>{bulkAllowancePaymentMethod === method ? 'Selected' : 'Tap to select'}</small>
+                        </button>
+                      ))
+                    ) : (
+                      <label className="payroll-bulk-method-select">
+                        <span>Allowance payment method</span>
+                        <select value={bulkAllowancePaymentMethod} onChange={(event) => setBulkAllowancePaymentMethod(event.target.value)}>
+                          <option value="cash">Cash</option>
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {(success || error) ? (
+                <div className={`payroll-bulk-status ${error ? 'is-error' : 'is-success'}`}>
+                  <strong>{error ? 'Bulk payroll could not be processed.' : 'Bulk payroll processed successfully.'}</strong>
+                  <span>{error || success}</span>
+                </div>
+              ) : null}
+
+              <div className="payroll-bulk-footer">
+                <label className="memo-checkbox payroll-bulk-override">
                   <input type="checkbox" checked={bulkOverrideBalance} onChange={(event) => setBulkOverrideBalance(event.target.checked)} />
                   <span>Override bank-balance warning</span>
                 </label>
-                <div className="filter-actions-row">
-                  <button type="button" className="primary-button" disabled={isProcessingBulk || !(data?.employees ?? []).some((row) => !row.is_paid)} onClick={processBulk}>
-                    {isProcessingBulk ? 'Processing...' : 'Process Bulk Payroll'}
+                <div className="filter-actions-row payroll-bulk-actions">
+                  <button type="button" className="ghost-button" disabled={!bulkSelectedEmployeeIds.length || isProcessingBulk} onClick={clearBulkSelection}>
+                    Clear selection
+                  </button>
+                  <button type="button" className="primary-button" disabled={isProcessingBulk || !bulkSelectedEmployeeIds.length} onClick={processBulk}>
+                    {isProcessingBulk
+                      ? 'Processing...'
+                      : bulkMode === 'allowance'
+                        ? `Process allowance pool (${bulkPayrollSummary.selected_count})`
+                        : bulkMode === 'declared'
+                          ? `Process declared salary (${bulkPayrollSummary.selected_count})`
+                          : `Process bulk payroll (${bulkPayrollSummary.selected_count})`}
                   </button>
                 </div>
+              </div>
+            </div>
+
+            <div className="payroll-control-summary">
+              <div className="payroll-control-summary-card">
+                <span>Declared salary pool</span>
+                <strong>{currency.format(payrollSummary.declared_total)}</strong>
+                <p>Salary portion currently marked as declared for {monthLabel(query.month, query.year)}.</p>
+              </div>
+              <div className="payroll-control-summary-card">
+                <span>Allowance pool</span>
+                <strong>{currency.format(payrollSummary.allowance_total)}</strong>
+                <p>The remaining payroll value that will be treated as allowance for selected staff.</p>
+              </div>
+              <div className="payroll-control-summary-card">
+                <span>Net payout after advances</span>
+                <strong>{currency.format(payrollSummary.net_total)}</strong>
+                <p>{payrollSummary.employee_count} unpaid staff in the current payroll batch.</p>
               </div>
             </div>
           </div>
         </article>
 
-        <article className="panel">
+        <article className="panel payroll-advance-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Salary Advance</p>
@@ -563,8 +759,8 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         </article>
       </section>
 
-      <section className="content-grid">
-        <article className="panel panel-wide">
+      <section className="content-grid payroll-content-grid">
+        <article className="panel panel-wide payroll-candidates-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Payroll Candidates</p>
@@ -577,6 +773,17 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
             <table className="portal-table">
               <thead>
                 <tr>
+                  <th>
+                    <label className="payroll-select-all">
+                      <input
+                        type="checkbox"
+                        checked={isBulkSelectionComplete}
+                        onChange={toggleAllBulkEmployees}
+                        disabled={!selectablePayrollEmployees.length}
+                      />
+                      <span>Select</span>
+                    </label>
+                  </th>
                   <th>Employee</th>
                   <th>Branch</th>
                   <th>Department</th>
@@ -592,10 +799,20 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan="11">Loading payroll records...</td></tr>
+                  <tr><td colSpan="12">Loading payroll records...</td></tr>
                 ) : (data?.employees ?? []).length ? (
                   data.employees.map((employee) => (
                     <tr key={employee.id}>
+                      <td>
+                        <label className="payroll-select-row">
+                          <input
+                            type="checkbox"
+                            checked={bulkSelectedEmployeeIdSet.has(String(employee.id))}
+                            disabled={employee.is_paid}
+                            onChange={() => toggleBulkEmployee(employee.id)}
+                          />
+                        </label>
+                      </td>
                       <td>
                         <div className="patient-table-primary payroll-employee-cell">
                           <strong>{employee.name}</strong>
@@ -645,14 +862,14 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                     </tr>
                   ))
                 ) : (
-                  <tr><td colSpan="11">No payroll candidates match the current filters.</td></tr>
+                  <tr><td colSpan="12">No payroll candidates match the current filters.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </article>
 
-        <article className="panel">
+        <article className="panel payroll-advances-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Salary Advances</p>
@@ -679,7 +896,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         </article>
       </section>
 
-      <article className="panel">
+      <article className="panel payroll-history-panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Payroll History</p>
@@ -993,4 +1210,21 @@ function calculatePayrollModalTotal(employee, declaration, draft) {
   )
 
   return Number(draft?.pay_declared_salary ? remainingDeclared : 0) + Number(draft?.pay_allowance ? remainingAllowance : 0)
+}
+
+function calculateBulkPayrollAmount(employee, declaration, bulkMode) {
+  if (!employee) return 0
+
+  const remainingDeclared = Math.max(
+    Number(declaration?.declared_salary ?? employee.salary ?? 0) - Number(employee.declared_paid ?? 0),
+    0,
+  )
+  const remainingAllowance = Math.max(
+    Number(declaration?.allowance_amount ?? 0) - Number(employee.allowance_paid ?? 0),
+    0,
+  )
+
+  return bulkMode === 'allowance'
+    ? Number(remainingAllowance)
+    : Number(remainingDeclared + remainingAllowance)
 }

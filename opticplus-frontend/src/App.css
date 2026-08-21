@@ -2593,8 +2593,8 @@
 
 .payroll-controls-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   align-items: start;
 }
 
@@ -2602,24 +2602,28 @@
   align-content: start;
 }
 
-.payroll-controls-side {
-  display: grid;
-  gap: 16px;
-}
-
 .payroll-control-summary {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .payroll-control-summary-card {
-  padding: 16px 18px;
+  padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)),
     var(--surface-soft);
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+}
+
+.payroll-control-summary-card:first-child {
+  grid-column: span 1;
+}
+
+.payroll-control-summary-card:last-child {
+  grid-column: 1 / -1;
 }
 
 .payroll-control-summary-card span {
@@ -2644,32 +2648,277 @@
   line-height: 1.45;
 }
 
-.payroll-bulk-bar {
+.payroll-bulk-hero {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr);
-  gap: 14px;
+  gap: 16px;
   align-items: start;
   margin-top: 0;
-  padding: 16px 18px;
-  border-radius: 18px;
+  padding: 16px 18px 18px;
+  border-radius: 22px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
     var(--surface-soft);
   box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
 }
 
-.payroll-bulk-bar label {
+.payroll-bulk-hero-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(180px, 0.44fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.payroll-bulk-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.payroll-bulk-hero label {
   display: grid;
   gap: 8px;
 }
 
-.payroll-bulk-bar .filter-actions-row {
+.payroll-bulk-hero-header h4 {
+  margin: 4px 0 6px;
+  font-size: 1.05rem;
+}
+
+.payroll-bulk-hero-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.payroll-bulk-badge {
+  min-width: 0;
+  width: 100%;
+  align-self: stretch;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  background: rgba(14, 165, 233, 0.08);
+  text-align: center;
+}
+
+.payroll-bulk-badge span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.payroll-bulk-badge strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.5rem;
+}
+
+.payroll-bulk-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payroll-bulk-summary div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.payroll-bulk-summary span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.payroll-bulk-summary strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1rem;
+}
+
+.payroll-bulk-meta-summary {
+  margin-top: -2px;
+}
+
+.payroll-bulk-scope-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payroll-bulk-method-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.payroll-bulk-method-panel {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.2);
+}
+
+.payroll-bulk-method-panel > span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.payroll-bulk-method-pill {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.22);
+  color: var(--text-primary);
+  text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.payroll-bulk-method-pill:hover:not(:disabled),
+.payroll-bulk-method-pill:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.34);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.18);
+}
+
+.payroll-bulk-method-pill span {
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.payroll-bulk-method-pill small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.payroll-bulk-method-pill.is-active {
+  border-color: rgba(56, 189, 248, 0.36);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.24), rgba(56, 189, 248, 0.16));
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.2);
+}
+
+.payroll-bulk-method-select {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.payroll-bulk-method-select span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.payroll-bulk-methods-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payroll-bulk-status {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.payroll-bulk-status strong {
+  font-size: 0.95rem;
+}
+
+.payroll-bulk-status span {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.payroll-bulk-status.is-success {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.payroll-bulk-status.is-error {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.payroll-bulk-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.payroll-bulk-override {
+  flex: 1;
+  min-height: 52px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-soft);
+}
+
+.payroll-bulk-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.payroll-bulk-hero .filter-actions-row {
   justify-content: stretch;
 }
 
-.payroll-bulk-bar .filter-actions-row .primary-button {
+.payroll-bulk-hero .filter-actions-row .primary-button {
   width: 100%;
+}
+
+.payroll-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.payroll-select-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.payroll-select-row input,
+.payroll-select-all input {
+  width: 16px;
+  height: 16px;
+  accent-color: #38bdf8;
 }
 
 .payroll-row-actions {
@@ -2858,11 +3107,40 @@
 }
 
 :root[data-theme='light'] .payroll-control-summary-card,
-:root[data-theme='light'] .payroll-bulk-bar {
+:root[data-theme='light'] .payroll-bulk-hero {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(240, 249, 255, 0.92)),
     var(--surface-soft);
   box-shadow: 0 16px 28px rgba(148, 163, 184, 0.16);
+}
+
+:root[data-theme='light'] .payroll-bulk-summary div,
+:root[data-theme='light'] .payroll-bulk-method-pill,
+:root[data-theme='light'] .payroll-bulk-method-panel,
+:root[data-theme='light'] .payroll-bulk-status,
+:root[data-theme='light'] .payroll-bulk-method-select,
+:root[data-theme='light'] .payroll-bulk-override {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 119, 182, 0.12);
+}
+
+:root[data-theme='light'] .payroll-bulk-status.is-success {
+  background: rgba(220, 252, 231, 0.9);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+:root[data-theme='light'] .payroll-bulk-status.is-error {
+  background: rgba(254, 226, 226, 0.92);
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+:root[data-theme='light'] .payroll-bulk-method-pill.is-active {
+  background: linear-gradient(135deg, rgba(0, 119, 182, 0.16), rgba(14, 165, 233, 0.12));
+  border-color: rgba(0, 119, 182, 0.18);
+}
+
+:root[data-theme='light'] .payroll-select-all {
+  color: #61798b;
 }
 
 :root[data-theme='light'] .payroll-advance-field:hover {
@@ -5805,6 +6083,32 @@
 .finance-section {
   display: grid;
   gap: 20px;
+}
+
+.payroll-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.payroll-page .payroll-content-grid {
+  display: contents;
+}
+
+.payroll-page .payroll-controls-panel {
+  order: 1;
+}
+
+.payroll-page .payroll-candidates-panel {
+  order: 2;
+}
+
+.payroll-page .payroll-history-panel {
+  order: 3;
+}
+
+.payroll-page .payroll-advance-panel,
+.payroll-page .payroll-advances-panel {
+  order: 4;
 }
 
 .finance-tabs {
@@ -9240,7 +9544,7 @@ td.billing-balance-due,
   .report-toolbar-grid,
   .report-comparison-meta,
   .payroll-controls-layout,
-  .payroll-bulk-bar,
+  .payroll-bulk-hero,
   .memo-filter-bar,
   .memo-detail-meta,
   .memo-decision-form,
@@ -9467,7 +9771,7 @@ td.billing-balance-due,
   .report-toolbar-grid,
   .report-comparison-meta,
   .payroll-controls-layout,
-  .payroll-bulk-bar,
+  .payroll-bulk-hero,
   .memo-filter-bar,
   .memo-detail-meta,
   .memo-decision-form,
@@ -9488,6 +9792,39 @@ td.billing-balance-due,
   .patient-payment-summary,
   .patient-name-edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .payroll-bulk-header,
+  .payroll-bulk-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .payroll-bulk-hero-header,
+  .payroll-bulk-hero-grid,
+  .payroll-bulk-methods-rail,
+  .payroll-control-summary,
+  .payroll-bulk-scope-group,
+  .payroll-bulk-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-bulk-badge {
+    width: 100%;
+  }
+
+  .payroll-bulk-method-group {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-bulk-method-panel {
+    padding: 12px 14px;
+  }
+
+  .payroll-bulk-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-direction: column;
   }
 
   .expense-filter-grid-horizontal,
