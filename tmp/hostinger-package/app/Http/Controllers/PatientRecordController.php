@@ -173,6 +173,8 @@ class PatientRecordController extends Controller
     {
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
+        $dateFrom = $request->string('date_from')->toString();
+        $dateTo = $request->string('date_to')->toString();
         $today = now()->toDateString();
 
         if (mb_strlen($search) < 2) {
@@ -951,8 +953,11 @@ class PatientRecordController extends Controller
 
     public function glassesPrescriptionIndex(Request $request): JsonResponse
     {
+        $this->ensureLensOrderRequestsTable();
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
+        $dateFrom = $request->string('date_from')->toString();
+        $dateTo = $request->string('date_to')->toString();
         $perPage = min(max((int) $request->integer('per_page', 15), 5), 50);
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
@@ -961,6 +966,12 @@ class PatientRecordController extends Controller
             ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id');
         $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
         $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
+        if ($dateFrom !== '') {
+            $legacyQuery->whereDate('gp.date', '>=', $dateFrom);
+        }
+        if ($dateTo !== '') {
+            $legacyQuery->whereDate('gp.date', '<=', $dateTo);
+        }
 
         if ($search !== '') {
             $searchTerm = '%'.$search.'%';
@@ -1005,6 +1016,12 @@ class PatientRecordController extends Controller
             ->join('patient_records as pr', 'pfd.folder_id', '=', 'pr.folder_id');
         $this->applyBranchScope($formQuery, 'pfd.branch_id', $branchId);
         $this->applyBranchScope($formQuery, 'pr.branch_id', $branchId);
+        if ($dateFrom !== '') {
+            $formQuery->whereDate('pfd.updated_at', '>=', $dateFrom);
+        }
+        if ($dateTo !== '') {
+            $formQuery->whereDate('pfd.updated_at', '<=', $dateTo);
+        }
 
         if ($search !== '') {
             $searchTerm = '%'.$search.'%';
@@ -1061,6 +1078,29 @@ class PatientRecordController extends Controller
             ->sortByDesc(fn ($item) => ($item['date'] ?? '').'|'.($item['created_at'] ?? '').'|'.($item['prescription_id'] ?? ''))
             ->values();
 
+        $placedKeys = DB::table('lens_order_requests')
+            ->where('branch_id', $branchId)
+            ->where('status', 'placed')
+            ->get(['source', 'source_id'])
+            ->mapWithKeys(fn ($item) => [$item->source.'|'.$item->source_id => true]);
+
+        $combined = $combined->map(function (array $item) use ($placedKeys): array {
+            $source = ($item['source'] ?? 'legacy') === 'exam_form' ? 'exam_form' : 'legacy';
+            $sourceId = $item['prescription_id'] ?? ($item['form_id'] ?? '');
+            if ($source === 'legacy' && (string) $sourceId === '0') {
+                $sourceId = implode(':', [
+                    $item['patient_id'] ?? '',
+                    $item['folder_id'] ?? '',
+                    $item['date'] ?? '',
+                ]);
+            }
+
+            return [
+                ...$item,
+                'order_placed' => $placedKeys->has($source.'|'.$sourceId),
+            ];
+        });
+
         $total = $combined->count();
         $prescriptions = $combined->slice($offset, $perPage)->values();
 
@@ -1069,6 +1109,8 @@ class PatientRecordController extends Controller
             'branch_name' => $this->branchName($branchId),
             'filters' => [
                 'search' => $search,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
             ],
             'pagination' => [
                 'page' => $page,
@@ -1518,6 +1560,25 @@ class PatientRecordController extends Controller
         if ($request->filled('date_to')) {
             $query->whereDate('pr.date', '<=', $request->string('date_to')->toString());
         }
+    }
+
+    private function ensureLensOrderRequestsTable(): void
+    {
+        if (Schema::hasTable('lens_order_requests')) {
+            return;
+        }
+
+        Schema::create('lens_order_requests', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('branch_id');
+            $table->string('source', 30);
+            $table->string('source_id', 80);
+            $table->unsignedBigInteger('placed_by')->nullable();
+            $table->string('status', 30)->default('placed');
+            $table->timestamps();
+            $table->unique(['branch_id', 'source', 'source_id']);
+            $table->index(['branch_id', 'status']);
+        });
     }
 
     private function resolveBranchId(Request $request): int

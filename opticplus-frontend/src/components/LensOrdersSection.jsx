@@ -25,6 +25,10 @@ export default function LensOrdersSection(props) {
   }
   const [commentMap, setCommentMap] = useState(() => loadCommentMap())
   const [selectedOrderKeys, setSelectedOrderKeys] = useState([])
+  const [isPrescriptionReferenceOpen, setIsPrescriptionReferenceOpen] = useState(false)
+  const [prescriptionReferences, setPrescriptionReferences] = useState([])
+  const [prescriptionReferenceSearch, setPrescriptionReferenceSearch] = useState('')
+  const [isLoadingPrescriptionReferences, setIsLoadingPrescriptionReferences] = useState(false)
   const displayOrders = useMemo(() => groupOrdersForDisplay(orders), [orders])
 
   const selectedOrders = useMemo(
@@ -36,6 +40,25 @@ export default function LensOrdersSection(props) {
       .filter((order) => selectedOrderKeys.includes(order.__orderKey)),
     [displayOrders, selectedOrderKeys],
   )
+
+  const filteredPrescriptionReferences = useMemo(() => {
+    const query = prescriptionReferenceSearch.trim().toLowerCase()
+    if (!query) return prescriptionReferences
+
+    return prescriptionReferences.filter((record) => [
+      record?.name,
+      record?.surname,
+      record?.firstname,
+      record?.othernames,
+      record?.folder_id,
+      record?.lens_type,
+      record?.source,
+      record?.sph_od,
+      record?.sph_os,
+      record?.cyl_od,
+      record?.cyl_os,
+    ].some((value) => String(value ?? '').toLowerCase().includes(query)))
+  }, [prescriptionReferenceSearch, prescriptionReferences])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -51,6 +74,28 @@ export default function LensOrdersSection(props) {
       ...current,
       ...next,
     }))
+  }
+
+  async function openPrescriptionReference() {
+    setIsPrescriptionReferenceOpen(true)
+    setIsLoadingPrescriptionReferences(true)
+    props.setLensOrdersError?.('')
+
+    try {
+      const firstPage = await props.fetchGlassesPrescriptions({ page: 1, perPage: 50 })
+      const totalPages = firstPage?.pagination?.total_pages ?? 1
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(totalPages - 1, 0) }, (_, index) => props.fetchGlassesPrescriptions({ page: index + 2, perPage: 50 })),
+      )
+      setPrescriptionReferences([
+        ...(firstPage?.prescriptions ?? []),
+        ...remainingPages.flatMap((page) => page?.prescriptions ?? []),
+      ])
+    } catch (error) {
+      props.setLensOrdersError?.(error.message || 'Unable to load prescription references.')
+    } finally {
+      setIsLoadingPrescriptionReferences(false)
+    }
   }
 
   function applyPreset(preset) {
@@ -261,7 +306,12 @@ export default function LensOrdersSection(props) {
             <p className="eyebrow">Queue Controls</p>
             <h3>{isTodayPreset ? "Today's prescription queue" : 'Prescription queue by date range'}</h3>
           </div>
-          <span className="panel-tag">{orders.length} rows</span>
+          <div className="table-actions-inline">
+            <button type="button" className="ghost-button" onClick={openPrescriptionReference}>
+              All Prescriptions
+            </button>
+            <span className="panel-tag">{orders.length} rows</span>
+          </div>
         </div>
 
         <div className="lens-orders-toolbar">
@@ -459,8 +509,88 @@ export default function LensOrdersSection(props) {
           </div>
         </div>
       </article>
+
+      {isPrescriptionReferenceOpen ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && setIsPrescriptionReferenceOpen(false)}
+        >
+          <article className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="lens-prescription-reference-title">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Database Reference</p>
+                <h3 id="lens-prescription-reference-title">All prescriptions for {branchName}</h3>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setIsPrescriptionReferenceOpen(false)}>Close</button>
+            </div>
+
+            {isLoadingPrescriptionReferences ? (
+              <p className="muted-copy">Loading all prescriptions...</p>
+            ) : (
+              <>
+                <label className="patient-search-shell" style={{ marginBottom: '1rem' }}>
+                  <span className="patient-search-icon" aria-hidden="true">⌕</span>
+                  <input
+                    value={prescriptionReferenceSearch}
+                    onChange={(event) => setPrescriptionReferenceSearch(event.target.value)}
+                    placeholder="Search patient, folder ID, lens type, or prescription"
+                  />
+                </label>
+                <div className="table-shell">
+                <table className="portal-table inventory-table-wide">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Patient</th>
+                      <th>Folder ID</th>
+                      <th>OD / OS Prescription</th>
+                      <th>IPD</th>
+                      <th>Lens Type</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPrescriptionReferences.map((record, index) => (
+                      <tr key={`${getReferenceKey(record)}-${index}`}>
+                        <td>{record.date || record.updated_at || 'N/A'}</td>
+                        <td><strong>{getReferencePatientName(record)}</strong></td>
+                        <td>{record.folder_id || 'N/A'}</td>
+                        <td>
+                          <div className="optometrist-prescription-history">
+                            <small>OD: {formatReferenceEye(record.sph_od, record.cyl_od, record.axis_od, record.add_od)}</small>
+                            <small>OS: {formatReferenceEye(record.sph_os, record.cyl_os, record.axis_os, record.add_os)}</small>
+                          </div>
+                        </td>
+                        <td>{record.ipd || 'N/A'}</td>
+                        <td>{record.lens_type || 'N/A'}</td>
+                        <td>{record.source === 'exam_form' ? 'Exam Form' : 'Glasses Table'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+                {filteredPrescriptionReferences.length === 0 ? <p className="muted-copy">No prescriptions match this search.</p> : null}
+              </>
+            )}
+          </article>
+        </div>
+      ) : null}
     </section>
   )
+}
+
+function getReferenceKey(record) {
+  return [record?.source || 'prescription', record?.prescription_id || record?.form_id || record?.folder_id || 'record', record?.date || record?.updated_at || 'undated'].join('-')
+}
+
+function getReferencePatientName(record) {
+  if (record?.name) return record.name
+  return [record?.surname, record?.firstname, record?.othernames].filter(Boolean).join(' ') || 'Unknown patient'
+}
+
+function formatReferenceEye(sphere, cylinder, axis, add) {
+  return [sphere, cylinder, axis ? `x ${axis}` : '', add ? `ADD ${add}` : ''].filter(Boolean).join(' ') || 'N/A'
 }
 
 function groupOrdersForDisplay(orders) {

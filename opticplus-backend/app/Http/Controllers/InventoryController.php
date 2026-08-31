@@ -11,6 +11,83 @@ use Illuminate\Support\Facades\Schema;
 
 class InventoryController extends Controller
 {
+    private function ensureLensOrderRequestsTable(): void
+    {
+        if (Schema::hasTable('lens_order_requests')) {
+            return;
+        }
+
+        Schema::create('lens_order_requests', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('branch_id');
+            $table->string('source', 30);
+            $table->string('source_id', 80);
+            $table->unsignedBigInteger('placed_by')->nullable();
+            $table->string('status', 30)->default('placed');
+            $table->timestamps();
+            $table->unique(['branch_id', 'source', 'source_id']);
+            $table->index(['branch_id', 'status']);
+        });
+    }
+
+    public function placeLensOrder(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'source' => ['required', 'in:legacy,exam_form'],
+            'source_id' => ['required', 'string', 'max:80'],
+        ]);
+
+        $this->ensureLensOrderRequestsTable();
+        $order = DB::table('lens_order_requests')->updateOrInsert(
+            [
+                'branch_id' => $branchId,
+                'source' => $validated['source'],
+                'source_id' => $validated['source_id'],
+            ],
+            [
+                'placed_by' => $request->user()?->id,
+                'status' => 'placed',
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
+        return response()->json([
+            'message' => 'Lens order placed successfully.',
+            'placed' => true,
+        ], 201);
+    }
+
+    public function overturnLensOrder(Request $request): JsonResponse
+    {
+        if ($request->user()?->normalized_role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can overturn a placed lens order.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $validated = $request->validate([
+            'source' => ['required', 'in:legacy,exam_form'],
+            'source_id' => ['required', 'string', 'max:80'],
+        ]);
+
+        $this->ensureLensOrderRequestsTable();
+        $deleted = DB::table('lens_order_requests')
+            ->where('branch_id', $branchId)
+            ->where('source', $validated['source'])
+            ->where('source_id', $validated['source_id'])
+            ->delete();
+
+        return response()->json([
+            'message' => $deleted ? 'Lens order overturned successfully.' : 'Placed lens order was not found.',
+            'overturned' => $deleted > 0,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
@@ -690,6 +767,7 @@ class InventoryController extends Controller
 
     public function lensOrders(Request $request): JsonResponse
     {
+        $this->ensureLensOrderRequestsTable();
         $branchId = $this->resolveBranchId($request);
         $month = $request->string('month')->toString() ?: null;
         $dateFrom = $request->string('date_from')->toString();
@@ -697,7 +775,7 @@ class InventoryController extends Controller
         $search = trim($request->string('search')->toString());
         $pickupStatus = $request->string('pickup_status')->toString() ?: 'all';
 
-        if ($dateFrom === '' || $dateTo === '') {
+        if (($dateFrom === '' || $dateTo === '') && $month !== 'all') {
             [$dateFrom, $dateTo] = $this->lensOrdersDateRange($month);
         }
 
@@ -706,9 +784,12 @@ class InventoryController extends Controller
             ->leftJoin('users as assigned', 'assigned.id', '=', 'pr.assigned_optometrist_id');
         $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
         $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
-        $legacyQuery
-            ->whereDate('gp.date', '>=', $dateFrom)
-            ->whereDate('gp.date', '<=', $dateTo);
+        if ($dateFrom !== '') {
+            $legacyQuery->whereDate('gp.date', '>=', $dateFrom);
+        }
+        if ($dateTo !== '') {
+            $legacyQuery->whereDate('gp.date', '<=', $dateTo);
+        }
 
         if ($search !== '') {
             $searchTerm = '%'.$search.'%';
@@ -795,9 +876,12 @@ class InventoryController extends Controller
             ->leftJoin('users as assigned', 'assigned.id', '=', 'pr.assigned_optometrist_id');
         $this->applyBranchScope($formQuery, 'pfd.branch_id', $branchId);
         $this->applyBranchScope($formQuery, 'pr.branch_id', $branchId);
-        $formQuery
-            ->whereDate('pfd.updated_at', '>=', $dateFrom)
-            ->whereDate('pfd.updated_at', '<=', $dateTo);
+        if ($dateFrom !== '') {
+            $formQuery->whereDate('pfd.updated_at', '>=', $dateFrom);
+        }
+        if ($dateTo !== '') {
+            $formQuery->whereDate('pfd.updated_at', '<=', $dateTo);
+        }
 
         if ($search !== '') {
             $searchTerm = '%'.$search.'%';
@@ -856,6 +940,12 @@ class InventoryController extends Controller
             ->filter()
             ->values();
 
+        $placedKeys = DB::table('lens_order_requests')
+            ->where('branch_id', $branchId)
+            ->where('status', 'placed')
+            ->get(['source', 'source_id'])
+            ->mapWithKeys(fn ($item) => [$item->source.'|'.$item->source_id => true]);
+
         $combined = $formPrescriptions
             ->concat($legacyPrescriptions)
             ->map(function (array $item): array {
@@ -877,6 +967,18 @@ class InventoryController extends Controller
                         || in_array(strtolower((string) ($item['status'] ?? '')), ['seen', 'completed', 'ready'], true),
                     'prescription_summary' => $this->buildLensOrderPrescriptionSummary($item),
                 ];
+            })
+            ->filter(function (array $item) use ($placedKeys): bool {
+                $source = ($item['source'] ?? 'legacy') === 'exam_form' ? 'exam_form' : 'legacy';
+                $sourceId = $item['prescription_id'] ?? ($item['form_id'] ?? '');
+                if ($source === 'legacy' && (string) $sourceId === '0') {
+                    $sourceId = implode(':', [
+                        $item['patient_id'] ?? '',
+                        $item['folder_id'] ?? '',
+                        $item['date'] ?? '',
+                    ]);
+                }
+                return $placedKeys->has($source.'|'.$sourceId);
             })
             ->filter(function (array $item) use ($pickupStatus): bool {
                 return match ($pickupStatus) {

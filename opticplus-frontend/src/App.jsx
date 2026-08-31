@@ -23,6 +23,8 @@ import NotesSection from './components/NotesSection.jsx'
 import OptometristAppointmentsSection from './components/OptometristAppointmentsSection.jsx'
 import OptometristDashboardSection from './components/OptometristDashboardSection.jsx'
 import OptometristPrescriptionsSection from './components/OptometristPrescriptionsSection.jsx'
+import PlaceLensOrderSection from './components/PlaceLensOrderSection.jsx'
+import TechnicianPrescriptionReferenceSection from './components/TechnicianPrescriptionReferenceSection.jsx'
 import MedicalReportSection from './components/MedicalReportSection.jsx'
 import MessengerWidget from './components/MessengerWidget.jsx'
 import PatientsSection, { defaultPatientFilters, patientFiltersForView, patientFormDefaults, PatientIntakeModal, PatientManagementModal, PatientRecordsModal } from './components/PatientsSection.jsx'
@@ -74,6 +76,7 @@ const managerNavSections = [
     items: [
       { label: 'Patients', navLabel: 'Patient Records', icon: 'patients' },
       { label: 'Billing', navLabel: 'Billing / Invoicing', icon: 'receipt' },
+      { label: 'Place Lens Order', navLabel: 'Place Lens Order', icon: 'glasses' },
     ],
   },
   {
@@ -137,6 +140,7 @@ const receptionistNavSections = [
       { label: 'Appointments', navLabel: 'Appointments', icon: 'calendar' },
       { label: 'Patients', navLabel: 'Patient Intake & Queue', icon: 'patients' },
       { label: 'Billing', navLabel: 'Billing / Payments', icon: 'receipt' },
+      { label: 'Place Lens Order', navLabel: 'Place Lens Order', icon: 'glasses' },
     ],
   },
   {
@@ -170,6 +174,7 @@ const technicianNavSections = [
     items: [
       { label: 'Lens Tracker', navLabel: 'Lens Tracker', icon: 'glasses' },
       { label: 'Lens Orders', navLabel: 'Lens Orders', icon: 'receipt' },
+      { label: 'Prescription Reference', navLabel: 'Prescription Reference', icon: 'reports' },
     ],
   },
   {
@@ -309,6 +314,8 @@ const viewHashMap = {
   'Assets Register': '#/assets-register',
   'Lens Tracker': '#/lens-tracker',
   'Lens Orders': '#/lens-orders',
+  'Place Lens Order': '#/place-lens-order',
+  'Prescription Reference': '#/prescription-reference',
   Memos: '#/memos',
   Payroll: '#/payroll',
   'Bank Deposits': '#/bank-deposits',
@@ -337,7 +344,7 @@ const financeViews = ['Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Extra
 const paymentDetailViews = ['Billing', ...financeViews]
 const insuranceViews = ['Insurance', 'Insurance Claims']
 const inventoryViews = ['Inventory', 'Lens Tracker', 'BSMI Tracking', 'Assets Register', 'Memos']
-const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Notes']
+const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Notes']
 const optometristPatientViews = [
   'Patient Management',
   'Prescription Reference',
@@ -505,9 +512,9 @@ const defaultLensTrackerFilters = () => ({
 })
 
 const defaultLensOrdersFilters = () => ({
-  month: 'custom',
-  date_from: todayIso(),
-  date_to: todayIso(),
+  month: 'all',
+  date_from: '',
+  date_to: '',
   search: '',
   pickup_status: 'all',
 })
@@ -708,6 +715,16 @@ function App() {
   const [inventoryLensData, setInventoryLensData] = useState(null)
   const [lensOrdersData, setLensOrdersData] = useState(null)
   const [inventoryBsmiData, setInventoryBsmiData] = useState(null)
+  const [placedLensOrders, setPlacedLensOrders] = useState(() => {
+    if (typeof window === 'undefined') return []
+
+    try {
+      const saved = window.localStorage.getItem('opticplus:place-lens-order:v1')
+      return saved ? JSON.parse(saved) : []
+    } catch (error) {
+      return []
+    }
+  })
   const [inventoryFilters, setInventoryFilters] = useState(defaultInventoryFilters())
   const [inventoryQuery, setInventoryQuery] = useState(defaultInventoryFilters())
   const [inventoryForm, setInventoryForm] = useState(defaultInventoryProductForm())
@@ -3290,7 +3307,7 @@ function App() {
     })
   }
 
-  async function fetchGlassesPrescriptions({ search = '', page = 1, perPage = 15 } = {}) {
+  async function fetchGlassesPrescriptions({ search = '', page = 1, perPage = 15, dateFrom = '', dateTo = '' } = {}) {
     const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
     const params = new URLSearchParams({
       branch_id: String(branchId ?? 1),
@@ -3298,9 +3315,29 @@ function App() {
       page: String(page),
       per_page: String(perPage),
     })
+    if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
 
     return apiFetch(`/glasses-prescriptions?${params.toString()}`, {
       token,
+    })
+  }
+
+  async function placeLensOrder(payload) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    return apiFetch('/inventory/lens-orders/place', {
+      method: 'POST',
+      token,
+      body: { ...payload, branch_id: branchId },
+    })
+  }
+
+  async function overturnLensOrder(payload) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    return apiFetch('/inventory/lens-orders/place', {
+      method: 'DELETE',
+      token,
+      body: { ...payload, branch_id: branchId },
     })
   }
 
@@ -5312,10 +5349,33 @@ function App() {
                 lensOrdersSuccess={lensOrdersSuccess}
                 setLensOrdersError={setLensOrdersError}
                 setLensOrdersSuccess={setLensOrdersSuccess}
+                fetchGlassesPrescriptions={fetchGlassesPrescriptions}
+                placeLensOrder={placeLensOrder}
+                overturnLensOrder={overturnLensOrder}
                 updatePickupStatus={updatePickupStatus}
                 pickupBusyIds={pickupBusyIds}
                 session={session}
                 companyName={companyProfileForm.company_name}
+              />
+            ) : null}
+
+            {activeView === 'Place Lens Order' && (session?.role === 'receptionist' || isGeneralManager) ? (
+              <PlaceLensOrderSection
+                fetchGlassesPrescriptions={fetchGlassesPrescriptions}
+                placeLensOrder={placeLensOrder}
+                overturnLensOrder={overturnLensOrder}
+                canOverturn={isGeneralManager}
+                session={session}
+                placedOrders={placedLensOrders}
+                setPlacedOrders={setPlacedLensOrders}
+              />
+            ) : null}
+
+            {activeView === 'Prescription Reference' && isTechnician ? (
+              <TechnicianPrescriptionReferenceSection
+                fetchGlassesPrescriptions={fetchGlassesPrescriptions}
+                session={session}
+                selectedBranchId={selectedBranchId}
               />
             ) : null}
 
@@ -5453,7 +5513,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>
