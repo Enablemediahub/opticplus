@@ -162,6 +162,7 @@ class PayrollController extends Controller
     public function processPayroll(Request $request): JsonResponse
     {
         $this->ensurePayrollTables();
+        $this->ensurePayrollLinkColumns();
 
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -239,6 +240,7 @@ class PayrollController extends Controller
         $allowancePaymentMethod = $validated['allowance_payment_method'] ?? $validated['payment_method'] ?? 'cash';
 
         DB::transaction(function () use ($validated, $branchId, $employee, $grossSalary, $declaredSalary, $allowanceAmount, $updatedDeclaredPaid, $updatedAllowancePaid, $advanceDeduction, $netSalary, $paymentAmount, $paymentLabel, $currentBalance, $overrideBalance, $existingPayroll, $declaredPaymentMethod, $allowancePaymentMethod): void {
+            $historyId = $existingPayroll?->id;
             if ($existingPayroll) {
                 DB::table('payroll_history')
                     ->where('id', $existingPayroll->id)
@@ -259,7 +261,7 @@ class PayrollController extends Controller
                         'updated_at' => now(),
                     ]);
             } else {
-                DB::table('payroll_history')->insert([
+                $historyId = DB::table('payroll_history')->insertGetId([
                     'branch_id' => $branchId,
                     'employee_id' => $employee->id,
                     'employee_name' => $employee->ghana_card_name,
@@ -303,6 +305,8 @@ class PayrollController extends Controller
                     'date' => now()->toDateString(),
                     'description' => $paymentLabel.' payment to '.$employee->ghana_card_name.' for '.$this->monthLabel((int) $validated['pay_month'], (int) $validated['pay_year']),
                     'type' => 'withdrawal',
+                    'source_type' => 'payroll',
+                    'source_id' => $historyId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -314,6 +318,8 @@ class PayrollController extends Controller
                 'amount' => $paymentAmount,
                 'date' => now()->toDateString(),
                 'category' => 'Payroll',
+                'source_type' => 'payroll',
+                'source_id' => $historyId,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -327,6 +333,7 @@ class PayrollController extends Controller
     public function processBulk(Request $request): JsonResponse
     {
         $this->ensurePayrollTables();
+        $this->ensurePayrollLinkColumns();
 
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -423,6 +430,7 @@ class PayrollController extends Controller
         DB::transaction(function () use ($bulkPlans, $validated, $branchId, $month, $year, $totalPayroll, $currentBalance, $overrideBalance, $bulkMode): void {
             $declaredPaymentMethod = $validated['declared_salary_payment_method'] ?? $validated['payment_method'] ?? 'bank_transfer';
             $allowancePaymentMethod = $validated['allowance_payment_method'] ?? $validated['payment_method'] ?? 'cash';
+            $bulkHistoryIds = [];
 
             foreach ($bulkPlans as $plan) {
                 $employee = $plan['employee'];
@@ -453,6 +461,7 @@ class PayrollController extends Controller
                 };
                 $existingNotes = trim((string) ($plan['declaration']['notes'] ?? ''));
                 $combinedNotes = trim($existingNotes.' '.$notesPrefix);
+                $historyId = $existingPayroll?->id;
 
                 if ($existingPayroll) {
                     DB::table('payroll_history')
@@ -474,7 +483,7 @@ class PayrollController extends Controller
                             'updated_at' => now(),
                         ]);
                 } else {
-                    DB::table('payroll_history')->insert([
+                    $historyId = DB::table('payroll_history')->insertGetId([
                         'branch_id' => $branchId,
                         'employee_id' => $employee['id'],
                         'employee_name' => $employee['name'],
@@ -517,6 +526,8 @@ class PayrollController extends Controller
                         'amount' => round($declaredPayment, 2),
                         'date' => now()->toDateString(),
                         'category' => 'Salary',
+                        'source_type' => 'payroll',
+                        'source_id' => $historyId,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -529,25 +540,34 @@ class PayrollController extends Controller
                         'amount' => round($allowancePayment, 2),
                         'date' => now()->toDateString(),
                         'category' => 'Allowance',
+                        'source_type' => 'payroll',
+                        'source_id' => $historyId,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
                 }
+
+                $bulkHistoryIds[(int) $employee['id']] = $historyId;
             }
 
             if (! $overrideBalance) {
                 $this->setBankBalance($branchId, $currentBalance - $totalPayroll);
-                DB::table('bank_deposits')->insert([
-                    'branch_id' => $branchId,
-                    'amount' => -$totalPayroll,
-                    'date' => now()->toDateString(),
-                    'description' => $bulkMode === 'allowance'
-                        ? 'Bulk allowance payroll for '.$this->monthLabel($month, $year).' ('.$bulkPlans->count().' employees)'
-                        : 'Bulk payroll for '.$this->monthLabel($month, $year).' ('.$bulkPlans->count().' employees)',
-                    'type' => 'withdrawal',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                foreach ($bulkPlans as $plan) {
+                    $historyId = $bulkHistoryIds[(int) $plan['employee']['id']] ?? null;
+                    $employeeName = $plan['employee']['name'];
+                    $employeeAmount = round($plan['paymentAmount'], 2);
+                    DB::table('bank_deposits')->insert([
+                        'branch_id' => $branchId,
+                        'amount' => -$employeeAmount,
+                        'date' => now()->toDateString(),
+                        'description' => 'Bulk payroll for '.$employeeName.' for '.$this->monthLabel($month, $year),
+                        'type' => 'withdrawal',
+                        'source_type' => 'payroll',
+                        'source_id' => $historyId,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
             }
 
         });
@@ -564,6 +584,12 @@ class PayrollController extends Controller
     public function deleteHistory(Request $request, int $historyId): JsonResponse
     {
         $this->ensurePayrollTables();
+        $this->ensurePayrollLinkColumns();
+
+        $user = $request->user();
+        if ($user?->normalized_role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can unprocess payroll.'], 403);
+        }
 
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -572,16 +598,66 @@ class PayrollController extends Controller
 
         $record = $this->historyQuery($branchId)
             ->where('ph.id', $historyId)
-            ->first(['ph.id', 'ph.employee_name']);
+            ->first(['ph.id', 'ph.employee_id', 'ph.employee_name', 'ph.pay_month', 'ph.pay_year']);
 
         if (! $record) {
             return response()->json(['message' => 'Payroll history entry not found for this branch.'], 404);
         }
 
-        DB::table('payroll_history')->where('id', $historyId)->delete();
+        DB::transaction(function () use ($record, $branchId, $historyId): void {
+            $withdrawals = DB::table('bank_deposits')
+                ->where('branch_id', $branchId)
+                ->where('type', 'withdrawal')
+                ->where('source_type', 'payroll')
+                ->where('source_id', $historyId)
+                ->get(['id', 'amount']);
+
+            if ($withdrawals->isEmpty()) {
+                $monthLabel = $this->monthLabel((int) $record->pay_month, (int) $record->pay_year);
+                $withdrawals = DB::table('bank_deposits')
+                    ->where('branch_id', $branchId)
+                    ->where('type', 'withdrawal')
+                    ->where('description', 'like', '%'.$record->employee_name.'%'.$monthLabel.'%')
+                    ->get(['id', 'amount']);
+            }
+
+            $withdrawalAmount = (float) $withdrawals->sum(fn ($withdrawal) => abs((float) $withdrawal->amount));
+            if ($withdrawalAmount > 0) {
+                $this->setBankBalance($branchId, $this->currentBankBalance($branchId) + $withdrawalAmount);
+                DB::table('bank_deposits')->whereIn('id', $withdrawals->pluck('id'))->delete();
+            }
+
+            $linkedExpenses = DB::table('expenses')
+                ->where('branch_id', $branchId)
+                ->where('source_type', 'payroll')
+                ->where('source_id', $historyId)
+                ->pluck('expense_id');
+
+            if ($linkedExpenses->isEmpty()) {
+                $monthLabel = $this->monthLabel((int) $record->pay_month, (int) $record->pay_year);
+                $linkedExpenses = DB::table('expenses')
+                    ->where('branch_id', $branchId)
+                    ->where(function ($query) use ($record, $monthLabel) {
+                        $query->where('description', 'like', '%'.$record->employee_name.'%'.$monthLabel.'%')
+                            ->whereIn('category', ['Payroll', 'Salary', 'Allowance']);
+                    })
+                    ->pluck('expense_id');
+            }
+            DB::table('expenses')->whereIn('expense_id', $linkedExpenses)->delete();
+
+            DB::table('salary_advances')
+                ->where('branch_id', $branchId)
+                ->where('employee_id', $record->employee_id)
+                ->where('deduction_month', $record->pay_month)
+                ->where('deduction_year', $record->pay_year)
+                ->where('status', 'deducted')
+                ->update(['status' => 'pending', 'updated_at' => now()]);
+
+            DB::table('payroll_history')->where('id', $historyId)->delete();
+        });
 
         return response()->json([
-            'message' => 'Payroll history entry deleted successfully.',
+            'message' => 'Payroll was unprocessed and its expense input was reversed.',
         ]);
     }
 
@@ -1170,6 +1246,37 @@ class PayrollController extends Controller
         if (Schema::hasTable('expenses')) {
             $this->ensureTimestampColumn('expenses', 'created_at');
             $this->ensureTimestampColumn('expenses', 'updated_at');
+        }
+    }
+
+    private function ensurePayrollLinkColumns(): void
+    {
+        if (Schema::hasTable('expenses')) {
+            if (! Schema::hasColumn('expenses', 'source_type')) {
+                Schema::table('expenses', function (Blueprint $table): void {
+                    $table->string('source_type', 50)->nullable()->index();
+                });
+            }
+
+            if (! Schema::hasColumn('expenses', 'source_id')) {
+                Schema::table('expenses', function (Blueprint $table): void {
+                    $table->unsignedBigInteger('source_id')->nullable()->index();
+                });
+            }
+        }
+
+        if (Schema::hasTable('bank_deposits')) {
+            if (! Schema::hasColumn('bank_deposits', 'source_type')) {
+                Schema::table('bank_deposits', function (Blueprint $table): void {
+                    $table->string('source_type', 50)->nullable()->index();
+                });
+            }
+
+            if (! Schema::hasColumn('bank_deposits', 'source_id')) {
+                Schema::table('bank_deposits', function (Blueprint $table): void {
+                    $table->unsignedBigInteger('source_id')->nullable()->index();
+                });
+            }
         }
     }
 

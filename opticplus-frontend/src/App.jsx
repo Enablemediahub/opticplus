@@ -864,6 +864,17 @@ function App() {
     const getfundAmount = Number(billing?.getfund_amount ?? receipt?.getfund_amount ?? 0)
     const vatAmount = Number(billing?.vat_amount ?? receipt?.vat_amount ?? 0)
     const taxTotal = nhilAmount + getfundAmount + vatAmount
+    const consultationPrice = Number(billing?.consultation_price ?? receipt?.consultation_price ?? 0)
+    const framePrice = Number(billing?.frame_price ?? receipt?.frame_price ?? 0)
+    const lensPrice = Number(billing?.lens_price ?? receipt?.lens_price ?? 0)
+    const casePrice = Number(billing?.case_price ?? receipt?.case_price ?? 0)
+
+    // Build pricing breakdown only for non-zero items
+    const pricingBreakdown = []
+    if (consultationPrice > 0) pricingBreakdown.push(['Consultation', consultationPrice])
+    if (lensPrice > 0) pricingBreakdown.push(['Lenses', lensPrice])
+    if (framePrice > 0) pricingBreakdown.push(['Frames', framePrice])
+    if (casePrice > 0) pricingBreakdown.push(['Case', casePrice])
 
     return {
       id: receipt?.id ?? billing?.id ?? 'receipt',
@@ -896,6 +907,7 @@ function App() {
         ['NHIL (2.5%)', nhilAmount],
         ['GETFund (2.5%)', getfundAmount],
       ].filter(([, amount]) => Number(amount) > 0),
+      pricing_breakdown: pricingBreakdown,
       printed_at: new Date().toLocaleString(),
     }
   }
@@ -929,6 +941,9 @@ function App() {
     const total = currency.format(Number(receiptData?.total_amount ?? 0))
     const discount = currency.format(Number(receiptData?.discount ?? 0))
     const balance = currency.format(Number(receiptData?.outstanding_balance ?? 0))
+    const pricingRows = (receiptData?.pricing_breakdown ?? [])
+      .map(([label, value]) => `<div class="row"><span>${safe(label)}</span><strong>${safe(currency.format(Number(value ?? 0)))}</strong></div>`)
+      .join('')
     const taxRows = (receiptData?.tax_breakdown ?? [])
       .map(([label, value]) => `<div class="row"><span>${safe(label)}</span><strong>${safe(currency.format(Number(value ?? 0)))}</strong></div>`)
       .join('')
@@ -1108,6 +1123,13 @@ function App() {
                 <div class="row total-row"><span>Balance after payment</span><strong>${safe(balance)}</strong></div>
               </div>
               <div class="divider"></div>
+              ${receiptData?.pricing_breakdown?.length ? `
+                <div class="tax-box">
+                  <div class="kicker">Services Breakdown</div>
+                  ${pricingRows}
+                  <div class="row total-row"><span>Total</span><strong>${safe(total)}</strong></div>
+                </div>
+              ` : ''}
               <div class="meta-grid">
                 <div class="row"><span>Patient</span><strong>${safe(receiptData?.patient_name)}</strong></div>
                 <div class="row"><span>Folder ID</span><strong>${safe(receiptData?.folder_id)}</strong></div>
@@ -1128,8 +1150,6 @@ function App() {
               <div class="footnote">
                 ${safe(receiptData?.company_phone_primary || '')}${receiptData?.company_phone_secondary ? ` | ${safe(receiptData.company_phone_secondary)}` : ''}<br />
                 ${safe(receiptData?.company_email || '')}<br />
-                Keep this slip for verification and future reprints.<br />
-                Generated from the OPTICPLUS finance desk.<br />
                 Designed and Developed by Dale Quist (Enable Technologies)
               </div>
             </section>
@@ -5753,6 +5773,16 @@ function ThermalReceiptPreview({ receipt }) {
 
         <div className="thermal-preview-divider" />
 
+        {receipt.pricing_breakdown?.length ? (
+          <div className="thermal-preview-meta">
+            <div><span>Services Breakdown</span></div>
+            {receipt.pricing_breakdown.map(([label, amount]) => (
+              <div key={label}><span>{label}</span><strong>{currency.format(Number(amount ?? 0))}</strong></div>
+            ))}
+            <div className="thermal-preview-balance"><span>Total</span><strong>{currency.format(Number(receipt.total_amount ?? 0))}</strong></div>
+          </div>
+        ) : null}
+
         <div className="thermal-preview-meta">
           <div><span>Patient</span><strong>{receipt.patient_name}</strong></div>
           <div><span>Folder ID</span><strong>{receipt.folder_id}</strong></div>
@@ -5776,8 +5806,6 @@ function ThermalReceiptPreview({ receipt }) {
           <span>{receipt.company_phone_primary}{receipt.company_phone_secondary ? ` | ${receipt.company_phone_secondary}` : ''}</span>
           <span>{receipt.company_email}</span>
           <span>Thank you for your payment.</span>
-          <span>Keep this slip for verification and future reprints.</span>
-          <span>Generated from the OPTICPLUS finance desk.</span>
           <span>Designed and Developed by Dale Quist (Enable Technologies)</span>
         </footer>
       </section>

@@ -74,6 +74,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
   })
 
   const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+  const canUnprocessPayroll = session?.role === 'manager'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -363,10 +364,10 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
     }
   }
 
-  async function deleteHistoryEntry(row) {
+  async function unprocessHistoryEntry(row) {
     if (!row?.id) return
 
-    const confirmed = window.confirm(`Delete payroll history entry for ${row.employee_name}?`)
+    const confirmed = window.confirm(`Unprocess payroll for ${row.employee_name}? This will reverse its expense and bank entries.`)
     if (!confirmed) return
 
     setDeletingHistoryId(row.id)
@@ -378,10 +379,10 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         method: 'DELETE',
         token,
       })
-      setSuccess(response.message || 'Payroll history entry deleted successfully.')
+      setSuccess(response.message || 'Payroll was unprocessed successfully.')
       showAllPayrollCandidates()
-    } catch (deleteError) {
-      setError(deleteError.message)
+    } catch (unprocessError) {
+      setError(unprocessError.message)
     } finally {
       setDeletingHistoryId(null)
     }
@@ -948,14 +949,16 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                     <td>{formatDateTime(row.payment_date)}</td>
                     <td>{row.notes || 'No note'}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        disabled={deletingHistoryId === row.id}
-                        onClick={() => deleteHistoryEntry(row)}
-                      >
-                        {deletingHistoryId === row.id ? 'Deleting...' : 'Delete'}
-                      </button>
+                      {canUnprocessPayroll ? (
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={deletingHistoryId === row.id}
+                          onClick={() => unprocessHistoryEntry(row)}
+                        >
+                          {deletingHistoryId === row.id ? 'Unprocessing...' : 'Unprocess'}
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))
