@@ -844,6 +844,58 @@ class BillingController extends Controller
             return;
         }
 
+        $column = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'billing'
+              AND COLUMN_NAME = 'id'
+        ");
+
+        if ($column && empty($column->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE billing ADD PRIMARY KEY (id)');
+        }
+
+        if ($column && ! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE billing MODIFY id INT NOT NULL AUTO_INCREMENT');
+        }
+
+        if (Schema::hasTable('billing_frames') && Schema::hasColumn('billing_frames', 'id')) {
+            $frameColumn = DB::selectOne("
+                SELECT EXTRA, COLUMN_KEY
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'billing_frames'
+                  AND COLUMN_NAME = 'id'
+            ");
+
+            if ($frameColumn && empty($frameColumn->COLUMN_KEY)) {
+                DB::statement('ALTER TABLE billing_frames ADD PRIMARY KEY (id)');
+            }
+
+            if ($frameColumn && ! str_contains(strtolower((string) ($frameColumn->EXTRA ?? '')), 'auto_increment')) {
+                DB::statement('ALTER TABLE billing_frames MODIFY id INT NOT NULL AUTO_INCREMENT');
+            }
+        }
+
+        if (Schema::hasTable('inventory_movements') && Schema::hasColumn('inventory_movements', 'id')) {
+            $movementColumn = DB::selectOne("
+                SELECT EXTRA, COLUMN_KEY
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'inventory_movements'
+                  AND COLUMN_NAME = 'id'
+            ");
+
+            if ($movementColumn && empty($movementColumn->COLUMN_KEY)) {
+                DB::statement('ALTER TABLE inventory_movements ADD PRIMARY KEY (id)');
+            }
+
+            if ($movementColumn && ! str_contains(strtolower((string) ($movementColumn->EXTRA ?? '')), 'auto_increment')) {
+                DB::statement('ALTER TABLE inventory_movements MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT');
+            }
+        }
+
         if (! Schema::hasColumn('billing', 'lens_item_count')) {
             Schema::table('billing', function (Blueprint $table): void {
                 $table->unsignedInteger('lens_item_count')->default(1)->after('lens_price');

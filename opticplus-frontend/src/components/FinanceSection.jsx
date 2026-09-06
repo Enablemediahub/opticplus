@@ -129,7 +129,7 @@ export default function FinanceSection(props) {
       ['Consultation (Allocated)', props.financeSales?.stats.allocated_consultation_total ?? props.financeSales?.stats.consultation_total, 'Payments applied first to consultation in billing priority order', 'today', 'money'],
       ['Lenses (Allocated)', props.financeSales?.stats.allocated_lens_total ?? props.financeSales?.stats.lens_total, 'Payments applied after consultation and before frames', 'today', 'receipt'],
       ['Frames (Allocated)', props.financeSales?.stats.allocated_frame_total ?? props.financeSales?.stats.frame_total, 'Payments applied after consultation and lenses', 'total', 'finance'],
-      ['Other Allocated', props.financeSales?.stats.allocated_other_total, 'Residual billed revenue after consultation, lenses, and frames', 'pending', 'shield'],
+      ['Other Allocated', props.financeSales?.stats.allocated_other_total, 'Collected payments not covered by known billing item balances', 'pending', 'shield'],
     ],
     expenses: expenseSummaryCards,
     debt: [
@@ -619,7 +619,7 @@ function AccountantSalesView(props) {
   }
 
   function exportSalesCsv() {
-    const headers = ['Date', 'Transactions', 'Collected Sales', 'Insurance Value', 'Sales + Insurance', 'Loan Revenue', 'Consultation Allocated', 'Lenses Allocated', 'Frames Allocated', 'Other Allocated']
+    const headers = ['Date', 'Transactions', 'Collected Sales', 'Insurance Value', 'Sales + Insurance', 'Loan Revenue', 'Consultation Allocated', 'Lenses Allocated', 'Frames Allocated', 'Cases Allocated', 'Other Allocated']
     const rows = dailyBreakdown.map((day) => [
       day.sale_date || '',
       Number(day.transaction_count ?? 0),
@@ -630,6 +630,7 @@ function AccountantSalesView(props) {
       Number(day.consultation_total ?? 0).toFixed(2),
       Number(day.lens_total ?? 0).toFixed(2),
       Number(day.frame_total ?? 0).toFixed(2),
+      Number(day.case_total ?? 0).toFixed(2),
       Number(day.other_total ?? 0).toFixed(2),
     ])
 
@@ -750,11 +751,12 @@ function AccountantSalesView(props) {
             <Metric label="Consultation (Allocated)" value={salesStats.allocated_consultation_total ?? salesStats.consultation_total} />
             <Metric label="Lenses (Allocated)" value={salesStats.allocated_lens_total ?? salesStats.lens_total} />
             <Metric label="Frames (Allocated)" value={salesStats.allocated_frame_total ?? salesStats.frame_total} />
+            <Metric label="Cases (Allocated)" value={salesStats.allocated_case_total ?? salesStats.case_total} />
             <Metric label="Other Allocated" value={salesStats.allocated_other_total} />
             <Metric label="Average Sale" value={salesStats.average_sale} />
           </div>
           <p className="muted-copy sales-summary-note">
-            Total Sales is the realized collection total. Consultation, Lenses, and Frames are allocated in payment order from consultation to lenses to frames, with loan revenue and any residual billed amount tracked separately.
+            Total Sales is the realized collection total. Payments are allocated in priority order; any amount without a remaining known item balance appears as Other Allocated, while unpaid balances remain in Billing as outstanding.
           </p>
         </article>
 
@@ -780,6 +782,7 @@ function AccountantSalesView(props) {
                   <th>Consultation</th>
                   <th>Lenses</th>
                   <th>Frames</th>
+                  <th>Cases</th>
                   <th>Other</th>
                 </tr>
               </thead>
@@ -795,6 +798,7 @@ function AccountantSalesView(props) {
                     <td>{currency.format(Number(day.consultation_total ?? 0))}</td>
                     <td>{currency.format(Number(day.lens_total ?? 0))}</td>
                     <td>{currency.format(Number(day.frame_total ?? 0))}</td>
+                    <td>{currency.format(Number(day.case_total ?? 0))}</td>
                     <td>{currency.format(Number(day.other_total ?? 0))}</td>
                   </tr>
                 )) : (

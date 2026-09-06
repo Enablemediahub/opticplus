@@ -346,12 +346,9 @@ class FinanceController extends Controller
         $scope = fn ($query, string $column = 'branch_id') => $this->applyBranchScope($query, $column, $branchId);
 
         $billing = tap(DB::table('billing')->whereBetween('date', [$start, $end]), $scope)
-            ->selectRaw('MONTH(date) as month, SUM(consultation_price) consultation, SUM(frame_price) frames, SUM(lens_price) lenses, SUM(case_price) cases, SUM(balance) debtors')
+            ->selectRaw('MONTH(date) as month, SUM(consultation_price) consultation, SUM(frame_price) frames, SUM(lens_price) lenses, SUM(case_price) cases, SUM(total_amount) billed, SUM(balance) debtors')
             ->groupByRaw('MONTH(date)')->get()->keyBy('month');
-        // Match the Sales page exactly: use the recorded non-insurance sale rows,
-        // not every invoice's catalogue value. This also preserves the selected
-        // branch and excludes insurance claims which are not cash sales yet.
-        $salesBreakdown = tap(
+        $salesRows = tap(
             DB::table('sales as s')
                 ->leftJoin('billing as b', function ($join): void {
                     $join->on('s.billing_id', '=', 'b.id')
@@ -361,11 +358,78 @@ class FinanceController extends Controller
                 ->where('s.payment_method', '!=', 'Insurance'),
             fn ($query) => $this->applyBranchScope($query, 's.branch_id', $branchId)
         )
-            ->selectRaw('MONTH(s.date) as month, SUM(COALESCE(b.consultation_price, 0)) consultation, SUM(COALESCE(b.frame_price, 0)) frames, SUM(COALESCE(b.lens_price, 0)) lenses, SUM(COALESCE(b.case_price, 0)) cases')
-            ->groupByRaw('MONTH(s.date)')->get()->keyBy('month');
-        $salesRows = tap(DB::table('sales')->whereBetween('date', [$start, $end])->where('payment_method', '!=', 'Insurance'), $scope)
-            ->selectRaw('MONTH(date) as month, payment_method, SUM(amount_paid) collected')->groupByRaw('MONTH(date), payment_method')->get();
-        $sales = $salesRows->groupBy('month')->map(fn ($rows) => (object) ['collected' => $rows->sum('collected')]);
+            ->select([
+                DB::raw('MONTH(s.date) as month'),
+                's.date as sale_date',
+                's.amount_paid',
+                's.billing_id',
+                's.folder_id',
+                'b.consultation_price',
+                'b.frame_price',
+                'b.lens_price',
+                'b.case_price',
+                'b.total_amount as billing_total',
+            ])
+            ->orderBy('s.date')
+            ->orderBy('s.id')
+            ->get();
+        $sales = [];
+        $salesBreakdown = [];
+        $billingAllocationState = [];
+        foreach ($salesRows as $saleRow) {
+            $month = (int) $saleRow->month;
+            $amountPaid = round((float) ($saleRow->amount_paid ?? 0), 2);
+            $sales[$month] = ($sales[$month] ?? 0) + $amountPaid;
+            $salesBreakdown[$month] ??= ['consultation' => 0.0, 'lens' => 0.0, 'frame' => 0.0, 'case' => 0.0, 'other' => 0.0];
+
+            if ($saleRow->billing_id === null) {
+                $salesBreakdown[$month]['other'] += $amountPaid;
+                continue;
+            }
+
+            $billingId = (int) $saleRow->billing_id;
+            $billingAllocationState[$month] ??= [];
+            $consultationPrice = $saleRow->consultation_price;
+            $lensPrice = $saleRow->lens_price;
+            $framePrice = $saleRow->frame_price;
+            $casePrice = $saleRow->case_price;
+            if ($consultationPrice === null && $saleRow->folder_id) {
+                $fallbackBilling = DB::table('billing')
+                    ->where('branch_id', $branchId)
+                    ->where('folder_id', $saleRow->folder_id)
+                    ->orderByRaw('ABS(DATEDIFF(date, ?))', [$saleRow->sale_date])
+                    ->orderByDesc('id')
+                    ->first(['id', 'consultation_price', 'lens_price', 'frame_price', 'case_price']);
+                if ($fallbackBilling) {
+                    $billingId = (int) $fallbackBilling->id;
+                    $consultationPrice = $fallbackBilling->consultation_price;
+                    $lensPrice = $fallbackBilling->lens_price;
+                    $framePrice = $fallbackBilling->frame_price;
+                    $casePrice = $fallbackBilling->case_price;
+                }
+            }
+            if (! isset($billingAllocationState[$month][$billingId])) {
+                $billingAllocationState[$month][$billingId] = [
+                    'consultation' => max(0.0, (float) ($consultationPrice ?? 0)),
+                    'lens' => max(0.0, (float) ($lensPrice ?? 0)),
+                    'frame' => max(0.0, (float) ($framePrice ?? 0)),
+                    'case' => max(0.0, (float) ($casePrice ?? 0)),
+                ];
+            }
+
+            $remainingAmount = $amountPaid;
+            foreach (['consultation', 'lens', 'frame', 'case'] as $bucket) {
+                if ($remainingAmount <= 0) break;
+                $allocated = min($remainingAmount, $billingAllocationState[$month][$billingId][$bucket] ?? 0.0);
+                $billingAllocationState[$month][$billingId][$bucket] = max(0.0, ($billingAllocationState[$month][$billingId][$bucket] ?? 0.0) - $allocated);
+                $salesBreakdown[$month][$bucket] += $allocated;
+                $remainingAmount -= $allocated;
+            }
+
+            if ($remainingAmount > 0) {
+                $salesBreakdown[$month]['other'] += $remainingAmount;
+            }
+        }
         $insurance = tap(DB::table('insurance_claims')->whereBetween('date', [$start, $end]), $scope)
             ->selectRaw("MONTH(date) as month, SUM(CASE WHEN status IN ('pending', 'claimed') THEN amount_paid ELSE 0 END) claimed, SUM(CASE WHEN status = 'paid' THEN amount_paid ELSE 0 END) received")
             ->groupByRaw('MONTH(date)')->get()->keyBy('month');
@@ -454,7 +518,9 @@ class FinanceController extends Controller
                     COALESCE(ph.employee_name, ec.ghana_card_name) as employee_name,
                     COALESCE(ec.staff_id, "") as staff_id,
                     ph.pay_month,
-                    SUM(COALESCE(ph.declared_paid, 0)) as total
+                    SUM(COALESCE(ph.declared_paid, 0)) as total,
+                    SUM(COALESCE(ph.declared_salary, 0)) as declared_total,
+                    SUM(COALESCE(ph.net_salary, 0)) as net_total
                 ')
                 ->groupBy('ph.employee_id', 'ph.employee_name', 'ec.ghana_card_name', 'ec.staff_id', 'ph.pay_month')
                 ->orderBy('ph.employee_name')
@@ -483,10 +549,14 @@ class FinanceController extends Controller
                         'staff_id' => trim((string) ($payment->staff_id ?? '')) ?: null,
                         'label' => $this->formatPayrollReportLabel($employeeName, $payment->staff_id ?? null),
                         'months' => array_fill(0, 12, 0.0),
+                        'declared_months' => array_fill(0, 12, 0.0),
+                        'net_months' => array_fill(0, 12, 0.0),
                     ];
                 }
 
                 $salaryRows[$rowKey]['months'][$monthIndex] += (float) $payment->total;
+                $salaryRows[$rowKey]['declared_months'][$monthIndex] += (float) $payment->declared_total;
+                $salaryRows[$rowKey]['net_months'][$monthIndex] += (float) $payment->net_total;
             }
         }
 
@@ -494,27 +564,22 @@ class FinanceController extends Controller
         $runningCash = 0.0;
         for ($month = 1; $month <= 12; $month++) {
             $bill = $billing->get($month);
-            $salesBreakdownRow = $salesBreakdown->get($month);
-            $sale = $sales->get($month);
             $claim = $insurance->get($month);
             $expenseTotal = array_sum(array_map(fn ($values) => (float) $values[$month - 1], $categoryRows));
-            $collected = (float) ($sale->collected ?? 0) + (float) ($claim->received ?? 0) + (float) ($loanCollections[$month - 1] ?? 0);
-            $itemSalesValue = (float) ($salesBreakdownRow->frames ?? 0)
-                + (float) ($salesBreakdownRow->lenses ?? 0)
-                + (float) ($salesBreakdownRow->consultation ?? 0)
-                + (float) ($salesBreakdownRow->cases ?? 0);
-            // This reconciles product rows to the Sales-page payment total. It
-            // captures linked payments whose invoice items do not equal the
-            // payment, plus legacy payments with no matching billing row.
-            $salesReconciliation = (float) ($sale->collected ?? 0) - $itemSalesValue;
+            $salesAllocation = $salesBreakdown[$month] ?? ['consultation' => 0.0, 'lens' => 0.0, 'frame' => 0.0, 'case' => 0.0, 'other' => 0.0];
+            $collected = (float) ($sales[$month] ?? 0) + (float) ($claim->received ?? 0) + (float) ($loanCollections[$month - 1] ?? 0);
+            $allocatedKnownTotal = $salesAllocation['consultation'] + $salesAllocation['lens'] + $salesAllocation['frame'] + $salesAllocation['case'];
+            $salesAllocation['other'] = max(0.0, (float) ($sales[$month] ?? 0) - $allocatedKnownTotal);
+            $salesReconciliation = 0.0;
             $runningCash += $collected - $expenseTotal;
             $months[] = [
                 'month' => $month,
                 'label' => strtoupper(now()->setDate($year, $month, 1)->format('M')),
-                'frames' => round((float) ($salesBreakdownRow->frames ?? 0), 2),
-                'lenses' => round((float) ($salesBreakdownRow->lenses ?? 0), 2),
-                'consultation' => round((float) ($salesBreakdownRow->consultation ?? 0), 2),
-                'cases' => round((float) ($salesBreakdownRow->cases ?? 0), 2),
+                'frames' => round((float) $salesAllocation['frame'], 2),
+                'lenses' => round((float) $salesAllocation['lens'], 2),
+                'consultation' => round((float) $salesAllocation['consultation'], 2),
+                'cases' => round((float) $salesAllocation['case'], 2),
+                'other_allocated' => round((float) $salesAllocation['other'], 2),
                 'sales_reconciliation' => round($salesReconciliation, 2),
                 'collected' => round($collected, 2),
                 'insurance_claimed' => round((float) ($claim->claimed ?? 0), 2),
@@ -541,6 +606,8 @@ class FinanceController extends Controller
                 'staff_id' => $row['staff_id'],
                 'label' => $row['label'],
                 'months' => array_map(fn ($value) => round($value, 2), $row['months']),
+                'declared_months' => array_map(fn ($value) => round($value, 2), $row['declared_months']),
+                'net_months' => array_map(fn ($value) => round($value, 2), $row['net_months']),
             ])->values(),
             'collection_sources' => collect($collectionSources)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($amount) => round($amount, 2), $values)])->values(),
             'budgets' => Schema::hasTable('monitor_budgets') ? DB::table('monitor_budgets')->where('branch_id', $branchId)->where('year', $year)->pluck('amount', 'line_key') : [],
@@ -621,6 +688,7 @@ class FinanceController extends Controller
         $allocatedConsultationTotal = 0.0;
         $allocatedLensTotal = 0.0;
         $allocatedFrameTotal = 0.0;
+        $allocatedCaseTotal = 0.0;
         $allocatedOtherTotal = 0.0;
         $salesRows = (clone $query)
             ->orderBy('s.date')
@@ -665,6 +733,7 @@ class FinanceController extends Controller
                     'consultation_total' => 0.0,
                     'frame_total' => 0.0,
                     'lens_total' => 0.0,
+                    'case_total' => 0.0,
                     'other_total' => 0.0,
                 ];
             }
@@ -684,13 +753,32 @@ class FinanceController extends Controller
 
             $billingRevenueTotal += $amountPaid;
             $billingId = (int) $row->billing_id;
+            $consultationPrice = $row->consultation_price;
+            $lensPrice = $row->lens_price;
+            $framePrice = $row->frame_price;
+            $casePrice = $row->case_price;
+            if ($consultationPrice === null && $row->folder_id) {
+                $fallbackBilling = DB::table('billing')
+                    ->where('branch_id', $branchId)
+                    ->where('folder_id', $row->folder_id)
+                    ->orderByRaw('ABS(DATEDIFF(date, ?))', [$row->date])
+                    ->orderByDesc('id')
+                    ->first(['id', 'consultation_price', 'lens_price', 'frame_price', 'case_price']);
+                if ($fallbackBilling) {
+                    $billingId = (int) $fallbackBilling->id;
+                    $consultationPrice = $fallbackBilling->consultation_price;
+                    $lensPrice = $fallbackBilling->lens_price;
+                    $framePrice = $fallbackBilling->frame_price;
+                    $casePrice = $fallbackBilling->case_price;
+                }
+            }
 
             if (! isset($seenBillingIds[$billingId])) {
                 $seenBillingIds[$billingId] = true;
-                $consultationTotal += max(0.0, (float) ($row->consultation_price ?? 0));
-                $frameTotal += max(0.0, (float) ($row->frame_price ?? 0));
-                $lensTotal += max(0.0, (float) ($row->lens_price ?? 0));
-                $caseTotal += max(0.0, (float) ($row->case_price ?? 0));
+                $consultationTotal += max(0.0, (float) ($consultationPrice ?? 0));
+                $frameTotal += max(0.0, (float) ($framePrice ?? 0));
+                $lensTotal += max(0.0, (float) ($lensPrice ?? 0));
+                $caseTotal += max(0.0, (float) ($casePrice ?? 0));
                 $discountTotal += max(0.0, (float) ($row->discount ?? 0));
                 $taxTotal += max(0.0, (float) ($row->tax ?? 0))
                     + max(0.0, (float) ($row->nhil_amount ?? 0))
@@ -701,13 +789,10 @@ class FinanceController extends Controller
                 $billingTotal += max(0.0, (float) ($row->billing_total ?? 0));
 
                 $billingAllocationState[$billingId] = [
-                    'consultation' => max(0.0, (float) ($row->consultation_price ?? 0)),
-                    'lens' => max(0.0, (float) ($row->lens_price ?? 0)),
-                    'frame' => max(0.0, (float) ($row->frame_price ?? 0)),
-                    'other' => max(0.0, (float) ($row->billing_total ?? 0))
-                        - max(0.0, (float) ($row->consultation_price ?? 0))
-                        - max(0.0, (float) ($row->lens_price ?? 0))
-                        - max(0.0, (float) ($row->frame_price ?? 0)),
+                    'consultation' => max(0.0, (float) ($consultationPrice ?? 0)),
+                    'lens' => max(0.0, (float) ($lensPrice ?? 0)),
+                    'frame' => max(0.0, (float) ($framePrice ?? 0)),
+                    'case' => max(0.0, (float) ($casePrice ?? 0)),
                 ];
             }
 
@@ -715,8 +800,9 @@ class FinanceController extends Controller
             $allocatedConsultation = 0.0;
             $allocatedLens = 0.0;
             $allocatedFrame = 0.0;
+            $allocatedCase = 0.0;
             $allocatedOther = 0.0;
-            foreach (['consultation', 'lens', 'frame'] as $bucket) {
+            foreach (['consultation', 'lens', 'frame', 'case'] as $bucket) {
                 if ($remainingAmount <= 0) {
                     break;
                 }
@@ -730,15 +816,8 @@ class FinanceController extends Controller
                     'consultation' => $allocatedConsultation += $allocated,
                     'lens' => $allocatedLens += $allocated,
                     'frame' => $allocatedFrame += $allocated,
+                    'case' => $allocatedCase += $allocated,
                 };
-            }
-
-            if ($remainingAmount > 0) {
-                $otherRemaining = $billingAllocationState[$billingId]['other'] ?? 0.0;
-                $allocatedToOtherBucket = min($remainingAmount, $otherRemaining);
-                $billingAllocationState[$billingId]['other'] = max(0.0, $otherRemaining - $allocatedToOtherBucket);
-                $allocatedOther += $allocatedToOtherBucket;
-                $remainingAmount -= $allocatedToOtherBucket;
             }
 
             if ($remainingAmount > 0) {
@@ -748,13 +827,17 @@ class FinanceController extends Controller
             $allocatedConsultationTotal += $allocatedConsultation;
             $allocatedLensTotal += $allocatedLens;
             $allocatedFrameTotal += $allocatedFrame;
+            $allocatedCaseTotal += $allocatedCase;
             $allocatedOtherTotal += $allocatedOther;
 
             $dailyBreakdownByDate[$saleDate]['consultation_total'] += $allocatedConsultation;
             $dailyBreakdownByDate[$saleDate]['lens_total'] += $allocatedLens;
             $dailyBreakdownByDate[$saleDate]['frame_total'] += $allocatedFrame;
+            $dailyBreakdownByDate[$saleDate]['case_total'] += $allocatedCase;
             $dailyBreakdownByDate[$saleDate]['other_total'] += $allocatedOther;
         }
+        $allocatedKnownTotal = $allocatedConsultationTotal + $allocatedLensTotal + $allocatedFrameTotal + $allocatedCaseTotal;
+        $allocatedOtherTotal = max(0.0, $totalAmount - $allocatedKnownTotal);
         $insuranceBilledQuery = tap(
             DB::table('insurance_claims as ic')
                 ->leftJoin('billing as b', function ($join): void {
@@ -969,6 +1052,7 @@ class FinanceController extends Controller
                 'allocated_consultation_total' => round($allocatedConsultationTotal, 2),
                 'allocated_lens_total' => round($allocatedLensTotal, 2),
                 'allocated_frame_total' => round($allocatedFrameTotal, 2),
+                'allocated_case_total' => round($allocatedCaseTotal, 2),
                 'allocated_other_total' => round($allocatedOtherTotal, 2),
                 'insurance_billed_value' => $insuranceBilledValue,
                 'sales_with_insurance' => $totalAmount + $insuranceBilledValue,
@@ -2003,6 +2087,7 @@ class FinanceController extends Controller
     public function storePayment(Request $request, int $billingId): JsonResponse
     {
         $this->ensureInsuranceProviderSchema();
+        $this->ensureSalesIdSchema();
         if ($response = $this->ensureFinancePaymentWriteAccess($request)) {
             return $response;
         }
@@ -2178,6 +2263,8 @@ class FinanceController extends Controller
             return $receiptNumber;
         });
 
+        $smsStatus = $this->sendPaymentConfirmationSms($billing, $totalRequested, $receiptNumber, $currentBalance);
+
         return response()->json([
             'message' => $paymentEntries->count() > 1
                 ? 'Multiple payments recorded successfully.'
@@ -2187,7 +2274,72 @@ class FinanceController extends Controller
             'receipt_number' => $receiptNumber,
             'payment_methods' => $paymentEntries->pluck('payment_method')->values(),
             'payment_count' => $paymentEntries->count(),
+            'sms' => $smsStatus,
         ], 201);
+    }
+
+    private function sendPaymentConfirmationSms(object $billing, float $amount, string $receiptNumber, float $previousBalance): array
+    {
+        $phone = $this->normalizeGhanaPhone((string) ($billing->phone ?? ''));
+        if (! $phone) {
+            return ['status' => 'skipped', 'reason' => 'No valid client phone number.'];
+        }
+
+        if (! filled(config('services.arkesel.api_key')) || ! filled(config('services.arkesel.sender_id'))) {
+            return ['status' => 'skipped', 'reason' => 'Arkesel SMS is not configured.'];
+        }
+
+        $firstName = trim((string) ($billing->patient_first_name ?? ''));
+        if ($firstName === '') {
+            $firstName = trim(explode(' ', (string) ($billing->name ?? ''))[0] ?? '') ?: 'Customer';
+        }
+
+        $remainingBalance = max(round($previousBalance - $amount, 2), 0.0);
+        $message = $remainingBalance > 0
+            ? sprintf(
+                'Dear %s, thank you for your payment of GHS %s to Bealet Optical Centre. Total paid: GHS %s. Balance remaining: GHS %s. Receipt: %s.',
+                $firstName,
+                number_format($amount, 2, '.', ''),
+                number_format((float) $billing->total_amount - $remainingBalance, 2, '.', ''),
+                number_format($remainingBalance, 2, '.', ''),
+                $receiptNumber,
+            )
+            : sprintf(
+                'Dear %s, thank you for your payment of GHS %s to Bealet Optical Centre. Your bill of GHS %s is paid in full. Receipt: %s.',
+                $firstName,
+                number_format($amount, 2, '.', ''),
+                number_format((float) $billing->total_amount, 2, '.', ''),
+                $receiptNumber,
+            );
+
+        try {
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'api-key' => (string) config('services.arkesel.api_key'),
+                    'Accept' => 'application/json',
+                ])
+                ->post(rtrim((string) config('services.arkesel.base_url'), '/').'/sms/send', [
+                    'sender' => (string) config('services.arkesel.sender_id'),
+                    'message' => $message,
+                    'recipients' => [$phone],
+                ]);
+
+            return $response->successful()
+                ? ['status' => 'sent', 'message' => $message]
+                : ['status' => 'failed', 'message' => 'Arkesel rejected the SMS.'];
+        } catch (\Throwable) {
+            return ['status' => 'failed', 'message' => 'SMS provider could not be reached.'];
+        }
+    }
+
+    private function normalizeGhanaPhone(string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $phone);
+        if (! $digits) return null;
+        if (str_starts_with($digits, '233') && strlen($digits) === 12) return $digits;
+        if (str_starts_with($digits, '0') && strlen($digits) === 10) return '233'.substr($digits, 1);
+        if (strlen($digits) === 9) return '233'.$digits;
+        return null;
     }
 
     private function applySalesFilters($query, Request $request): void
@@ -2314,6 +2466,7 @@ class FinanceController extends Controller
                 'b.customer_id',
                 'b.folder_id',
                 'b.name',
+                'pr.firstname as patient_first_name',
                 DB::raw($patientEmailSelect),
                 DB::raw($patientPhoneSelect),
                 'b.branch_id',
@@ -2635,6 +2788,29 @@ class FinanceController extends Controller
         }
     }
 
+    private function ensureSalesIdSchema(): void
+    {
+        if (! Schema::hasTable('sales') || ! Schema::hasColumn('sales', 'id')) {
+            return;
+        }
+
+        $column = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'sales'
+              AND COLUMN_NAME = 'id'
+        ");
+
+        if ($column && empty($column->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE sales ADD PRIMARY KEY (id)');
+        }
+
+        if ($column && ! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE sales MODIFY id INT NOT NULL AUTO_INCREMENT');
+        }
+    }
+
     private function generateReceiptNumber(int $branchId): string
     {
         $year = now()->format('Y');
@@ -2702,12 +2878,20 @@ class FinanceController extends Controller
     private function ensureExpenseIdAutoIncrement(): void
     {
         $column = DB::selectOne("
-            SELECT EXTRA
+            SELECT EXTRA, COLUMN_KEY
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = 'expenses'
               AND COLUMN_NAME = 'expense_id'
         ");
+
+        if (! $column) {
+            return;
+        }
+
+        if (empty($column->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE expenses ADD INDEX idx_expenses_expense_id (expense_id)');
+        }
 
         if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
             DB::statement('ALTER TABLE expenses MODIFY expense_id INT NOT NULL AUTO_INCREMENT');

@@ -274,10 +274,14 @@ function getPayrollDeclaredSalary({ branchId, year, month, employeeId, fallback 
     : toNumber(fallback)
 }
 
-function buildDeclaredSalaryRows(report, selectedMonths) {
+function buildSalaryRows(report, selectedMonths, salaryField = 'months') {
   return (report?.salary_rows ?? []).map((row) => ({
     ...row,
-    months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+    months: selectedMonths.map((month) => {
+      const monthIndex = Number(month) - 1
+      const values = Array.isArray(row?.[salaryField]) ? row[salaryField] : row?.months
+      return toNumber(values?.[monthIndex])
+    }),
   }))
 }
 
@@ -719,6 +723,7 @@ function buildFinancialSheet(report, selectedMonths, branchLabel, options = {}) 
     { sn: '1.6', label: 'INSURANCE RECEIVED', key: 'receipt:insurance-received', months: monthRows.map((row) => toNumber(row.insurance_received)) },
     { sn: '1.7', label: 'SALE OF CASES', key: 'receipt:cases', months: monthRows.map((row) => toNumber(row.cases)) },
     { sn: '1.8', label: 'SALES RECONCILIATION BALANCE', key: 'receipt:sales-reconciliation', months: monthRows.map((row) => toNumber(row.sales_reconciliation)) },
+    { sn: '1.9', label: 'OTHER ALLOCATED SALES', key: 'receipt:other-allocated', months: monthRows.map((row) => toNumber(row.other_allocated)) },
     ...(report?.collection_sources ?? [])
       .map((row, index) => ({
         sn: `1.${9 + index}`,
@@ -730,10 +735,10 @@ function buildFinancialSheet(report, selectedMonths, branchLabel, options = {}) 
       .filter((row) => row.months.some((amount) => amount !== 0)),
   ]
 
-  const salaryRows = buildDeclaredSalaryRows(report, selectedMonths).map((row) => ({
+  const salaryRows = buildSalaryRows(report, selectedMonths, auditMode ? 'declared_months' : 'net_months').map((row) => ({
     label: `SALARY - ${String(row.label ?? row.name ?? '').toUpperCase()}`,
     key: financialLineKey('salary', row.employee_id ?? row.label ?? row.name),
-    months: selectedMonths.map((month) => toNumber(row?.months?.[Number(month) - 1])),
+    months: row.months,
   }))
   const expenseRows = (report?.expense_categories ?? []).map((row) => ({
     label: row.label.toUpperCase(),

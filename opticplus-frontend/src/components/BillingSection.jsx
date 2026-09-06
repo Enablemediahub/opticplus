@@ -11,6 +11,14 @@ function hasBalanceDue(amount) {
   return Number(amount ?? 0) > 0.0005
 }
 
+function billingStatusLabel(record) {
+  const balance = Number(record?.calculated_balance ?? record?.balance ?? 0)
+  const paid = Number(record?.total_paid ?? 0)
+  if (balance <= 0.0005) return 'Paid'
+  if (paid > 0.0005) return 'Partially Paid'
+  return 'Pending'
+}
+
 export default function BillingSection({
   session,
   billingMeta,
@@ -312,8 +320,8 @@ export default function BillingSection({
                         <td>{record.receipt_number || 'No receipt yet'}</td>
                         <td>{record.date}</td>
                         <td>
-                          <span className={`status-pill status-${String(record.status).toLowerCase().replaceAll(' ', '-')}`}>
-                            {record.status}
+                          <span className={`status-pill status-${billingStatusLabel(record).toLowerCase().replaceAll(' ', '-')}`}>
+                            {billingStatusLabel(record)}
                           </span>
                         </td>
                         <td>{currency.format(Number(record.total_amount ?? 0))}</td>
@@ -1212,7 +1220,7 @@ function ManagerBillingWorkspace({
                       <td className={hasBalanceDue(record.calculated_balance) ? 'billing-balance-due' : undefined}>
                         {currency.format(Number(record.calculated_balance ?? 0))}
                       </td>
-                      <td><span className={`status-pill status-${String(record.status).toLowerCase().replaceAll(' ', '-')}`}>{record.status}</span></td>
+                      <td><span className={`status-pill status-${billingStatusLabel(record).toLowerCase().replaceAll(' ', '-')}`}>{billingStatusLabel(record)}</span></td>
                       <td>
                         <div className="billing-row-actions">
                           <button

@@ -1287,12 +1287,16 @@ class PayrollController extends Controller
         }
 
         $column = DB::selectOne("
-            SELECT EXTRA
+            SELECT EXTRA, COLUMN_KEY
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = 'expenses'
               AND COLUMN_NAME = 'expense_id'
         ");
+
+        if (empty($column?->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE expenses ADD INDEX idx_expenses_expense_id (expense_id)');
+        }
 
         if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
             DB::statement('ALTER TABLE expenses MODIFY expense_id INT NOT NULL AUTO_INCREMENT');

@@ -3928,6 +3928,11 @@
   color: #4ade80;
 }
 
+.status-partially-paid {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.14);
+}
+
 .status-claimed {
   color: #38bdf8;
 }
