@@ -15,6 +15,7 @@ const defaultDebtForm = () => ({
   description: '',
   principal_amount: '',
   interest_rate: '',
+  expected_repayment_amount: '',
   interest_type: 'fixed',
   lender_name: '',
   lender_contact: '',
@@ -36,6 +37,7 @@ const debtFormFromRecord = (debt) => ({
   description: debt?.description ?? '',
   principal_amount: debt?.principal_amount != null ? String(debt.principal_amount) : '',
   interest_rate: debt?.interest_rate != null ? String(debt.interest_rate) : '',
+  expected_repayment_amount: '',
   interest_type: debt?.interest_type ?? 'fixed',
   lender_name: debt?.lender_name ?? '',
   lender_contact: debt?.lender_contact ?? '',
@@ -174,6 +176,7 @@ export default function DebtManagementSection(props) {
           ...debtForm,
           principal_amount: Number(debtForm.principal_amount || 0),
           interest_rate: debtForm.interest_rate === '' ? null : Number(debtForm.interest_rate),
+          expected_repayment_amount: debtForm.expected_repayment_amount === '' ? null : Number(debtForm.expected_repayment_amount),
           term_months: debtForm.term_months === '' ? null : Number(debtForm.term_months),
         },
       })
@@ -202,6 +205,7 @@ export default function DebtManagementSection(props) {
           ...debtForm,
           principal_amount: Number(debtForm.principal_amount || 0),
           interest_rate: debtForm.interest_rate === '' ? null : Number(debtForm.interest_rate),
+          expected_repayment_amount: debtForm.expected_repayment_amount === '' ? null : Number(debtForm.expected_repayment_amount),
           term_months: debtForm.term_months === '' ? null : Number(debtForm.term_months),
         },
       })
@@ -522,11 +526,12 @@ export default function DebtManagementSection(props) {
             <form className="patient-form-grid debt-form-grid" onSubmit={saveDebt}>
               <label><span>Debtor name</span><input value={debtForm.debtor_name} onChange={(event) => setDebtForm((current) => ({ ...current, debtor_name: event.target.value }))} required /></label>
               <label><span>Debt type</span><select value={debtForm.debt_type} onChange={(event) => setDebtForm((current) => ({ ...current, debt_type: event.target.value }))}>{(debtMeta?.debt_types ?? []).map((type) => <option key={type} value={type}>{formatLabel(type)}</option>)}</select></label>
-              <label><span>Category</span><input value={debtForm.category} onChange={(event) => setDebtForm((current) => ({ ...current, category: event.target.value }))} required /></label>
+              <label><span>Category</span><select value={debtForm.category} onChange={(event) => setDebtForm((current) => ({ ...current, category: event.target.value }))} required><option value="">Select category</option>{(debtMeta?.categories ?? []).map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
               <label><span>Lender name</span><input value={debtForm.lender_name} onChange={(event) => setDebtForm((current) => ({ ...current, lender_name: event.target.value }))} /></label>
               <label className="full-span"><span>Description</span><textarea rows="3" value={debtForm.description} onChange={(event) => setDebtForm((current) => ({ ...current, description: event.target.value }))} /></label>
               <label><span>Principal amount</span><input type="number" min="0" step="0.01" value={debtForm.principal_amount} onChange={(event) => setDebtForm((current) => ({ ...current, principal_amount: event.target.value }))} required /></label>
               <label><span>Interest rate (%)</span><input type="number" min="0" step="0.01" value={debtForm.interest_rate} onChange={(event) => setDebtForm((current) => ({ ...current, interest_rate: event.target.value }))} /></label>
+              <label><span>Expected repayment amount</span><input type="number" min={debtForm.principal_amount || '0'} step="0.01" value={debtForm.expected_repayment_amount} onChange={(event) => setDebtForm((current) => ({ ...current, expected_repayment_amount: event.target.value, interest_type: event.target.value ? 'fixed' : current.interest_type }))} placeholder="Use this instead of interest rate" /></label>
               <label><span>Interest type</span><select value={debtForm.interest_type} onChange={(event) => setDebtForm((current) => ({ ...current, interest_type: event.target.value }))}>{(debtMeta?.interest_types ?? []).map((type) => <option key={type} value={type}>{formatLabel(type)}</option>)}</select></label>
               <label><span>Term (months)</span><input type="number" min="1" value={debtForm.term_months} onChange={(event) => setDebtForm((current) => ({ ...current, term_months: event.target.value }))} /></label>
               <label><span>Start date</span><input type="date" value={debtForm.start_date} onChange={(event) => setDebtForm((current) => ({ ...current, start_date: event.target.value }))} required /></label>
@@ -553,11 +558,12 @@ export default function DebtManagementSection(props) {
             <form className="patient-form-grid debt-form-grid" onSubmit={updateDebt}>
               <label><span>Debtor name</span><input value={debtForm.debtor_name} onChange={(event) => setDebtForm((current) => ({ ...current, debtor_name: event.target.value }))} required /></label>
               <label><span>Debt type</span><select value={debtForm.debt_type} onChange={(event) => setDebtForm((current) => ({ ...current, debt_type: event.target.value }))}>{(debtMeta?.debt_types ?? []).map((type) => <option key={type} value={type}>{formatLabel(type)}</option>)}</select></label>
-              <label><span>Category</span><input value={debtForm.category} onChange={(event) => setDebtForm((current) => ({ ...current, category: event.target.value }))} required /></label>
+              <label><span>Category</span><select value={debtForm.category} onChange={(event) => setDebtForm((current) => ({ ...current, category: event.target.value }))} required><option value="">Select category</option>{(debtMeta?.categories ?? []).map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
               <label><span>Lender name</span><input value={debtForm.lender_name} onChange={(event) => setDebtForm((current) => ({ ...current, lender_name: event.target.value }))} /></label>
               <label className="full-span"><span>Description</span><textarea rows="3" value={debtForm.description} onChange={(event) => setDebtForm((current) => ({ ...current, description: event.target.value }))} /></label>
               <label><span>Principal amount</span><input type="number" min="0" step="0.01" value={debtForm.principal_amount} onChange={(event) => setDebtForm((current) => ({ ...current, principal_amount: event.target.value }))} required /></label>
               <label><span>Interest rate (%)</span><input type="number" min="0" step="0.01" value={debtForm.interest_rate} onChange={(event) => setDebtForm((current) => ({ ...current, interest_rate: event.target.value }))} /></label>
+              <label><span>Expected repayment amount</span><input type="number" min={debtForm.principal_amount || '0'} step="0.01" value={debtForm.expected_repayment_amount} onChange={(event) => setDebtForm((current) => ({ ...current, expected_repayment_amount: event.target.value, interest_type: event.target.value ? 'fixed' : current.interest_type }))} placeholder="Use this instead of interest rate" /></label>
               <label><span>Interest type</span><select value={debtForm.interest_type} onChange={(event) => setDebtForm((current) => ({ ...current, interest_type: event.target.value }))}>{(debtMeta?.interest_types ?? []).map((type) => <option key={type} value={type}>{formatLabel(type)}</option>)}</select></label>
               <label><span>Term (months)</span><input type="number" min="1" value={debtForm.term_months} onChange={(event) => setDebtForm((current) => ({ ...current, term_months: event.target.value }))} /></label>
               <label><span>Start date</span><input type="date" value={debtForm.start_date} onChange={(event) => setDebtForm((current) => ({ ...current, start_date: event.target.value }))} required /></label>

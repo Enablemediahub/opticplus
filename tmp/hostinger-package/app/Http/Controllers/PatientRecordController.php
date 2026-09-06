@@ -319,6 +319,8 @@ class PatientRecordController extends Controller
             return $response;
         }
 
+        $this->ensurePatientRecordIdSchema();
+
         $validated = $request->validate([
             'surname' => ['required', 'string', 'max:100'],
             'firstname' => ['required', 'string', 'max:100'],
@@ -1873,6 +1875,29 @@ class PatientRecordController extends Controller
         $sequence = str_pad((string) $count, 4, '0', STR_PAD_LEFT);
 
         return "BOC-{$initials}/{$sequence}/{$year}";
+    }
+
+    private function ensurePatientRecordIdSchema(): void
+    {
+        $column = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'patient_records'
+              AND COLUMN_NAME = 'id'
+        ");
+
+        if (! $column) {
+            return;
+        }
+
+        if (empty($column->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE patient_records ADD PRIMARY KEY (id)');
+        }
+
+        if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE patient_records MODIFY id INT NOT NULL AUTO_INCREMENT');
+        }
     }
 
     private function formatPatientRecord(object $record, string $today): array

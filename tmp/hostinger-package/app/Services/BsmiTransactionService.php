@@ -17,6 +17,8 @@ class BsmiTransactionService
             return;
         }
 
+        $this->ensureTransactionIdSchema();
+
         $billing = DB::table('billing')->where('id', $billingId)->first();
         if (! $billing) {
             return;
@@ -126,5 +128,28 @@ class BsmiTransactionService
             2 => 'Madina',
             default => 'Branch '.$branchId,
         };
+    }
+
+    private function ensureTransactionIdSchema(): void
+    {
+        if (! Schema::hasColumn('bsmi_transactions', 'id')) {
+            return;
+        }
+
+        $column = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'bsmi_transactions'
+              AND COLUMN_NAME = 'id'
+        ");
+
+        if ($column && empty($column->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE bsmi_transactions ADD PRIMARY KEY (id)');
+        }
+
+        if ($column && ! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE bsmi_transactions MODIFY id INT NOT NULL AUTO_INCREMENT');
+        }
     }
 }

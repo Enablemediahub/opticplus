@@ -2087,6 +2087,7 @@ class FinanceController extends Controller
     public function storePayment(Request $request, int $billingId): JsonResponse
     {
         $this->ensureInsuranceProviderSchema();
+        $this->ensureSalesIdSchema();
         if ($response = $this->ensureFinancePaymentWriteAccess($request)) {
             return $response;
         }
@@ -2262,6 +2263,8 @@ class FinanceController extends Controller
             return $receiptNumber;
         });
 
+        $smsStatus = $this->sendPaymentConfirmationSms($billing, $totalRequested, $receiptNumber, $currentBalance);
+
         return response()->json([
             'message' => $paymentEntries->count() > 1
                 ? 'Multiple payments recorded successfully.'
@@ -2271,7 +2274,72 @@ class FinanceController extends Controller
             'receipt_number' => $receiptNumber,
             'payment_methods' => $paymentEntries->pluck('payment_method')->values(),
             'payment_count' => $paymentEntries->count(),
+            'sms' => $smsStatus,
         ], 201);
+    }
+
+    private function sendPaymentConfirmationSms(object $billing, float $amount, string $receiptNumber, float $previousBalance): array
+    {
+        $phone = $this->normalizeGhanaPhone((string) ($billing->phone ?? ''));
+        if (! $phone) {
+            return ['status' => 'skipped', 'reason' => 'No valid client phone number.'];
+        }
+
+        if (! filled(config('services.arkesel.api_key')) || ! filled(config('services.arkesel.sender_id'))) {
+            return ['status' => 'skipped', 'reason' => 'Arkesel SMS is not configured.'];
+        }
+
+        $firstName = trim((string) ($billing->patient_first_name ?? ''));
+        if ($firstName === '') {
+            $firstName = trim(explode(' ', (string) ($billing->name ?? ''))[0] ?? '') ?: 'Customer';
+        }
+
+        $remainingBalance = max(round($previousBalance - $amount, 2), 0.0);
+        $message = $remainingBalance > 0
+            ? sprintf(
+                'Dear %s, thank you for your payment of GHS %s to Bealet Optical Centre. Total paid: GHS %s. Balance remaining: GHS %s. Receipt: %s.',
+                $firstName,
+                number_format($amount, 2, '.', ''),
+                number_format((float) $billing->total_amount - $remainingBalance, 2, '.', ''),
+                number_format($remainingBalance, 2, '.', ''),
+                $receiptNumber,
+            )
+            : sprintf(
+                'Dear %s, thank you for your payment of GHS %s to Bealet Optical Centre. Your bill of GHS %s is paid in full. Receipt: %s.',
+                $firstName,
+                number_format($amount, 2, '.', ''),
+                number_format((float) $billing->total_amount, 2, '.', ''),
+                $receiptNumber,
+            );
+
+        try {
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'api-key' => (string) config('services.arkesel.api_key'),
+                    'Accept' => 'application/json',
+                ])
+                ->post(rtrim((string) config('services.arkesel.base_url'), '/').'/sms/send', [
+                    'sender' => (string) config('services.arkesel.sender_id'),
+                    'message' => $message,
+                    'recipients' => [$phone],
+                ]);
+
+            return $response->successful()
+                ? ['status' => 'sent', 'message' => $message]
+                : ['status' => 'failed', 'message' => 'Arkesel rejected the SMS.'];
+        } catch (\Throwable) {
+            return ['status' => 'failed', 'message' => 'SMS provider could not be reached.'];
+        }
+    }
+
+    private function normalizeGhanaPhone(string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $phone);
+        if (! $digits) return null;
+        if (str_starts_with($digits, '233') && strlen($digits) === 12) return $digits;
+        if (str_starts_with($digits, '0') && strlen($digits) === 10) return '233'.substr($digits, 1);
+        if (strlen($digits) === 9) return '233'.$digits;
+        return null;
     }
 
     private function applySalesFilters($query, Request $request): void
@@ -2398,6 +2466,7 @@ class FinanceController extends Controller
                 'b.customer_id',
                 'b.folder_id',
                 'b.name',
+                'pr.firstname as patient_first_name',
                 DB::raw($patientEmailSelect),
                 DB::raw($patientPhoneSelect),
                 'b.branch_id',
@@ -2716,6 +2785,29 @@ class FinanceController extends Controller
                     $table->integer('branch_id')->default(1)->index();
                 });
             }
+        }
+    }
+
+    private function ensureSalesIdSchema(): void
+    {
+        if (! Schema::hasTable('sales') || ! Schema::hasColumn('sales', 'id')) {
+            return;
+        }
+
+        $column = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'sales'
+              AND COLUMN_NAME = 'id'
+        ");
+
+        if ($column && empty($column->COLUMN_KEY)) {
+            DB::statement('ALTER TABLE sales ADD PRIMARY KEY (id)');
+        }
+
+        if ($column && ! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
+            DB::statement('ALTER TABLE sales MODIFY id INT NOT NULL AUTO_INCREMENT');
         }
     }
 

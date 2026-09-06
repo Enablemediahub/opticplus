@@ -17,6 +17,7 @@ class DebtController extends Controller
             'branch_id' => $branchId,
             'branch_name' => $this->branchName($branchId),
             'debt_types' => ['loan', 'supplier_credit', 'overdraft', 'lease', 'other'],
+            'categories' => $this->debtCategories($branchId),
             'statuses' => ['active', 'paid', 'defaulted', 'restructured', 'pending'],
             'interest_types' => ['fixed', 'variable', 'none'],
             'payment_frequencies' => ['monthly', 'quarterly', 'annually', 'one-time'],
@@ -139,6 +140,7 @@ class DebtController extends Controller
             'description' => ['nullable', 'string'],
             'principal_amount' => ['required', 'numeric', 'min:0.01'],
             'interest_rate' => ['nullable', 'numeric', 'min:0'],
+            'expected_repayment_amount' => ['nullable', 'numeric', 'gte:principal_amount'],
             'interest_type' => ['nullable', 'in:fixed,variable,none'],
             'lender_name' => ['nullable', 'string', 'max:255'],
             'lender_contact' => ['nullable', 'string', 'max:255'],
@@ -156,12 +158,22 @@ class DebtController extends Controller
         $interestRate = $validated['interest_rate'] !== null ? (float) $validated['interest_rate'] : null;
         $termMonths = $validated['term_months'] ?? null;
         $interestType = $validated['interest_type'] ?? 'fixed';
+        $expectedRepaymentAmount = $validated['expected_repayment_amount'] ?? null;
+        if ($expectedRepaymentAmount !== null) {
+            if (! $termMonths) {
+                return response()->json(['message' => 'Term in months is required when using an expected repayment amount.'], 422);
+            }
+            $interestRate = max(0, (($expectedRepaymentAmount / $principalAmount) - 1) * 100 * (12 / $termMonths));
+            $interestType = 'fixed';
+        }
         if ($interestType === 'none') {
             $interestRate = null;
         }
 
         $totalAmount = $principalAmount;
-        if ($interestRate && $interestRate > 0 && $termMonths) {
+        if ($expectedRepaymentAmount !== null) {
+            $totalAmount = (float) $expectedRepaymentAmount;
+        } elseif ($interestRate && $interestRate > 0 && $termMonths) {
             $interestAmount = $principalAmount * ($interestRate / 100) * ($termMonths / 12);
             $totalAmount += $interestAmount;
         }
@@ -239,6 +251,7 @@ class DebtController extends Controller
             'description' => ['nullable', 'string'],
             'principal_amount' => ['required', 'numeric', 'min:0.01'],
             'interest_rate' => ['nullable', 'numeric', 'min:0'],
+            'expected_repayment_amount' => ['nullable', 'numeric', 'gte:principal_amount'],
             'interest_type' => ['nullable', 'in:fixed,variable,none'],
             'lender_name' => ['nullable', 'string', 'max:255'],
             'lender_contact' => ['nullable', 'string', 'max:255'],
@@ -256,12 +269,22 @@ class DebtController extends Controller
         $interestRate = $validated['interest_rate'] !== null ? (float) $validated['interest_rate'] : null;
         $termMonths = $validated['term_months'] ?? null;
         $interestType = $validated['interest_type'] ?? 'fixed';
+        $expectedRepaymentAmount = $validated['expected_repayment_amount'] ?? null;
+        if ($expectedRepaymentAmount !== null) {
+            if (! $termMonths) {
+                return response()->json(['message' => 'Term in months is required when using an expected repayment amount.'], 422);
+            }
+            $interestRate = max(0, (($expectedRepaymentAmount / $principalAmount) - 1) * 100 * (12 / $termMonths));
+            $interestType = 'fixed';
+        }
         if ($interestType === 'none') {
             $interestRate = null;
         }
 
         $totalAmount = $principalAmount;
-        if ($interestRate && $interestRate > 0 && $termMonths) {
+        if ($expectedRepaymentAmount !== null) {
+            $totalAmount = (float) $expectedRepaymentAmount;
+        } elseif ($interestRate && $interestRate > 0 && $termMonths) {
             $interestAmount = $principalAmount * ($interestRate / 100) * ($termMonths / 12);
             $totalAmount += $interestAmount;
         }
@@ -748,6 +771,21 @@ class DebtController extends Controller
             2 => 'Madina',
             default => 'Unknown',
         };
+    }
+
+    private function debtCategories(int $branchId): array
+    {
+        $categories = tap(DB::table('debts'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category')
+            ->map(fn ($category) => (string) $category)
+            ->values()
+            ->all();
+
+            return $categories ?: ['Loan', 'Supplier Credit', 'Overdraft', 'Lease', 'Other'];
     }
 
     private function applyBranchScope($query, string $column, int $branchId): void
