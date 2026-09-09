@@ -7,6 +7,7 @@ export default function OptometristPrescriptionsSection({
   patientData,
   fetchGlassesPrescriptions,
   fetchFormPrescriptionSearch,
+  updatePatientPrescription,
   companyProfile,
 }) {
   const [search, setSearch] = useState('')
@@ -204,8 +205,8 @@ export default function OptometristPrescriptionsSection({
                       <td>{record.ipd || 'N/A'}</td>
                       <td>{record.lens_type || 'N/A'}</td>
                       <td>
-                        <span className={`status-pill status-${String(record.status || '').toLowerCase().replaceAll(' ', '-')}`}>
-                          {record.latest_form_status || record.status || 'pending'}
+                        <span className={`status-pill status-${String(getPatientSeenStatus(record) || '').toLowerCase().replaceAll(' ', '-')}`}>
+                          {getPatientSeenStatus(record)}
                         </span>
                       </td>
                       <td>{record.source === 'exam_form' ? `Exam Form${record.latest_form_version ? ` V${record.latest_form_version}` : (record.form_version ? ` V${record.form_version}` : '')}` : 'Glasses Table'}</td>
@@ -252,6 +253,7 @@ export default function OptometristPrescriptionsSection({
         <PrescriptionModal
           prescription={selectedPrescription}
           companyProfile={companyProfile}
+            updatePatientPrescription={updatePatientPrescription}
           onClose={() => setSelectedPrescription(null)}
         />
       ) : null}
@@ -259,7 +261,39 @@ export default function OptometristPrescriptionsSection({
   )
 }
 
-function PrescriptionModal({ prescription, companyProfile, onClose }) {
+function PrescriptionModal({ prescription, companyProfile, updatePatientPrescription, onClose }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState(() => createPrescriptionEditForm(prescription))
+  const [isSaving, setIsSaving] = useState(false)
+  const [editMessage, setEditMessage] = useState('')
+
+  function beginEditing() {
+    setEditForm(createPrescriptionEditForm(prescription))
+    setEditMessage('')
+    setIsEditing(true)
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault()
+    setIsSaving(true)
+    setEditMessage('')
+
+    try {
+      await updatePatientPrescription(prescription.patient_id, prescription.patient_id, editForm)
+      Object.assign(prescription, editForm, {
+        edited_by_name: 'You',
+        edited_by_role: 'optometrist',
+        edited_at: new Date().toISOString(),
+      })
+      setIsEditing(false)
+      setEditMessage('Prescription updated successfully. The editor is recorded in Audit Log.')
+    } catch (error) {
+      setEditMessage(error.message || 'Could not update prescription.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   function handlePrint() {
     window.print()
   }
@@ -270,7 +304,7 @@ function PrescriptionModal({ prescription, companyProfile, onClose }) {
 
   const patientName = formatPatientName(prescription)
   const dateValue = formatDate(prescription.date || prescription.latest_form_updated_at)
-  const status = prescription.latest_form_status || prescription.status || 'pending'
+  const status = getPatientSeenStatus(prescription)
   const companyName = String(companyProfile?.company_name || 'BEALET OPTICAL CENTER').toUpperCase()
   const companyTagline = companyProfile?.tagline || 'Professional Eye Care and Optical Services'
   const phonePrimary = companyProfile?.company_phone_primary || 'N/A'
@@ -291,8 +325,14 @@ function PrescriptionModal({ prescription, companyProfile, onClose }) {
           <div className="modal-actions">
             <button type="button" className="ghost-button" onClick={handlePrint}>Print</button>
             <button type="button" className="primary-button" onClick={handleExportPdf}>Export PDF</button>
+            {prescription.source !== 'exam_form' && prescription.patient_id ? (
+              <button type="button" className="ghost-button" onClick={beginEditing}>Edit Prescription</button>
+            ) : null}
             <button type="button" className="ghost-button" onClick={onClose}>Close</button>
           </div>
+          {prescription.edited_by_name ? (
+            <p className="muted-copy">Edited by {prescription.edited_by_name}{prescription.edited_by_role ? ` (${prescription.edited_by_role})` : ''}{prescription.edited_at ? ` on ${formatDate(prescription.edited_at)}` : ''}</p>
+          ) : null}
         </header>
 
         <section className="prescription-sheet" aria-label="Prescription sheet">
@@ -360,9 +400,55 @@ function PrescriptionModal({ prescription, companyProfile, onClose }) {
             <span>{companyEmail}</span>
           </div>
         </section>
+        {isEditing ? (
+          <form className="optometrist-workspace-card optometrist-management-form" onSubmit={saveEdit}>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Edit Prescription</p>
+                <h4>Update saved glasses prescription</h4>
+              </div>
+            </div>
+            <div className="optometrist-exam-grid">
+              {['date', 'ipd', 'sph_od', 'cyl_od', 'axis_od', 'add_od', 'sph_os', 'cyl_os', 'axis_os', 'add_os', 'lens_type', 'lens_material', 'color'].map((field) => (
+                <label key={field}>
+                  {field.replaceAll('_', ' ').toUpperCase()}
+                  <input type={field === 'date' ? 'date' : 'text'} value={editForm[field] || ''} onChange={(event) => setEditForm((current) => ({ ...current, [field]: event.target.value }))} />
+                </label>
+              ))}
+              <label className="full-span">
+                Notes
+                <textarea rows="3" value={editForm.notes || ''} onChange={(event) => setEditForm((current) => ({ ...current, notes: event.target.value }))} />
+              </label>
+            </div>
+            <div className="optometrist-inline-actions">
+              <button type="submit" className="primary-button" disabled={isSaving}>{isSaving ? 'Saving...' : 'Update Prescription'}</button>
+              <button type="button" className="ghost-button" onClick={() => setIsEditing(false)}>Cancel Edit</button>
+              {editMessage ? <span className="panel-tag">{editMessage}</span> : null}
+            </div>
+          </form>
+        ) : null}
       </article>
     </div>
   )
+}
+
+function createPrescriptionEditForm(prescription) {
+  return {
+    date: prescription?.date || '',
+    ipd: prescription?.ipd || '',
+    sph_od: prescription?.sph_od || '',
+    cyl_od: prescription?.cyl_od || '',
+    axis_od: prescription?.axis_od || '',
+    add_od: prescription?.add_od || '',
+    sph_os: prescription?.sph_os || '',
+    cyl_os: prescription?.cyl_os || '',
+    axis_os: prescription?.axis_os || '',
+    add_os: prescription?.add_os || '',
+    lens_type: prescription?.lens_type || '',
+    lens_material: prescription?.lens_material || '',
+    color: prescription?.color || '',
+    notes: prescription?.notes || '',
+  }
 }
 
 function formatPatientName(record) {
@@ -387,6 +473,12 @@ function formatEye(sph, cyl, axis, add) {
 function fallbackValue(value) {
   if (value === null || value === undefined || value === '') return 'N/A'
   return String(value)
+}
+
+function getPatientSeenStatus(record) {
+  if (record?.patient_status === 'pending') return 'pending'
+  if (record?.patient_status === 'seen') return 'seen'
+  return record?.latest_form_status || record?.status || 'pending'
 }
 
 function comparePrescriptionRecency(left, right) {

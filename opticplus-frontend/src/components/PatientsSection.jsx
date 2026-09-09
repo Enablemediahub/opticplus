@@ -107,6 +107,7 @@ export default function PatientsSection({
   fetchPatientPrescriptions,
   fetchPatientPayments,
   addPatientPrescription,
+  updatePatientPrescription,
   fetchMedicalReport,
   fetchPatientExamForm,
   savePatientExamForm,
@@ -169,6 +170,7 @@ export default function PatientsSection({
           fetchPatientPrescriptions={fetchPatientPrescriptions}
           fetchPatientPayments={fetchPatientPayments}
           addPatientPrescription={addPatientPrescription}
+          updatePatientPrescription={updatePatientPrescription}
           fetchMedicalReport={fetchMedicalReport}
           fetchPatientExamForm={fetchPatientExamForm}
           savePatientExamForm={savePatientExamForm}
@@ -1479,6 +1481,7 @@ function ManagerPatientsWorkspace({
   fetchPatientPrescriptions,
   fetchPatientPayments,
   addPatientPrescription,
+  updatePatientPrescription,
   fetchMedicalReport,
   fetchPatientExamForm,
   savePatientExamForm,
@@ -1866,6 +1869,7 @@ function OptometristPatientsWorkspace({
   fetchPatientPrescriptions,
   fetchPatientPayments,
   addPatientPrescription,
+  updatePatientPrescription,
   fetchMedicalReport,
   fetchPatientExamForm,
   savePatientExamForm,
@@ -2267,6 +2271,7 @@ function OptometristPatientsWorkspace({
             fetchPatientPrescriptions={fetchPatientPrescriptions}
             fetchPatientExamForm={fetchPatientExamForm}
             addPatientPrescription={addPatientPrescription}
+            updatePatientPrescription={updatePatientPrescription}
             fetchPatientDocuments={fetchPatientDocuments}
             uploadPatientDocuments={uploadPatientDocuments}
           />
@@ -4396,6 +4401,7 @@ function PatientPrescriptionWorkspace({
   fetchPatientPrescriptions,
   fetchPatientExamForm,
   addPatientPrescription,
+  updatePatientPrescription,
   fetchPatientDocuments,
   uploadPatientDocuments,
 }) {
@@ -4409,6 +4415,7 @@ function PatientPrescriptionWorkspace({
   const [documentNotes, setDocumentNotes] = useState('')
   const [selectedFiles, setSelectedFiles] = useState([])
   const [message, setMessage] = useState('')
+  const [editingPrescriptionId, setEditingPrescriptionId] = useState(null)
   const featuredPrescription = useMemo(() => {
     if (!prescriptions.length) return null
     return [...prescriptions]
@@ -4466,12 +4473,17 @@ function PatientPrescriptionWorkspace({
     setIsSavingPrescription(true)
     setMessage('')
     try {
-      await addPatientPrescription(patient.id, newPrescription)
+      if (editingPrescriptionId) {
+        await updatePatientPrescription(patient.id, editingPrescriptionId, newPrescription)
+      } else {
+        await addPatientPrescription(patient.id, newPrescription)
+      }
       const refreshed = await fetchPatientPrescriptions(patient.id)
       setPrescriptions(refreshed.prescriptions ?? [])
       const refreshedExamForm = await fetchPatientExamForm(patient.id)
       setNewPrescription(buildPrefilledPrescriptionFromExamForm(refreshedExamForm))
-      setMessage('Prescription saved successfully.')
+      setEditingPrescriptionId(null)
+      setMessage(editingPrescriptionId ? 'Prescription updated successfully. The optometrist identity is recorded in Audit Log.' : 'Prescription saved successfully.')
     } catch (error) {
       setMessage(error.message || 'Could not save prescription.')
     } finally {
@@ -4644,6 +4656,26 @@ function PatientPrescriptionWorkspace({
                         <span>ADD: {item.add_od || '-'} / {item.add_os || '-'}</span>
                         <span>IPD: {item.ipd || 'N/A'}</span>
                       </div>
+                      {item.edited_by_name ? (
+                        <p className="muted-copy">Edited by {item.edited_by_name}{item.edited_by_role ? ` (${item.edited_by_role})` : ''}{item.edited_at ? ` on ${formatDateDisplay(item.edited_at)}` : ''}</p>
+                      ) : null}
+                      {item.source !== 'exam_form' && item.patient_id ? (
+                        <div className="optometrist-inline-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => {
+                              setEditingPrescriptionId(item.patient_id)
+                              setNewPrescription({ ...defaultNewPrescription(), ...item })
+                              setMessage('Editing this saved prescription.')
+                            }}
+                          >
+                            Edit Prescription
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="muted-copy">Exam form prescription. Edit it from Patient Form to preserve clinical version history.</p>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -4653,7 +4685,7 @@ function PatientPrescriptionWorkspace({
             </div>
 
             <form className="optometrist-workspace-card optometrist-management-form" onSubmit={handleSavePrescription}>
-              <p className="eyebrow">Add Prescription</p>
+              <p className="eyebrow">{editingPrescriptionId ? 'Edit Prescription' : 'Add Prescription'}</p>
               <div className="optometrist-exam-grid">
                 <Field label="Date"><input type="date" value={newPrescription.date} onChange={(event) => setNewPrescription((current) => ({ ...current, date: event.target.value }))} /></Field>
                 <Field label="IPD"><input value={newPrescription.ipd} onChange={(event) => setNewPrescription((current) => ({ ...current, ipd: event.target.value }))} /></Field>
@@ -4694,9 +4726,14 @@ function PatientPrescriptionWorkspace({
                 </Field>
               </div>
               <div className="optometrist-inline-actions">
-                <button type="submit" className="primary-button" disabled={isSavingPrescription}>
-                  {isSavingPrescription ? 'Saving...' : 'Save Prescription'}
+                <button type="submit" className="primary-button" disabled={isSavingPrescription || (editingPrescriptionId && !updatePatientPrescription)}>
+                  {isSavingPrescription ? 'Saving...' : editingPrescriptionId ? 'Update Prescription' : 'Save Prescription'}
                 </button>
+                {editingPrescriptionId ? (
+                  <button type="button" className="ghost-button" onClick={() => { setEditingPrescriptionId(null); setNewPrescription(defaultNewPrescription()) }}>
+                    Cancel Edit
+                  </button>
+                ) : null}
               </div>
             </form>
 
@@ -4769,6 +4806,7 @@ function PatientPrescriptionModal({
   fetchPatientPrescriptions,
   fetchPatientExamForm,
   addPatientPrescription,
+  updatePatientPrescription,
   fetchPatientDocuments,
   uploadPatientDocuments,
 }) {
@@ -4794,6 +4832,7 @@ function PatientPrescriptionModal({
           fetchPatientPrescriptions={fetchPatientPrescriptions}
           fetchPatientExamForm={fetchPatientExamForm}
           addPatientPrescription={addPatientPrescription}
+          updatePatientPrescription={updatePatientPrescription}
           fetchPatientDocuments={fetchPatientDocuments}
           uploadPatientDocuments={uploadPatientDocuments}
         />

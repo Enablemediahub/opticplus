@@ -781,6 +781,14 @@ class InventoryController extends Controller
 
         $legacyQuery = DB::table('glasses_prescriptions as gp')
             ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id')
+            ->leftJoin('billing as linked_billing', function ($join) use ($branchId): void {
+                $join->on('linked_billing.patient_id', '=', 'gp.patient_id')
+                    ->on('linked_billing.folder_id', '=', 'gp.folder_id')
+                    ->on('linked_billing.date', '=', 'gp.date');
+                if ($branchId > 0) {
+                    $join->where('linked_billing.branch_id', '=', $branchId);
+                }
+            })
             ->leftJoin('users as assigned', 'assigned.id', '=', 'pr.assigned_optometrist_id');
         $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
         $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
@@ -808,6 +816,7 @@ class InventoryController extends Controller
             ->orderByDesc('gp.created_at')
             ->get([
                 'gp.prescription_id as billing_id',
+                'linked_billing.id as linked_billing_id',
                 'gp.prescription_id',
                 'gp.patient_id',
                 'gp.folder_id',
@@ -856,7 +865,7 @@ class InventoryController extends Controller
                     'notes' => $item->notes,
                     'status' => $item->status,
                     'created_at' => $item->created_at,
-                    'billing_id' => $item->billing_id,
+                    'billing_id' => ((int) $item->billing_id > 0 ? $item->billing_id : $item->linked_billing_id),
                     'pickup_status' => $item->pickup_status,
                     'prescription_id' => $item->prescription_id,
                     'source' => 'legacy',
@@ -970,15 +979,19 @@ class InventoryController extends Controller
             })
             ->filter(function (array $item) use ($placedKeys): bool {
                 $source = ($item['source'] ?? 'legacy') === 'exam_form' ? 'exam_form' : 'legacy';
-                $sourceId = $item['prescription_id'] ?? ($item['form_id'] ?? '');
-                if ($source === 'legacy' && (string) $sourceId === '0') {
-                    $sourceId = implode(':', [
+                $sourceIds = [$item['prescription_id'] ?? ($item['form_id'] ?? '')];
+                if ($source === 'legacy') {
+                    $sourceIds[] = $item['billing_id'] ?? '';
+                    $sourceIds[] = implode(':', [
                         $item['patient_id'] ?? '',
                         $item['folder_id'] ?? '',
                         $item['date'] ?? '',
                     ]);
                 }
-                return $placedKeys->has($source.'|'.$sourceId);
+
+                return collect($sourceIds)
+                    ->filter(fn ($sourceId) => $sourceId !== null && (string) $sourceId !== '')
+                    ->contains(fn ($sourceId) => $placedKeys->has($source.'|'.(string) $sourceId));
             })
             ->filter(function (array $item) use ($pickupStatus): bool {
                 return match ($pickupStatus) {

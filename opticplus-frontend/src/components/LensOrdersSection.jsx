@@ -25,6 +25,7 @@ export default function LensOrdersSection(props) {
   }
   const [commentMap, setCommentMap] = useState(() => loadCommentMap())
   const [selectedOrderKeys, setSelectedOrderKeys] = useState([])
+  const [pickupStatusOverrides, setPickupStatusOverrides] = useState({})
   const [isPrescriptionReferenceOpen, setIsPrescriptionReferenceOpen] = useState(false)
   const [prescriptionReferences, setPrescriptionReferences] = useState([])
   const [prescriptionReferenceSearch, setPrescriptionReferenceSearch] = useState('')
@@ -149,6 +150,11 @@ export default function LensOrdersSection(props) {
     }
 
     props.updatePickupStatus?.(pickupIds, action)
+    const nextStatus = action === 'ready' ? 'ready' : 'not_ready'
+    setPickupStatusOverrides((current) => selectedOrders.reduce((next, order, index) => ({
+      ...next,
+      [getOrderKey(order, index)]: nextStatus,
+    }), current))
   }
 
   function getOrderKey(order, index = 0) {
@@ -431,10 +437,11 @@ export default function LensOrdersSection(props) {
             <tbody>
               {displayOrders.length ? displayOrders.map((order, index) => {
                 const orderKey = getOrderKey(order, index)
-                const pickupStatus = order.pickup_status === 'ready' || order.pickup_status === 'notified'
+                const orderPickupStatus = pickupStatusOverrides[orderKey] ?? order.pickup_status
+                const pickupStatus = orderPickupStatus === 'ready' || orderPickupStatus === 'notified'
                   ? 'ready'
                   : 'not_ready'
-                const pickupOrderId = order.prescription_id ?? order.billing_id ?? order.form_id ?? orderKey
+                const pickupOrderId = getPickupOrderId(order, index)
                 return (
                   <tr key={orderKey}>
                     <td>
@@ -474,7 +481,11 @@ export default function LensOrdersSection(props) {
                     <td>
                       <select
                         value={pickupStatus}
-                        onChange={(event) => props.updatePickupStatus?.(pickupOrderId, event.target.value === 'ready' ? 'ready' : 'not-ready')}
+                        onChange={(event) => {
+                          const nextStatus = event.target.value
+                          setPickupStatusOverrides((current) => ({ ...current, [orderKey]: nextStatus }))
+                          props.updatePickupStatus?.(pickupOrderId, nextStatus === 'ready' ? 'ready' : 'not-ready')
+                        }}
                         disabled={props.pickupBusyIds?.includes(pickupOrderId) || order.pickup_status === 'picked_up'}
                       >
                         <option value="not_ready">Not ready</option>

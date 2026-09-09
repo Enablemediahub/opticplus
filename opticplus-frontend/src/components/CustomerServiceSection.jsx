@@ -23,7 +23,7 @@ export default function CustomerServiceSection(props) {
 
   function closeTemplateEditor() {
     setEditingTemplate(null)
-    props.setTemplateForm({ id: null, template_name: '', message_text: '', is_shared: false })
+    props.setTemplateForm({ id: null, template_name: '', message_text: '', is_shared: true })
   }
 
   function openTemplateEditor(template) {
@@ -225,16 +225,7 @@ export default function CustomerServiceSection(props) {
               </label>
               <label>
                 Scope
-                <select
-                  value={props.templateForm.is_shared ? 'shared' : 'branch'}
-                  onChange={(event) =>
-                    props.setTemplateForm((current) => ({ ...current, is_shared: event.target.value === 'shared' }))
-                  }
-                  disabled={props.isSavingTemplate}
-                >
-                  <option value="branch">This branch only</option>
-                  <option value="shared">Shared across branches</option>
-                </select>
+                <input value="Shared across branches" readOnly />
               </label>
 
               <label className="full-span customer-service-template-modal__message">
@@ -306,44 +297,28 @@ function MessagesTab(props) {
             <table className="portal-table">
               <thead>
                 <tr>
-                  <th>Patient</th>
-                  <th>Folder ID</th>
-                  <th>Birthday</th>
+                  <th>Name</th>
                   <th>Phone</th>
+                  <th>Folder ID</th>
+                  <th>Days</th>
                   <th>Branch</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {(props.customerServiceData?.upcoming_birthdays ?? []).map((patient) => (
-                  <tr key={`birthday-${patient.patient_id}`}>
+                {(props.customerServiceData?.upcoming_birthdays ?? []).map((recipient) => (
+                  <tr key={recipient.patient_id ?? recipient.id ?? `${recipient.folder_id ?? 'folder'}-${recipient.phone ?? 'phone'}`}>
+                    <td>{recipient.name || 'Unknown patient'}</td>
+                    <td>{recipient.phone || 'N/A'}</td>
+                    <td>{recipient.folder_id || 'N/A'}</td>
+                    <td>{recipient.days_until_birthday}</td>
+                    <td>{recipient.branch_name || props.customerServiceData?.branch_name || 'N/A'}</td>
                     <td>
-                      <div className="patient-table-primary">
-                        <strong>{patient.name || 'Unnamed patient'}</strong>
-                        <span>
-                          {patient.days_until_birthday === 0
-                            ? 'Birthday is today'
-                            : `Birthday in ${patient.days_until_birthday} day${patient.days_until_birthday === 1 ? '' : 's'}`}
-                        </span>
+                      <div className="table-actions-inline">
+                        <button type="button" className="mini-action" onClick={() => queueSingleMessage(recipient)}>
+                          Draft SMS
+                        </button>
                       </div>
-                    </td>
-                    <td>{patient.folder_id || 'N/A'}</td>
-                    <td>{patient.birthday_label || 'N/A'}</td>
-                    <td>{patient.phone || 'N/A'}</td>
-                    <td>{patient.branch_name || props.customerServiceData?.branch_name || 'N/A'}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="mini-action success"
-                        onClick={() =>
-                          queueSingleMessage(
-                            patient,
-                            `Happy birthday ${patient.name || ''}! Wishing you a joyful year ahead from Bealet Optical Center.`,
-                          )
-                        }
-                      >
-                        Load SMS
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -438,7 +413,7 @@ function MessagesTab(props) {
               rows="5"
               value={props.messageForm.message}
               onChange={(event) => props.setMessageForm((current) => ({ ...current, message: event.target.value }))}
-                  placeholder="Type your message here"
+              placeholder="Type your message here"
             />
           </label>
 
@@ -484,22 +459,13 @@ function MessagesTab(props) {
           </label>
           <label>
             Scope
-            <select
-              value={props.templateForm.is_shared ? 'shared' : 'branch'}
-              onChange={(event) =>
-                props.setTemplateForm((current) => ({ ...current, is_shared: event.target.value === 'shared' }))
-              }
-              disabled={props.isMergedView}
-            >
-              <option value="branch">This branch only</option>
-              <option value="shared">Shared across branches</option>
-            </select>
+            <input value="Shared across branches" readOnly />
           </label>
           <div className="filter-actions-row">
             <button type="submit" className="primary-button" disabled={props.isSavingTemplate || props.isMergedView}>
               {props.isSavingTemplate ? 'Saving...' : props.templateForm.id ? 'Update Template' : 'Save Template'}
             </button>
-            <button type="button" className="ghost-button" onClick={() => props.setTemplateForm({ id: null, template_name: '', message_text: '', is_shared: false })}>
+            <button type="button" className="ghost-button" onClick={() => props.setTemplateForm({ id: null, template_name: '', message_text: '', is_shared: true })}>
               Clear
             </button>
           </div>
@@ -556,11 +522,15 @@ function PickupTab(props) {
   const [selectedPickupIds, setSelectedPickupIds] = useState([])
 
   const pickupRecords = props.customerServiceData?.pickup_records ?? []
-  const displayedPickupRecords = useMemo(() => (
-    props.customerServiceFilters.status === 'picked_up'
-      ? pickupRecords
-      : pickupRecords.filter((record) => record.pickup_status !== 'picked_up')
-  ), [pickupRecords, props.customerServiceFilters.status])
+  const displayedPickupRecords = useMemo(() => {
+    if (props.customerServiceFilters.status === 'all') {
+      return pickupRecords
+    }
+
+    const normalizedStatus = props.customerServiceFilters.status === 'not_ready' ? 'pending' : props.customerServiceFilters.status
+    return pickupRecords.filter((record) => record.pickup_status === normalizedStatus)
+  }, [pickupRecords, props.customerServiceFilters.status])
+
   const selectedVisibleCount = displayedPickupRecords.filter((record) => selectedPickupIds.includes(record.billing_id)).length
   const allVisibleSelected = displayedPickupRecords.length > 0 && selectedVisibleCount === displayedPickupRecords.length
 
@@ -568,6 +538,28 @@ function PickupTab(props) {
     const visibleIds = new Set(displayedPickupRecords.map((record) => record.billing_id))
     setSelectedPickupIds((current) => current.filter((billingId) => visibleIds.has(billingId)))
   }, [displayedPickupRecords])
+
+  function resolvePatientName(record) {
+    return record.patient_name || record.name || [record.firstname, record.surname, record.othernames].filter(Boolean).join(' ') || 'Unknown patient'
+  }
+
+  function pickupStatusClass(status) {
+    return {
+      pending: 'mini-action danger pickup-status-chip',
+      ready: 'mini-action success pickup-status-chip',
+      notified: 'mini-action pickup-status-chip',
+      picked_up: 'mini-action success pickup-status-chip',
+    }[status] ?? 'mini-action danger pickup-status-chip'
+  }
+
+  function pickupStatusLabel(status) {
+    return {
+      pending: 'Not Ready',
+      ready: 'Ready',
+      notified: 'Notified',
+      picked_up: 'Picked Up',
+    }[status] ?? 'Not Ready'
+  }
 
   function isPickupBusy(billingId) {
     return props.pickupBusyIds?.includes(billingId)
@@ -590,16 +582,12 @@ function PickupTab(props) {
     setSelectedPickupIds(displayedPickupRecords.map((record) => record.billing_id))
   }
 
-  async function runBulkPickupAction(action) {
-    const eligibleBillingIds = displayedPickupRecords
-      .filter((record) => (
-        selectedPickupIds.includes(record.billing_id) && (
-          action === 'ready'
-            ? !['ready', 'notified', 'picked_up'].includes(record.pickup_status)
-            : action === 'not-ready'
-              ? ['ready', 'notified'].includes(record.pickup_status)
-              : ['ready', 'notified'].includes(record.pickup_status)
-        )
+  async function runBulkPickupAction(action, records = displayedPickupRecords, selectedIds = selectedPickupIds) {
+    const eligibleBillingIds = records
+      .filter((record) => selectedIds.includes(record.billing_id) && (
+        action === 'picked-up'
+          ? ['ready', 'notified'].includes(record.pickup_status)
+          : ['ready', 'notified', 'picked_up'].includes(record.pickup_status)
       ))
       .map((record) => record.billing_id)
 
@@ -615,69 +603,25 @@ function PickupTab(props) {
         record.pickup_status === 'notified'
           ? 'This customer was already notified before, and the glasses are still ready.'
           : 'This customer is ready for a pickup notification.',
-      name: record.patient_name,
+      name: resolvePatientName(record),
       phone: record.phone,
       folderId: record.folder_id,
       patientId: record.patient_id ?? '',
       branchName: record.branch_name,
-      message: `Hello ${record.patient_name || ''}, your glasses are ${record.pickup_status === 'notified' ? 'still ready' : 'ready'} for pickup at Bealet Optical Center. Kindly visit the branch at your convenience.`,
+      message: `Hello ${resolvePatientName(record) || ''}, your glasses are ${record.pickup_status === 'notified' ? 'still ready' : 'ready'} for pickup at Bealet Optical Center. Kindly visit the branch at your convenience.`,
       markNotified: true,
     })
   }
 
   return (
     <section className="finance-layout">
-      <article className="panel patient-list-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Ready for Pickup</p>
-            <h3>Patients whose glasses are ready right now</h3>
-          </div>
-          <span className="panel-tag">{props.customerServiceData?.ready_for_pickup?.length ?? 0} in queue</span>
-        </div>
-
-        {(props.customerServiceData?.ready_for_pickup ?? []).length ? (
-          <div className="table-shell">
-            <table className="portal-table">
-              <thead>
-                <tr>
-                  <th>Patient</th>
-                  <th>Folder ID</th>
-                  <th>Phone</th>
-                  <th>Branch</th>
-                  <th>Pickup</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(props.customerServiceData?.ready_for_pickup ?? []).map((record) => (
-                  <tr key={`ready-${record.billing_id}`}>
-                    <td>{record.patient_name}</td>
-                    <td>{record.folder_id}</td>
-                    <td>{record.phone || 'N/A'}</td>
-                    <td>{record.branch_name || props.customerServiceData?.branch_name || 'N/A'}</td>
-                    <td>{record.pickup_status_display}</td>
-                    <td>
-                      <button type="button" className="mini-action success" onClick={() => queuePickupMessage(record)}>
-                        Load SMS
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="muted-copy">No ready-for-pickup glasses are waiting in this view right now.</p>
-        )}
-      </article>
-
       <article className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Pickup Filters</p>
-            <h3>Track pickup readiness and payment status</h3>
+            <p className="eyebrow">Pickup Table</p>
+            <h3>All glasses pickup records</h3>
           </div>
+          <span className="panel-tag">{displayedPickupRecords.length} visible</span>
         </div>
 
         <form
@@ -751,16 +695,6 @@ function PickupTab(props) {
             </button>
           </div>
         </form>
-      </article>
-
-      <article className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Pickup Table</p>
-            <h3>Patients waiting for glasses or collection</h3>
-          </div>
-          <span className="panel-tag">{props.customerServiceData?.pagination?.total ?? 0} records</span>
-        </div>
 
         {props.isLoadingCustomerService && !props.customerServiceData ? <p className="muted-copy">Loading customer service records...</p> : null}
 
@@ -777,11 +711,19 @@ function PickupTab(props) {
           <div className="table-actions-inline">
             <button
               type="button"
-              className="mini-action danger"
+              className="mini-action"
               disabled={props.isMergedView || !selectedPickupIds.length}
               onClick={() => runBulkPickupAction('picked-up')}
             >
-              Picked up selected
+              Mark picked up
+            </button>
+            <button
+              type="button"
+              className="mini-action danger"
+              disabled={props.isMergedView || !selectedPickupIds.length}
+              onClick={() => runBulkPickupAction('not-ready')}
+            >
+              Reverse selected
             </button>
           </div>
         </div>
@@ -797,7 +739,7 @@ function PickupTab(props) {
                 <th>Receipt</th>
                 <th>Billing Date</th>
                 <th>Payment</th>
-                <th>Pickup</th>
+                <th>Status</th>
                 <th>Balance</th>
                 <th></th>
               </tr>
@@ -812,52 +754,67 @@ function PickupTab(props) {
                       onChange={() => togglePickupSelection(record.billing_id)}
                     />
                   </td>
-                  <td>{record.patient_name}</td>
+                  <td>{resolvePatientName(record)}</td>
                   <td>{record.folder_id}</td>
                   <td>{record.phone || 'N/A'}</td>
                   <td>{record.receipt_number || 'Pending'}</td>
                   <td>{record.billing_date}</td>
                   <td>{record.payment_status_display}</td>
-                  <td>{record.pickup_status_display}</td>
+                  <td>
+                    <span className={pickupStatusClass(record.pickup_status)}>
+                      {record.pickup_status_display || pickupStatusLabel(record.pickup_status)}
+                    </span>
+                  </td>
                   <td>{record.balance}</td>
                   <td>
                     <div className="table-actions-inline">
-                      <span className={record.pickup_status === 'picked_up' ? 'mini-action pickup-status-chip' : 'mini-action danger pickup-status-chip'}>
-                        {record.pickup_status === 'picked_up' ? 'Picked Up' : record.pickup_status === 'notified' ? 'Notified' : record.pickup_status === 'ready' ? 'Ready' : 'Not Ready'}
-                      </span>
-                      <button
-                        type="button"
-                        className="mini-action success"
-                        disabled={!['ready', 'notified'].includes(record.pickup_status)}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          queuePickupMessage(record)
-                        }}
-                      >
-                        Load SMS
-                      </button>
-                      <button
-                        type="button"
-                        className="mini-action"
-                        disabled={props.isMergedView || isPickupBusy(record.billing_id) || !['ready', 'notified'].includes(record.pickup_status)}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          props.updatePickupStatus(record.billing_id, 'picked-up')
-                        }}
-                      >
-                        Picked Up
-                      </button>
+                      {['ready', 'notified'].includes(record.pickup_status) ? (
+                        <>
+                          <button
+                            type="button"
+                            className="mini-action success"
+                            disabled={props.isMergedView || props.isSendingCustomerMessage}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              queuePickupMessage(record)
+                            }}
+                          >
+                            Load SMS
+                          </button>
+                          <button
+                            type="button"
+                            className="mini-action"
+                            disabled={props.isMergedView || isPickupBusy(record.billing_id)}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              props.updatePickupStatus(record.billing_id, 'picked-up')
+                            }}
+                          >
+                            Picked Up
+                          </button>
+                        </>
+                      ) : null}
+
+                      {record.pickup_status === 'picked_up' ? (
+                        <button
+                          type="button"
+                          className="mini-action danger"
+                          disabled={props.isMergedView || isPickupBusy(record.billing_id)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            props.updatePickupStatus(record.billing_id, 'not-ready')
+                          }}
+                        >
+                          Reverse
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
               ))}
               {!displayedPickupRecords.length ? (
                 <tr>
-                  <td colSpan="10">
-                    {props.customerServiceFilters.status === 'picked_up'
-                      ? 'No picked-up records match the current filter.'
-                      : 'No active pickup rows are waiting here right now.'}
-                  </td>
+                  <td colSpan="10">No pickup records match the current filters.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -889,3 +846,4 @@ function PickupTab(props) {
     </section>
   )
 }
+

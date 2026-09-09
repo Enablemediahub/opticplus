@@ -543,7 +543,7 @@ const defaultTemplateForm = () => ({
   id: null,
   template_name: '',
   message_text: '',
-  is_shared: false,
+  is_shared: true,
 })
 
 const defaultSettingsProfileForm = (session = null) => ({
@@ -3250,6 +3250,19 @@ function App() {
     })
   }
 
+  async function updatePatientPrescription(recordId, prescriptionId, payload) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+
+    return apiFetch(`/patients/${recordId}/prescriptions/${prescriptionId}`, {
+      method: 'PUT',
+      token,
+      body: {
+        ...payload,
+        branch_id: branchId,
+      },
+    })
+  }
+
   async function fetchMedicalReport(recordId) {
     const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
     const params = new URLSearchParams()
@@ -4893,6 +4906,7 @@ function App() {
                 fetchPatientPrescriptions={fetchPatientPrescriptions}
                 fetchPatientPayments={fetchPatientPayments}
                 addPatientPrescription={addPatientPrescription}
+                updatePatientPrescription={updatePatientPrescription}
                 fetchMedicalReport={fetchMedicalReport}
                 fetchPatientExamForm={fetchPatientExamForm}
                 savePatientExamForm={savePatientExamForm}
@@ -5519,6 +5533,7 @@ function App() {
                 patientData={patientData}
                 fetchGlassesPrescriptions={fetchGlassesPrescriptions}
                 fetchFormPrescriptionSearch={fetchFormPrescriptionSearch}
+                updatePatientPrescription={updatePatientPrescription}
                 companyProfile={companyProfileForm}
               />
             ) : null}

@@ -51,6 +51,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/patients/{recordId}/exam-form', [PatientRecordController::class, 'saveExamForm']);
         Route::get('/patients/{recordId}/prescriptions', [PatientRecordController::class, 'prescriptions']);
         Route::post('/patients/{recordId}/prescriptions', [PatientRecordController::class, 'storePrescription']);
+        Route::put('/patients/{recordId}/prescriptions/{prescriptionId}', [PatientRecordController::class, 'updatePrescription']);
         Route::get('/patients/{recordId}/payments', [PatientRecordController::class, 'payments']);
         Route::get('/patients/{recordId}/documents', [PatientRecordController::class, 'documents']);
         Route::post('/patients/{recordId}/documents', [PatientRecordController::class, 'storeDocuments']);

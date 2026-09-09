@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\AuditLog;
 use Illuminate\Support\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
@@ -28,9 +29,14 @@ class CustomerServiceController extends Controller
         $offset = ($page - 1) * $perPage;
 
         $query = DB::table('billing as b')
+            ->distinct()
             ->leftJoin('patient_records as pr', 'b.folder_id', '=', 'pr.folder_id')
             ->leftJoin('glasses_prescriptions as gp', function ($join) use ($branchId): void {
-                $join->on('b.id', '=', 'gp.prescription_id');
+                $join->on('b.id', '=', 'gp.prescription_id')
+                    ->orOn(function ($orJoin): void {
+                        $orJoin->on('b.patient_id', '=', 'gp.patient_id')
+                            ->on('b.folder_id', '=', 'gp.folder_id');
+                    });
                 if ($branchId > 0) {
                     $join->where('gp.branch_id', '=', $branchId);
                 }
@@ -46,6 +52,7 @@ class CustomerServiceController extends Controller
             $query->where(function ($inner) use ($like, $patientRecordsHasEmail, $patientRecordsHasPhone): void {
                 $inner->where('b.name', 'like', $like)
                     ->orWhere('b.folder_id', 'like', $like)
+                    ->orWhere('pr.name', 'like', $like)
                     ->orWhere('b.receipt_number', 'like', $like);
 
                 if ($patientRecordsHasPhone) {
@@ -59,10 +66,7 @@ class CustomerServiceController extends Controller
         }
 
         if ($status === 'all') {
-            $query->where(function ($inner): void {
-                $inner->whereNull('gp.status')
-                    ->orWhere('gp.status', '<>', 'picked_up');
-            });
+            // Include picked-up rows so the frontend can keep them in the archive table.
         } elseif ($status !== 'all') {
             if ($status === 'not_ready') {
                 $query->where(function ($inner): void {
@@ -98,7 +102,7 @@ class CustomerServiceController extends Controller
             'b.branch_id',
             'b.patient_id',
             'b.folder_id',
-            'b.name as patient_name',
+            DB::raw("COALESCE(NULLIF(b.name, ''), NULLIF(pr.name, ''), CONCAT_WS(' ', pr.surname, pr.firstname, pr.othernames)) as patient_name"),
             'b.total_amount',
             'b.balance',
             'b.date as billing_date',
@@ -177,9 +181,14 @@ class CustomerServiceController extends Controller
         $readyForPickup = tap(DB::table('billing as b'), function ($query) use ($branchId): void {
                 $this->applyBranchScope($query, 'b.branch_id', $branchId);
             })
+            ->distinct()
             ->leftJoin('patient_records as pr', 'b.folder_id', '=', 'pr.folder_id')
             ->leftJoin('glasses_prescriptions as gp', function ($join) use ($branchId): void {
-                $join->on('b.id', '=', 'gp.prescription_id');
+                $join->on('b.id', '=', 'gp.prescription_id')
+                    ->orOn(function ($orJoin): void {
+                        $orJoin->on('b.patient_id', '=', 'gp.patient_id')
+                            ->on('b.folder_id', '=', 'gp.folder_id');
+                    });
                 if ($branchId > 0) {
                     $join->where('gp.branch_id', '=', $branchId);
                 }
@@ -199,7 +208,7 @@ class CustomerServiceController extends Controller
                 'b.branch_id',
                 'b.patient_id',
                 'b.folder_id',
-                'b.name as patient_name',
+                DB::raw("COALESCE(NULLIF(b.name, ''), NULLIF(pr.name, ''), CONCAT_WS(' ', pr.surname, pr.firstname, pr.othernames)) as patient_name"),
                 'b.receipt_number',
                 'b.balance',
                 'b.date as billing_date',
@@ -269,7 +278,7 @@ class CustomerServiceController extends Controller
         $id = DB::table('sms_templates')->insertGetId([
             'template_name' => $validated['template_name'],
             'message_text' => $validated['message_text'],
-            'branch_id' => $isShared ? null : $branchId,
+            'branch_id' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -300,7 +309,7 @@ class CustomerServiceController extends Controller
             ->update([
                 'template_name' => $validated['template_name'],
                 'message_text' => $validated['message_text'],
-                'branch_id' => $isShared ? null : $branchId,
+                'branch_id' => null,
                 'updated_at' => now(),
             ]);
 
@@ -636,7 +645,7 @@ class CustomerServiceController extends Controller
 
         $updateQuery = DB::table('glasses_prescriptions')
             ->where('prescription_id', $billingId)
-            ->whereIn('status', ['ready', 'notified']);
+            ->whereIn('status', ['ready', 'notified', 'picked_up']);
 
         if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
             $updateQuery->where('branch_id', $branchId);
@@ -650,7 +659,7 @@ class CustomerServiceController extends Controller
         $updated = $updateQuery->update($payload);
         if (! $updated) {
             return response()->json([
-                'message' => 'Only ready or notified pickup entries can be changed back to not ready.',
+                'message' => 'Only ready, notified, or picked-up entries can be reversed.',
             ], 422);
         }
 
@@ -711,16 +720,7 @@ class CustomerServiceController extends Controller
 
     private function templateQuery(int $branchId)
     {
-        $query = DB::table('sms_templates');
-
-        if ($branchId === 0) {
-            return $query;
-        }
-
-        return $query->where(function ($inner) use ($branchId): void {
-            $inner->where('branch_id', $branchId)
-                ->orWhereNull('branch_id');
-        });
+        return DB::table('sms_templates');
     }
 
     private function ensureSmsTemplateSchema(): void
@@ -738,6 +738,15 @@ class CustomerServiceController extends Controller
             Schema::table('sms_templates', function (Blueprint $table): void {
                 $table->unsignedInteger('branch_id')->nullable()->index()->after('message_text');
             });
+        } else {
+            $branchColumn = DB::selectOne(
+                'SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                ['sms_templates', 'branch_id'],
+            );
+
+            if (strtoupper((string) ($branchColumn->IS_NULLABLE ?? 'YES')) !== 'YES') {
+                DB::statement('ALTER TABLE `sms_templates` MODIFY `branch_id` INT UNSIGNED NULL');
+            }
         }
 
         if (! DB::table('sms_templates')->exists()) {
@@ -751,6 +760,13 @@ class CustomerServiceController extends Controller
                 ]);
             }
         }
+
+        DB::table('sms_templates')
+            ->whereNotNull('branch_id')
+            ->update([
+                'branch_id' => null,
+                'updated_at' => now(),
+            ]);
     }
 
     private function defaultSmsTemplates(): array

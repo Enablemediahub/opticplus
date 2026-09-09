@@ -679,6 +679,7 @@ class PatientRecordController extends Controller
     public function prescriptions(Request $request, int $recordId): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
+        $this->ensurePrescriptionAuditColumns();
 
         $record = DB::table('patient_records')
             ->where('id', $recordId)
@@ -716,6 +717,10 @@ class PatientRecordController extends Controller
                 'status',
                 'created_at',
                 'prescription_id',
+                'edited_by_user_id',
+                'edited_by_name',
+                'edited_by_role',
+                'edited_at',
             ]);
 
         $formPrescriptions = $this->patientFormQuery($record->folder_id, $branchId)
@@ -819,6 +824,91 @@ class PatientRecordController extends Controller
             'message' => 'Prescription saved successfully.',
             'prescription' => $saved,
         ], 201);
+    }
+
+    public function updatePrescription(Request $request, int $recordId, int $prescriptionId): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        $this->ensurePrescriptionAuditColumns();
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $record = DB::table('patient_records')
+            ->where('id', $recordId)
+            ->where('branch_id', $branchId)
+            ->first();
+
+        if (! $record) {
+            return response()->json(['message' => 'Patient record not found for this branch.'], 404);
+        }
+
+        $prescriptionQuery = DB::table('glasses_prescriptions')
+            ->where('patient_id', $prescriptionId)
+            ->where('folder_id', $record->folder_id);
+
+        if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
+            $prescriptionQuery->where('branch_id', $branchId);
+        }
+
+        if (! $prescriptionQuery->exists()) {
+            return response()->json(['message' => 'Prescription not found for this patient.'], 404);
+        }
+
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'sph_od' => ['nullable', 'string', 'max:20'],
+            'sph_os' => ['nullable', 'string', 'max:20'],
+            'cyl_od' => ['nullable', 'string', 'max:20'],
+            'cyl_os' => ['nullable', 'string', 'max:20'],
+            'axis_od' => ['nullable', 'string', 'max:20'],
+            'axis_os' => ['nullable', 'string', 'max:20'],
+            'add_od' => ['nullable', 'string', 'max:20'],
+            'add_os' => ['nullable', 'string', 'max:20'],
+            'ipd' => ['nullable', 'string', 'max:30'],
+            'lens_type' => ['nullable', 'string', 'max:120'],
+            'lens_material' => ['nullable', 'string', 'max:60'],
+            'color' => ['nullable', 'string', 'max:60'],
+            'notes' => ['nullable', 'string'],
+            'status' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $payload = collect($validated)->mapWithKeys(fn ($value, $key) => [$key => $value ?? null])->all();
+        if (Schema::hasColumn('glasses_prescriptions', 'updated_at')) {
+            $payload['updated_at'] = now();
+        }
+        $payload['edited_by_user_id'] = $request->user()?->id;
+        $payload['edited_by_name'] = $request->user()?->name;
+        $payload['edited_by_role'] = $request->user()?->normalized_role ?? $request->user()?->role;
+        $payload['edited_at'] = now();
+
+        $prescriptionQuery->update($payload);
+        $saved = $prescriptionQuery->first();
+
+        return response()->json([
+            'message' => 'Prescription updated successfully.',
+            'prescription' => $saved,
+        ]);
+    }
+
+    private function ensurePrescriptionAuditColumns(): void
+    {
+        if (! Schema::hasTable('glasses_prescriptions')) {
+            return;
+        }
+
+        $columns = [
+            'edited_by_user_id' => fn (Blueprint $table) => $table->unsignedBigInteger('edited_by_user_id')->nullable(),
+            'edited_by_name' => fn (Blueprint $table) => $table->string('edited_by_name', 255)->nullable(),
+            'edited_by_role' => fn (Blueprint $table) => $table->string('edited_by_role', 100)->nullable(),
+            'edited_at' => fn (Blueprint $table) => $table->timestamp('edited_at')->nullable(),
+        ];
+
+        foreach ($columns as $name => $definition) {
+            if (! Schema::hasColumn('glasses_prescriptions', $name)) {
+                Schema::table('glasses_prescriptions', $definition);
+            }
+        }
     }
 
     public function documents(Request $request, int $recordId): JsonResponse
@@ -956,6 +1046,7 @@ class PatientRecordController extends Controller
     public function glassesPrescriptionIndex(Request $request): JsonResponse
     {
         $this->ensureLensOrderRequestsTable();
+        $this->ensurePrescriptionAuditColumns();
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
         $dateFrom = $request->string('date_from')->toString();
@@ -1009,9 +1100,14 @@ class PatientRecordController extends Controller
                 'gp.notes',
                 'gp.status',
                 'gp.created_at',
+                'gp.edited_by_user_id',
+                'gp.edited_by_name',
+                'gp.edited_by_role',
+                'gp.edited_at',
                 'pr.surname',
                 'pr.firstname',
                 'pr.othernames',
+                'pr.status as patient_status',
             ]);
 
         $formQuery = DB::table('patient_form_data as pfd')
@@ -1051,6 +1147,7 @@ class PatientRecordController extends Controller
                 'pr.firstname',
                 'pr.othernames',
                 'pr.name',
+                'pr.status as patient_status',
             ])
             ->map(function ($item) {
                 $record = (object) [
@@ -1060,6 +1157,7 @@ class PatientRecordController extends Controller
                     'firstname' => $item->firstname,
                     'othernames' => $item->othernames,
                     'name' => $item->name,
+                    'status' => $item->patient_status,
                 ];
 
                 $form = (object) [
@@ -1335,6 +1433,7 @@ class PatientRecordController extends Controller
 
     public function formPrescriptionSearch(Request $request): JsonResponse
     {
+        $this->ensurePrescriptionAuditColumns();
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
 
@@ -1477,11 +1576,15 @@ class PatientRecordController extends Controller
                         'gp.notes',
                         'gp.status',
                         'gp.created_at',
+                        'gp.edited_by_user_id',
+                        'gp.edited_by_name',
+                        'gp.edited_by_role',
+                        'gp.edited_at',
                     ])
                     ->map(function ($item) use ($record) {
                         return [
                             'id' => $record->id,
-                            'patient_id' => $record->id,
+                            'patient_id' => $item->patient_id,
                             'folder_id' => $record->folder_id,
                             'name' => trim($record->name ?: implode(' ', array_filter([
                                 $record->surname,
@@ -1509,7 +1612,12 @@ class PatientRecordController extends Controller
                             'lens_type' => $item->lens_type,
                             'notes' => $item->notes,
                             'status' => $item->status,
+                            'patient_status' => $item->patient_status,
                             'created_at' => $item->created_at,
+                            'edited_by_user_id' => $item->edited_by_user_id,
+                            'edited_by_name' => $item->edited_by_name,
+                            'edited_by_role' => $item->edited_by_role,
+                            'edited_at' => $item->edited_at,
                             'source' => 'legacy',
                         ];
                     })
