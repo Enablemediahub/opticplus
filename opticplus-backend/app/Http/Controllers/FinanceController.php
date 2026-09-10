@@ -576,7 +576,6 @@ class FinanceController extends Controller
         if (Schema::hasTable('inventory_movements') && Schema::hasTable('products')) {
             $inventoryProducts = DB::table('products')
                 ->select('id', 'min_price', 'max_price')
-                ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
                 ->get();
 
             foreach (range(1, 12) as $inventoryMonth) {
@@ -584,7 +583,6 @@ class FinanceController extends Controller
                 $snapshotStocks = DB::table('inventory_movements')
                     ->selectRaw('product_id, SUM(quantity_change) as stock_at_snapshot')
                     ->whereIn('product_id', $inventoryProducts->pluck('id'))
-                    ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
                     ->where('movement_at', '<=', $monthEnd)
                     ->groupBy('product_id')
                     ->pluck('stock_at_snapshot', 'product_id');
@@ -603,6 +601,9 @@ class FinanceController extends Controller
             'accrued_expenses' => 0.0,
             'other_actuals' => 0.0,
         ]);
+        $cashInHandByMonthEnd = array_fill(1, 12, null);
+        $cashInMomoByMonthEnd = array_fill(1, 12, null);
+        $cashAtBankByMonthEnd = array_fill(1, 12, null);
         if (Schema::hasTable('working_capital_liabilities')) {
             for ($liabilityMonth = 1; $liabilityMonth <= 12; $liabilityMonth++) {
                 $monthEnd = sprintf('%d-%02d-%02d', $year, $liabilityMonth, cal_days_in_month(CAL_GREGORIAN, $liabilityMonth, $year));
@@ -611,7 +612,7 @@ class FinanceController extends Controller
                     ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
                     ->orderByDesc('as_of_date')
                     ->orderByDesc('id')
-                    ->get(['liability_type', 'description', 'amount']);
+                    ->get(['entry_side', 'liability_type', 'description', 'amount']);
                 $seenBalances = [];
 
                 foreach ($latestBalances as $liabilityRow) {
@@ -623,6 +624,16 @@ class FinanceController extends Controller
                     $seenBalances[$balanceKey] = true;
                     if (isset($liabilityTotalsByMonth[$liabilityMonth][$liabilityRow->liability_type])) {
                         $liabilityTotalsByMonth[$liabilityMonth][$liabilityRow->liability_type] += (float) $liabilityRow->amount;
+                    }
+
+                    if ($liabilityRow->entry_side === 'current_asset') {
+                        if ($liabilityRow->liability_type === 'cash_in_hand') {
+                            $cashInHandByMonthEnd[$liabilityMonth] = (float) ($cashInHandByMonthEnd[$liabilityMonth] ?? 0) + (float) $liabilityRow->amount;
+                        } elseif ($liabilityRow->liability_type === 'cash_in_momo') {
+                            $cashInMomoByMonthEnd[$liabilityMonth] = (float) ($cashInMomoByMonthEnd[$liabilityMonth] ?? 0) + (float) $liabilityRow->amount;
+                        } elseif ($liabilityRow->liability_type === 'cash_at_bank') {
+                            $cashAtBankByMonthEnd[$liabilityMonth] = (float) ($cashAtBankByMonthEnd[$liabilityMonth] ?? 0) + (float) $liabilityRow->amount;
+                        }
                     }
                 }
 
@@ -655,8 +666,9 @@ class FinanceController extends Controller
                 'expenses' => round($expenseTotal, 2),
                 'debtors' => round((float) ($bill->debtors ?? 0), 2),
                 'inventory_value' => $inventoryValueByMonth[$month] ?? 0.0,
-                'cash_in_hand' => round($cashInHandByMonth[$month - 1], 2),
-                'cash_in_momo' => round($cashInMomoByMonth[$month - 1], 2),
+                'cash_in_hand' => $cashInHandByMonthEnd[$month] !== null ? round($cashInHandByMonthEnd[$month], 2) : null,
+                'cash_in_momo' => $cashInMomoByMonthEnd[$month] !== null ? round($cashInMomoByMonthEnd[$month], 2) : null,
+                'cash_at_bank' => $cashAtBankByMonthEnd[$month] !== null ? round($cashAtBankByMonthEnd[$month], 2) : null,
                 'liabilities' => $liabilityTotalsByMonth[$month],
                 'operating_cash' => round($runningCash, 2),
             ];

@@ -6038,6 +6038,23 @@ const LENS_TYPE_OPTIONS = [
   'Blue Cut',
   'Anti-Reflective',
   'Office Lens',
+  'SV WHITE',
+  'SV PHOTO',
+  'SV PHOTO AR',
+  'SV PHOTO BLUE UV',
+  'SV POLY PHOTO AR',
+  'SV POLY PHOTO BLUE UV',
+  'BF WHITE',
+  'BF PHOTO',
+  'BF PHOTO AR',
+  'BF PHOTO BLUE UV',
+  'INV BF PHOTO AR',
+  'INV BF PHOTO BLUE UV',
+  'PROG WHITE',
+  'PROG PHOTO',
+  'PROG PHOTO AR',
+  'PROG PHOTO BLUE UV',
+  'PROG POLY PHOTO AR',
 ]
 
 const LENS_MATERIAL_OPTIONS = [

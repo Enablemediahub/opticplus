@@ -85,6 +85,8 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/working-capital-liabilities', [WorkingCapitalLiabilityController::class, 'store']);
         Route::put('/working-capital-liabilities/{liabilityId}', [WorkingCapitalLiabilityController::class, 'update']);
         Route::delete('/working-capital-liabilities/{liabilityId}', [WorkingCapitalLiabilityController::class, 'destroy']);
+        Route::post('/working-capital-liabilities/approve', [WorkingCapitalLiabilityController::class, 'approve']);
+        Route::post('/working-capital-liabilities/reopen', [WorkingCapitalLiabilityController::class, 'reopen']);
         Route::post('/finance/expense-categories', [FinanceController::class, 'storeExpenseCategory']);
         Route::put('/finance/expense-categories/{categoryId}', [FinanceController::class, 'updateExpenseCategory']);
         Route::delete('/finance/expense-categories/{categoryId}', [FinanceController::class, 'deleteExpenseCategory']);
