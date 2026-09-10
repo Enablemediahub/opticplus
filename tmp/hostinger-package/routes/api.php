@@ -17,6 +17,7 @@ use App\Http\Controllers\ManagerController;
 use App\Http\Controllers\MemoController;
 use App\Http\Controllers\PatientRecordController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\WorkingCapitalLiabilityController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('idempotency')->group(function (): void {
@@ -80,6 +81,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::put('/finance/expenses/{expenseId}', [FinanceController::class, 'updateExpense']);
         Route::delete('/finance/expenses/{expenseId}', [FinanceController::class, 'deleteExpense']);
         Route::get('/finance/expense-categories', [FinanceController::class, 'expenseCategories']);
+        Route::get('/working-capital-liabilities', [WorkingCapitalLiabilityController::class, 'index']);
+        Route::post('/working-capital-liabilities', [WorkingCapitalLiabilityController::class, 'store']);
+        Route::put('/working-capital-liabilities/{liabilityId}', [WorkingCapitalLiabilityController::class, 'update']);
+        Route::delete('/working-capital-liabilities/{liabilityId}', [WorkingCapitalLiabilityController::class, 'destroy']);
         Route::post('/finance/expense-categories', [FinanceController::class, 'storeExpenseCategory']);
         Route::put('/finance/expense-categories/{categoryId}', [FinanceController::class, 'updateExpenseCategory']);
         Route::delete('/finance/expense-categories/{categoryId}', [FinanceController::class, 'deleteExpenseCategory']);

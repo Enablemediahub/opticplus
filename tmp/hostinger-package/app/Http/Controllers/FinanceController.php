@@ -364,6 +364,7 @@ class FinanceController extends Controller
                 's.amount_paid',
                 's.billing_id',
                 's.folder_id',
+                's.payment_method',
                 'b.consultation_price',
                 'b.frame_price',
                 'b.lens_price',
@@ -376,11 +377,20 @@ class FinanceController extends Controller
         $sales = [];
         $salesBreakdown = [];
         $billingAllocationState = [];
+        $cashInHandByMonth = array_fill(0, 12, 0.0);
+        $cashInMomoByMonth = array_fill(0, 12, 0.0);
         foreach ($salesRows as $saleRow) {
             $month = (int) $saleRow->month;
             $amountPaid = round((float) ($saleRow->amount_paid ?? 0), 2);
             $sales[$month] = ($sales[$month] ?? 0) + $amountPaid;
             $salesBreakdown[$month] ??= ['consultation' => 0.0, 'lens' => 0.0, 'frame' => 0.0, 'case' => 0.0, 'other' => 0.0];
+
+            $paymentBucket = $this->classifyPaymentMethod((string) ($saleRow->payment_method ?? ''));
+            if ($paymentBucket === 'cash') {
+                $cashInHandByMonth[$month - 1] += $amountPaid;
+            } elseif ($paymentBucket === 'mobile_money') {
+                $cashInMomoByMonth[$month - 1] += $amountPaid;
+            }
 
             if ($saleRow->billing_id === null) {
                 $salesBreakdown[$month]['other'] += $amountPaid;
@@ -562,6 +572,64 @@ class FinanceController extends Controller
 
         $months = [];
         $runningCash = 0.0;
+        $inventoryValueByMonth = [];
+        if (Schema::hasTable('inventory_movements') && Schema::hasTable('products')) {
+            $inventoryProducts = DB::table('products')
+                ->select('id', 'min_price', 'max_price')
+                ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                ->get();
+
+            foreach (range(1, 12) as $inventoryMonth) {
+                $monthEnd = sprintf('%d-%02d-%02d 23:59:59', $year, $inventoryMonth, cal_days_in_month(CAL_GREGORIAN, $inventoryMonth, $year));
+                $snapshotStocks = DB::table('inventory_movements')
+                    ->selectRaw('product_id, SUM(quantity_change) as stock_at_snapshot')
+                    ->whereIn('product_id', $inventoryProducts->pluck('id'))
+                    ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                    ->where('movement_at', '<=', $monthEnd)
+                    ->groupBy('product_id')
+                    ->pluck('stock_at_snapshot', 'product_id');
+
+                $inventoryValueByMonth[$inventoryMonth] = round((float) $inventoryProducts->sum(function ($product) use ($snapshotStocks): float {
+                    $stock = (float) ($snapshotStocks[(int) $product->id] ?? 0);
+                    $averageSellingPrice = ((float) ($product->min_price ?? 0) + (float) ($product->max_price ?? 0)) / 2;
+                    return $stock * $averageSellingPrice;
+                }), 2);
+            }
+        }
+
+        $liabilityTotalsByMonth = array_fill(1, 12, [
+            'trade_creditors' => 0.0,
+            'staff_creditors' => 0.0,
+            'accrued_expenses' => 0.0,
+            'other_actuals' => 0.0,
+        ]);
+        if (Schema::hasTable('working_capital_liabilities')) {
+            for ($liabilityMonth = 1; $liabilityMonth <= 12; $liabilityMonth++) {
+                $monthEnd = sprintf('%d-%02d-%02d', $year, $liabilityMonth, cal_days_in_month(CAL_GREGORIAN, $liabilityMonth, $year));
+                $latestBalances = DB::table('working_capital_liabilities')
+                    ->where('as_of_date', '<=', $monthEnd)
+                    ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                    ->orderByDesc('as_of_date')
+                    ->orderByDesc('id')
+                    ->get(['liability_type', 'description', 'amount']);
+                $seenBalances = [];
+
+                foreach ($latestBalances as $liabilityRow) {
+                    $balanceKey = $liabilityRow->liability_type.'|'.$liabilityRow->description;
+                    if (isset($seenBalances[$balanceKey])) {
+                        continue;
+                    }
+
+                    $seenBalances[$balanceKey] = true;
+                    if (isset($liabilityTotalsByMonth[$liabilityMonth][$liabilityRow->liability_type])) {
+                        $liabilityTotalsByMonth[$liabilityMonth][$liabilityRow->liability_type] += (float) $liabilityRow->amount;
+                    }
+                }
+
+                $liabilityTotalsByMonth[$liabilityMonth] = array_map('round', $liabilityTotalsByMonth[$liabilityMonth]);
+            }
+        }
+
         for ($month = 1; $month <= 12; $month++) {
             $bill = $billing->get($month);
             $claim = $insurance->get($month);
@@ -586,6 +654,10 @@ class FinanceController extends Controller
                 'insurance_received' => round((float) ($claim->received ?? 0), 2),
                 'expenses' => round($expenseTotal, 2),
                 'debtors' => round((float) ($bill->debtors ?? 0), 2),
+                'inventory_value' => $inventoryValueByMonth[$month] ?? 0.0,
+                'cash_in_hand' => round($cashInHandByMonth[$month - 1], 2),
+                'cash_in_momo' => round($cashInMomoByMonth[$month - 1], 2),
+                'liabilities' => $liabilityTotalsByMonth[$month],
                 'operating_cash' => round($runningCash, 2),
             ];
         }

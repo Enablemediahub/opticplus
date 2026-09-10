@@ -597,6 +597,39 @@ class FinanceController extends Controller
             }
         }
 
+        $liabilityTotalsByMonth = array_fill(1, 12, [
+            'trade_creditors' => 0.0,
+            'staff_creditors' => 0.0,
+            'accrued_expenses' => 0.0,
+            'other_actuals' => 0.0,
+        ]);
+        if (Schema::hasTable('working_capital_liabilities')) {
+            for ($liabilityMonth = 1; $liabilityMonth <= 12; $liabilityMonth++) {
+                $monthEnd = sprintf('%d-%02d-%02d', $year, $liabilityMonth, cal_days_in_month(CAL_GREGORIAN, $liabilityMonth, $year));
+                $latestBalances = DB::table('working_capital_liabilities')
+                    ->where('as_of_date', '<=', $monthEnd)
+                    ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                    ->orderByDesc('as_of_date')
+                    ->orderByDesc('id')
+                    ->get(['liability_type', 'description', 'amount']);
+                $seenBalances = [];
+
+                foreach ($latestBalances as $liabilityRow) {
+                    $balanceKey = $liabilityRow->liability_type.'|'.$liabilityRow->description;
+                    if (isset($seenBalances[$balanceKey])) {
+                        continue;
+                    }
+
+                    $seenBalances[$balanceKey] = true;
+                    if (isset($liabilityTotalsByMonth[$liabilityMonth][$liabilityRow->liability_type])) {
+                        $liabilityTotalsByMonth[$liabilityMonth][$liabilityRow->liability_type] += (float) $liabilityRow->amount;
+                    }
+                }
+
+                $liabilityTotalsByMonth[$liabilityMonth] = array_map('round', $liabilityTotalsByMonth[$liabilityMonth]);
+            }
+        }
+
         for ($month = 1; $month <= 12; $month++) {
             $bill = $billing->get($month);
             $claim = $insurance->get($month);
@@ -624,6 +657,7 @@ class FinanceController extends Controller
                 'inventory_value' => $inventoryValueByMonth[$month] ?? 0.0,
                 'cash_in_hand' => round($cashInHandByMonth[$month - 1], 2),
                 'cash_in_momo' => round($cashInMomoByMonth[$month - 1], 2),
+                'liabilities' => $liabilityTotalsByMonth[$month],
                 'operating_cash' => round($runningCash, 2),
             ];
         }

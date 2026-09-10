@@ -36,6 +36,7 @@ import SettingsSection from './components/SettingsSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
 import TechnicianDashboardSection from './components/TechnicianDashboardSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
+import WorkingCapitalLiabilitiesSection from './components/WorkingCapitalLiabilitiesSection.jsx'
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
@@ -95,6 +96,7 @@ const managerNavSections = [
       { label: 'Revenue Tracking', navLabel: 'Revenue Tracking', icon: 'finance' },
       { label: 'Sales', navLabel: 'Daily Sales', icon: 'money' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
+      { label: 'Working Capital Liabilities', navLabel: 'Working Capital Liabilities', icon: 'finance' },
       { label: 'Insurance Claims', navLabel: 'Insurance Claims', icon: 'shield' },
       { label: 'Debts', navLabel: 'Company Debts', icon: 'receipt' },
       { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
@@ -247,6 +249,7 @@ const accountantNavSections = [
       { label: 'Revenue Tracking', navLabel: 'Revenue Tracking', icon: 'trend' },
       { label: 'The Monitor', navLabel: 'The Monitor', icon: 'dashboard' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
+      { label: 'Working Capital Liabilities', navLabel: 'Working Capital Liabilities', icon: 'finance' },
       { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
       { label: 'Reports', navLabel: 'Reports', icon: 'reports' },
       { label: 'Payroll', navLabel: 'Staff Payroll', icon: 'money' },
@@ -306,6 +309,7 @@ const viewHashMap = {
   'Revenue Tracking': '#/revenue-tracking',
   'The Monitor': '#/the-monitor',
   Expenses: '#/expenses',
+  'Working Capital Liabilities': '#/working-capital-liabilities',
   Insurance: '#/insurance',
   'Insurance Claims': '#/insurance-claims',
   'Debt Management': '#/debt-management',
@@ -796,7 +800,7 @@ function App() {
   const canSwitchBranch = session?.is_admin || isTechnician
   const scopedBranchId = canSwitchBranch ? selectedBranchId : session?.branch_id
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
-  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
+  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
   const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
@@ -5214,6 +5218,15 @@ function App() {
               />
             ) : null}
 
+            {activeView === 'Working Capital Liabilities' ? (
+              <WorkingCapitalLiabilitiesSection
+                apiFetch={apiFetch}
+                token={token}
+                selectedBranchId={selectedBranchId}
+                session={session}
+              />
+            ) : null}
+
             {activeView === 'Debt Management' || activeView === 'Debts' ? (
               <DebtManagementSection
                 apiFetch={apiFetch}
@@ -5548,7 +5561,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>

@@ -981,6 +981,10 @@ function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
   const inventoryValue = selected.map((item) => toNumber(item.data.inventory_value))
   const cashInHand = selected.map((item) => toNumber(item.data.cash_in_hand))
   const cashInMomo = selected.map((item) => toNumber(item.data.cash_in_momo))
+  const tradeCreditors = selected.map((item) => toNumber(item.data.liabilities?.trade_creditors))
+  const staffCreditors = selected.map((item) => toNumber(item.data.liabilities?.staff_creditors))
+  const accruedExpenses = selected.map((item) => toNumber(item.data.liabilities?.accrued_expenses))
+  const otherActuals = selected.map((item) => toNumber(item.data.liabilities?.other_actuals))
   const cashProxy = selected.map((item, index) => toNumber(item.data.operating_cash) - cashInHand[index] - cashInMomo[index])
   const expenses = selected.map((item) => toNumber(item.data.expenses))
   const collections = selected.map((item) => toNumber(item.data.collected))
@@ -988,7 +992,7 @@ function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
     .filter((row) => /loan|support/i.test(String(row.label)))
     .reduce((totals, row) => totals.map((amount, index) => amount + toNumber(row.months?.[Number(selectedMonths[index]) - 1])), Array(selectedMonths.length).fill(0))
   const totalAssets = cashProxy.map((amount, index) => amount + debtors[index] + inventoryValue[index] + cashInHand[index] + cashInMomo[index])
-  const totalLiabilities = expenses.map((amount, index) => amount + supportTotals[index])
+  const totalLiabilities = expenses.map((amount, index) => amount + supportTotals[index] + tradeCreditors[index] + staffCreditors[index] + accruedExpenses[index] + otherActuals[index])
   const workingCapital = totalAssets.map((amount, index) => amount - totalLiabilities[index])
 
   const rows = [
@@ -1007,6 +1011,10 @@ function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
     { kind: 'section', cells: ['CURRENT LIAB'] },
     { kind: 'data', cells: ['2.1', 'OPERATING EXPENSES', ...expenses, sumArray(expenses)] },
     { kind: 'data', cells: ['2.2', 'LOANS / SUPPORT', ...supportTotals, sumArray(supportTotals)] },
+    { kind: 'data', cells: ['2.3', 'TRADE CREDITORS', ...tradeCreditors, sumArray(tradeCreditors)] },
+    { kind: 'data', cells: ['2.4', 'STAFF CREDITORS', ...staffCreditors, sumArray(staffCreditors)] },
+    { kind: 'data', cells: ['2.5', 'ACCRUED EXPENSES', ...accruedExpenses, sumArray(accruedExpenses)] },
+    { kind: 'data', cells: ['2.6', 'OTHER ACTUALS', ...otherActuals, sumArray(otherActuals)] },
     { kind: 'total', cells: ['', 'TOTAL CURRENT LIABILITIES', ...totalLiabilities, sumArray(totalLiabilities)] },
     { kind: 'total', cells: ['', 'WORKING CAPITAL', ...workingCapital, sumArray(workingCapital)] },
   ]
@@ -1624,10 +1632,10 @@ function applyWorkingCapitalSheetFormulas(worksheet, sheet, aoa) {
   const startCol = 2
   const endCol = aoa[3].length - 1
   const assetRows = [5, 6, 7, 8, 9, 10]
-  const liabilityRows = [14, 15]
+  const liabilityRows = [13, 14, 15, 16, 17, 18]
   const totalAssetRow = 11
-  const totalLiabilityRow = 16
-  const workingRow = 17
+  const totalLiabilityRow = 19
+  const workingRow = 20
 
   assetRows.concat(liabilityRows).forEach((rowIndex) => {
     const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
