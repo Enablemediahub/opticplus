@@ -9,6 +9,23 @@ const currency = new Intl.NumberFormat('en-GH', {
 
 const inventoryTabs = ['Stock Overview', 'Lens Tracker & Lens Spec']
 
+const monthFormatter = new Intl.DateTimeFormat('en-GH', { month: 'long', year: 'numeric' })
+
+function monthEndOptions(count = 24) {
+  const now = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - index, 1)
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0)
+    const pad = (value) => String(value).padStart(2, '0')
+    const date = `${monthEnd.getFullYear()}-${pad(monthEnd.getMonth() + 1)}-${pad(monthEnd.getDate())}`
+
+    return {
+      value: `${date}T23:59`,
+      label: `${monthFormatter.format(monthEnd)} (${date})`,
+    }
+  })
+}
+
 export default function InventorySection(props) {
   const [activeTab, setActiveTab] = useState(props.initialTab ?? 'Stock Overview')
   const [lensDrafts, setLensDrafts] = useState({})
@@ -83,6 +100,10 @@ function StockOverviewTab(props) {
   const frameSalesBreakdown = props.inventoryData?.frame_sales_breakdown ?? []
   const hasSalesRange = Boolean(props.inventoryFilters.date_from || props.inventoryFilters.date_to)
   const salesRangeLabel = hasSalesRange ? 'the selected date range' : 'all recorded time'
+  const monthEndDates = monthEndOptions()
+  const selectedMonthEnd = monthEndDates.some((option) => option.value === props.inventoryFilters.as_of_at)
+    ? props.inventoryFilters.as_of_at
+    : ''
 
   function startEdit(record) {
     props.setInventoryForm({
@@ -325,6 +346,22 @@ function StockOverviewTab(props) {
               value={props.inventoryFilters.date_to}
               onChange={(event) => props.setInventoryFilters((current) => ({ ...current, date_to: event.target.value }))}
             />
+          </label>
+          <label className="full-span">
+            Month-end stock
+            <select
+              value={selectedMonthEnd}
+              onChange={(event) => {
+                const asOfAt = event.target.value
+                props.setInventoryFilters((current) => ({ ...current, as_of_at: asOfAt }))
+                props.setInventoryQuery((current) => ({ ...current, as_of_at: asOfAt, page: 1 }))
+              }}
+            >
+              <option value="">Live stock / choose a month</option>
+              {monthEndDates.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
           </label>
           <label className="full-span">
             Stock as of

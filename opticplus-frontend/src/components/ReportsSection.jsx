@@ -977,14 +977,17 @@ function buildPurchasesSheet(primaryReport, mergedReport, selectedMonths) {
 function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
   const labels = selectedMonths.map((month) => monthName(month, false))
   const selected = buildSelectedMonths(mergedReport, selectedMonths)
-  const cashProxy = selected.map((item) => toNumber(item.data.operating_cash))
   const debtors = selected.map((item) => toNumber(item.data.debtors))
+  const inventoryValue = selected.map((item) => toNumber(item.data.inventory_value))
+  const cashInHand = selected.map((item) => toNumber(item.data.cash_in_hand))
+  const cashInMomo = selected.map((item) => toNumber(item.data.cash_in_momo))
+  const cashProxy = selected.map((item, index) => toNumber(item.data.operating_cash) - cashInHand[index] - cashInMomo[index])
   const expenses = selected.map((item) => toNumber(item.data.expenses))
   const collections = selected.map((item) => toNumber(item.data.collected))
   const supportTotals = (mergedReport?.collection_sources ?? [])
     .filter((row) => /loan|support/i.test(String(row.label)))
     .reduce((totals, row) => totals.map((amount, index) => amount + toNumber(row.months?.[Number(selectedMonths[index]) - 1])), Array(selectedMonths.length).fill(0))
-  const totalAssets = cashProxy.map((amount, index) => amount + debtors[index])
+  const totalAssets = cashProxy.map((amount, index) => amount + debtors[index] + inventoryValue[index] + cashInHand[index] + cashInMomo[index])
   const totalLiabilities = expenses.map((amount, index) => amount + supportTotals[index])
   const workingCapital = totalAssets.map((amount, index) => amount - totalLiabilities[index])
 
@@ -996,7 +999,10 @@ function buildWorkingCapitalSheet(mergedReport, selectedMonths) {
     { kind: 'section', cells: ['CURRENT ASSETS'] },
     { kind: 'data', cells: ['1.1', 'CASH AT BANK / OPERATING CASH', ...cashProxy, sumArray(cashProxy)] },
     { kind: 'data', cells: ['1.2', 'TRADE DEBTORS', ...debtors, sumArray(debtors)] },
-    { kind: 'data', cells: ['1.3', 'COLLECTIONS', ...collections, sumArray(collections)] },
+    { kind: 'data', cells: ['1.3', 'STOCKS + EXPECTED MARGINS', ...inventoryValue, sumArray(inventoryValue)] },
+    { kind: 'data', cells: ['1.4', 'COLLECTIONS', ...collections, sumArray(collections)] },
+    { kind: 'data', cells: ['1.5', 'CASH IN HAND', ...cashInHand, sumArray(cashInHand)] },
+    { kind: 'data', cells: ['1.6', 'CASH IN MOMO', ...cashInMomo, sumArray(cashInMomo)] },
     { kind: 'total', cells: ['', 'TOTAL CURRENT ASSETS', ...totalAssets, sumArray(totalAssets)] },
     { kind: 'section', cells: ['CURRENT LIAB'] },
     { kind: 'data', cells: ['2.1', 'OPERATING EXPENSES', ...expenses, sumArray(expenses)] },
@@ -1617,11 +1623,11 @@ function applyPurchasesSheetFormulas(worksheet, sheet, aoa) {
 function applyWorkingCapitalSheetFormulas(worksheet, sheet, aoa) {
   const startCol = 2
   const endCol = aoa[3].length - 1
-  const assetRows = [5, 6, 7]
-  const liabilityRows = [10, 11]
-  const totalAssetRow = 8
-  const totalLiabilityRow = 12
-  const workingRow = 13
+  const assetRows = [5, 6, 7, 8, 9, 10]
+  const liabilityRows = [14, 15]
+  const totalAssetRow = 11
+  const totalLiabilityRow = 16
+  const workingRow = 17
 
   assetRows.concat(liabilityRows).forEach((rowIndex) => {
     const formula = `SUM(${XLSX.utils.encode_col(startCol)}${rowIndex + 1}:${XLSX.utils.encode_col(endCol - 1)}${rowIndex + 1})`
@@ -1630,7 +1636,7 @@ function applyWorkingCapitalSheetFormulas(worksheet, sheet, aoa) {
 
   for (let col = startCol; col < endCol; col += 1) {
     const colLetter = XLSX.utils.encode_col(col)
-    const assetFormula = `${colLetter}${assetRows[0] + 1}+${colLetter}${assetRows[1] + 1}+${colLetter}${assetRows[2] + 1}`
+    const assetFormula = assetRows.map((rowIndex) => `${colLetter}${rowIndex + 1}`).join('+')
     const liabilityFormula = `${colLetter}${liabilityRows[0] + 1}+${colLetter}${liabilityRows[1] + 1}`
     const workingFormula = `${colLetter}${totalAssetRow + 1}-${colLetter}${totalLiabilityRow + 1}`
     setCellStyle(worksheet, totalAssetRow, col, XLSX_STYLES.total, toNumber(aoa[totalAssetRow]?.[col]), assetFormula)

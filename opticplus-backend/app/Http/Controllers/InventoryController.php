@@ -202,7 +202,14 @@ class InventoryController extends Controller
         $category = $request->string('category')->toString() ?: 'all';
         $dateFrom = $request->string('date_from')->toString();
         $dateTo = $request->string('date_to')->toString();
-        $asOfAt = $request->string('as_of_at')->toString();
+        $asOfAt = str_replace('T', ' ', trim($request->string('as_of_at')->toString()));
+        if ($asOfAt !== '') {
+            if (strlen($asOfAt) === 10) {
+                $asOfAt .= ' 23:59:59';
+            } elseif (strlen($asOfAt) === 16) {
+                $asOfAt .= ':59';
+            }
+        }
         $perPage = min(max((int) $request->integer('per_page', 15), 10), 40);
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
@@ -251,6 +258,7 @@ class InventoryController extends Controller
         $snapshotUnits = null;
         $snapshotLowStock = null;
         $snapshotOutOfStock = null;
+        $snapshotFloorValue = null;
         $rangeNetChange = 0;
         $rangeMovementCount = 0;
         $frameSalesByProduct = [];
@@ -280,6 +288,13 @@ class InventoryController extends Controller
                 $snapshotUnits = (int) $snapshotValues->sum();
                 $snapshotLowStock = (int) $snapshotValues->filter(fn ($value) => $value >= 1 && $value <= 10)->count();
                 $snapshotOutOfStock = (int) $snapshotValues->filter(fn ($value) => $value <= 0)->count();
+
+                $snapshotPrices = DB::table('products')
+                    ->whereIn('id', $filteredProductIds)
+                    ->get(['id', 'min_price']);
+                $snapshotFloorValue = (float) $snapshotPrices->sum(function ($product) use ($movementSnapshotByProduct): float {
+                    return (float) ($movementSnapshotByProduct[(int) $product->id] ?? 0) * (float) ($product->min_price ?? 0);
+                });
             }
 
             if ($dateFrom !== '' || $dateTo !== '') {
@@ -423,7 +438,7 @@ class InventoryController extends Controller
                 'stock_units' => $snapshotUnits ?? (int) tap(DB::table('products'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('stock'),
                 'low_stock' => $snapshotLowStock ?? (int) tap(DB::table('products'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->whereBetween('stock', [1, 10])->count(),
                 'out_of_stock' => $snapshotOutOfStock ?? (int) tap(DB::table('products'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->where('stock', '<=', 0)->count(),
-                'inventory_floor_value' => (float) tap(DB::table('products'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+                'inventory_floor_value' => $snapshotFloorValue ?? (float) tap(DB::table('products'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
                     ->selectRaw('SUM(stock * min_price) as value')
                     ->value('value'),
                 'range_net_change' => $rangeNetChange,
