@@ -14,6 +14,12 @@ class InventoryController extends Controller
     private function ensureLensOrderRequestsTable(): void
     {
         if (Schema::hasTable('lens_order_requests')) {
+            if (! Schema::hasColumn('lens_order_requests', 'pickup_status')) {
+                Schema::table('lens_order_requests', function (Blueprint $table): void {
+                    $table->string('pickup_status', 30)->default('pending')->after('status');
+                });
+            }
+
             return;
         }
 
@@ -24,6 +30,7 @@ class InventoryController extends Controller
             $table->string('source_id', 80);
             $table->unsignedBigInteger('placed_by')->nullable();
             $table->string('status', 30)->default('placed');
+            $table->string('pickup_status', 30)->default('pending');
             $table->timestamps();
             $table->unique(['branch_id', 'source', 'source_id']);
             $table->index(['branch_id', 'status']);
@@ -85,6 +92,41 @@ class InventoryController extends Controller
         return response()->json([
             'message' => $deleted ? 'Lens order overturned successfully.' : 'Placed lens order was not found.',
             'overturned' => $deleted > 0,
+        ]);
+    }
+
+    public function updateLensOrderPickupStatus(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'source' => ['required', 'in:legacy,exam_form'],
+            'source_id' => ['required', 'string', 'max:80'],
+            'action' => ['required', 'in:ready,not-ready'],
+        ]);
+
+        $this->ensureLensOrderRequestsTable();
+        $updated = DB::table('lens_order_requests')
+            ->where('branch_id', $branchId)
+            ->where('source', $validated['source'])
+            ->where('source_id', $validated['source_id'])
+            ->where('status', 'placed')
+            ->update([
+                'pickup_status' => $validated['action'] === 'ready' ? 'ready' : 'pending',
+                'updated_at' => now(),
+            ]);
+
+        if (! $updated) {
+            return response()->json(['message' => 'Placed lens order was not found.'], 404);
+        }
+
+        return response()->json([
+            'message' => $validated['action'] === 'ready'
+                ? 'Lens order marked ready for pickup.'
+                : 'Lens order marked not ready.',
         ]);
     }
 
@@ -549,7 +591,7 @@ class InventoryController extends Controller
                 $join->on('b.id', '=', 'bf.billing_id');
             })
             ->leftJoinSub($prescriptionSummary, 'gp', function ($join): void {
-                $join->on('b.folder_id', '=', 'gp.folder_id');
+                $join->whereRaw('BINARY b.folder_id = BINARY gp.folder_id');
             })
             ->leftJoin('customers as c', 'b.customer_id', '=', 'c.id')
             ->leftJoinSub($insuranceSummary, 'ic', function ($join): void {
@@ -798,7 +840,7 @@ class InventoryController extends Controller
             ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id')
             ->leftJoin('billing as linked_billing', function ($join) use ($branchId): void {
                 $join->on('linked_billing.patient_id', '=', 'gp.patient_id')
-                    ->on('linked_billing.folder_id', '=', 'gp.folder_id')
+                    ->whereRaw('BINARY linked_billing.folder_id = BINARY gp.folder_id')
                     ->on('linked_billing.date', '=', 'gp.date');
                 if ($branchId > 0) {
                     $join->where('linked_billing.branch_id', '=', $branchId);
@@ -880,7 +922,7 @@ class InventoryController extends Controller
                     'notes' => $item->notes,
                     'status' => $item->status,
                     'created_at' => $item->created_at,
-                    'billing_id' => ((int) $item->billing_id > 0 ? $item->billing_id : $item->linked_billing_id),
+                    'billing_id' => ((int) $item->linked_billing_id > 0 ? $item->linked_billing_id : $item->billing_id),
                     'pickup_status' => $item->pickup_status,
                     'prescription_id' => $item->prescription_id,
                     'source' => 'legacy',
@@ -896,7 +938,17 @@ class InventoryController extends Controller
             ->values();
 
         $formQuery = DB::table('patient_form_data as pfd')
-            ->join('patient_records as pr', 'pfd.folder_id', '=', 'pr.folder_id')
+            ->join('patient_records as pr', function ($join): void {
+                $join->whereRaw('BINARY pfd.folder_id = BINARY pr.folder_id');
+            })
+            ->leftJoin('lens_order_requests as form_order', function ($join) use ($branchId): void {
+                $join->whereRaw("BINARY form_order.source_id = CONCAT(0x464f524d2d, pr.id, 0x2d, pfd.version)")
+                    ->whereRaw('BINARY form_order.source = 0x6578616d5f666f726d')
+                    ->whereRaw('BINARY form_order.status = 0x706c61636564');
+                if ($branchId > 0) {
+                    $join->where('form_order.branch_id', $branchId);
+                }
+            })
             ->leftJoin('users as assigned', 'assigned.id', '=', 'pr.assigned_optometrist_id');
         $this->applyBranchScope($formQuery, 'pfd.branch_id', $branchId);
         $this->applyBranchScope($formQuery, 'pr.branch_id', $branchId);
@@ -929,6 +981,7 @@ class InventoryController extends Controller
                 'pfd.status as form_status',
                 'pfd.updated_at',
                 'pfd.form_data',
+                'form_order.pickup_status as form_pickup_status',
                 'pr.id as patient_id',
                 'pr.surname',
                 'pr.firstname',
@@ -957,6 +1010,7 @@ class InventoryController extends Controller
                     'status' => $item->form_status,
                     'updated_at' => $item->updated_at,
                     'form_data' => $item->form_data,
+                    'pickup_status' => $item->form_pickup_status,
                 ];
 
                 return $this->formatExamFormPrescriptionRow($record, $form);
@@ -1774,7 +1828,7 @@ class InventoryController extends Controller
             'status' => $form->status ?? 'completed',
             'created_at' => $form->updated_at,
             'billing_id' => null,
-            'pickup_status' => null,
+            'pickup_status' => $form->pickup_status ?? null,
             'prescription_id' => 'FORM-'.$record->id.'-'.$form->version,
             'source' => 'exam_form',
             'form_version' => $form->version,

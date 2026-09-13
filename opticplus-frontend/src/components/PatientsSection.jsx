@@ -5786,7 +5786,7 @@ function createExamFormState(patient) {
     diagnosis: {
       diagnosis: 'No abnormal ocular findings detected.',
       management_plan: 'Routine eye care review advised.',
-      prescription: 'No corrective prescription indicated at this time.',
+      prescription: '',
       followup_date: '',
       followup_notes: 'Review at the next routine eye examination or earlier if symptoms develop.',
     },
@@ -6031,13 +6031,6 @@ function defaultNewPrescription() {
 }
 
 const LENS_TYPE_OPTIONS = [
-  'Single Vision',
-  'Bifocal',
-  'Progressive',
-  'Photochromic',
-  'Blue Cut',
-  'Anti-Reflective',
-  'Office Lens',
   'SV WHITE',
   'SV PHOTO',
   'SV PHOTO AR',
@@ -6055,6 +6048,7 @@ const LENS_TYPE_OPTIONS = [
   'PROG PHOTO AR',
   'PROG PHOTO BLUE UV',
   'PROG POLY PHOTO AR',
+  'PROG POLY PHOTO BLUE UV',
 ]
 
 const LENS_MATERIAL_OPTIONS = [
@@ -6100,8 +6094,8 @@ const EXAM_SELECT_OPTION_SUFFIXES = {
   'visual_field.os.method': ['Confrontation', 'Automated Perimetry', 'Other'],
   'visual_field.od.result': ['Normal', 'Defect', 'Other'],
   'visual_field.os.result': ['Normal', 'Defect', 'Other'],
-  'spectacle_rx.od.lens_type': ['Single Vision', 'Bifocal', 'Progressive', 'Other'],
-  'spectacle_rx.os.lens_type': ['Single Vision', 'Bifocal', 'Progressive', 'Other'],
+  'spectacle_rx.od.lens_type': LENS_TYPE_OPTIONS,
+  'spectacle_rx.os.lens_type': LENS_TYPE_OPTIONS,
 }
 
 const PRELIMINARY_EXTERNAL_TEST_FIELDS = [

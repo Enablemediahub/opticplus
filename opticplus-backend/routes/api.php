@@ -125,6 +125,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/inventory/lens-orders', [InventoryController::class, 'lensOrders']);
         Route::post('/inventory/lens-orders/place', [InventoryController::class, 'placeLensOrder']);
         Route::delete('/inventory/lens-orders/place', [InventoryController::class, 'overturnLensOrder']);
+        Route::post('/inventory/lens-orders/pickup-status', [InventoryController::class, 'updateLensOrderPickupStatus']);
         Route::get('/inventory/bsmi-tracker', [InventoryController::class, 'bsmiTracker']);
         Route::post('/inventory/lens-tracker/{billingId}', [InventoryController::class, 'storeLensCost']);
         Route::delete('/inventory/lens-tracker/{billingId}', [InventoryController::class, 'deleteLensCost']);

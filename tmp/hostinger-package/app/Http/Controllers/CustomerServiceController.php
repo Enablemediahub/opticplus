@@ -16,6 +16,7 @@ class CustomerServiceController extends Controller
     public function dashboard(Request $request): JsonResponse
     {
         $this->ensureSmsTemplateSchema();
+        $this->ensureLensOrderPickupSchema();
         $branchId = $this->resolveBranchId($request);
         $patientRecordsHasEmail = Schema::hasColumn('patient_records', 'email');
         $patientRecordsHasPhone = Schema::hasColumn('patient_records', 'phone');
@@ -30,15 +31,28 @@ class CustomerServiceController extends Controller
 
         $query = DB::table('billing as b')
             ->distinct()
-            ->leftJoin('patient_records as pr', 'b.folder_id', '=', 'pr.folder_id')
+            ->leftJoin('patient_records as pr', function ($join): void {
+                $join->whereRaw('BINARY b.folder_id = BINARY pr.folder_id');
+            })
+            ->leftJoin('patient_form_data as pfd', function ($join): void {
+                $join->whereRaw('BINARY pfd.folder_id = BINARY pr.folder_id');
+            })
             ->leftJoin('glasses_prescriptions as gp', function ($join) use ($branchId): void {
                 $join->on('b.id', '=', 'gp.prescription_id')
                     ->orOn(function ($orJoin): void {
                         $orJoin->on('b.patient_id', '=', 'gp.patient_id')
-                            ->on('b.folder_id', '=', 'gp.folder_id');
+                            ->whereRaw('BINARY b.folder_id = BINARY gp.folder_id');
                     });
                 if ($branchId > 0) {
                     $join->where('gp.branch_id', '=', $branchId);
+                }
+            })
+            ->leftJoin('lens_order_requests as form_order', function ($join) use ($branchId): void {
+                $join->whereRaw("BINARY form_order.source_id = CONCAT(0x464f524d2d, pr.id, 0x2d, pfd.version)")
+                    ->whereRaw('BINARY form_order.source = 0x6578616d5f666f726d')
+                    ->whereRaw('BINARY form_order.status = 0x706c61636564');
+                if ($branchId > 0) {
+                    $join->where('form_order.branch_id', '=', $branchId);
                 }
             })
             ->where(function ($inner): void {
@@ -70,11 +84,19 @@ class CustomerServiceController extends Controller
         } elseif ($status !== 'all') {
             if ($status === 'not_ready') {
                 $query->where(function ($inner): void {
-                    $inner->whereNull('gp.status')
-                        ->orWhereIn('gp.status', ['pending', '']);
+                        $inner->whereRaw("CASE WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 0 ELSE 1 END = 1")
+                            ->where(function ($statusQuery): void {
+                                $statusQuery->whereNull(DB::raw('COALESCE(gp.status, form_order.pickup_status)'))
+                                    ->orWhereIn(DB::raw('COALESCE(gp.status, form_order.pickup_status)'), ['pending', '']);
+                            });
                 });
             } else {
-                $query->where('gp.status', $status);
+                if ($status === 'picked_up') {
+                    $query->whereRaw('BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570');
+                } else {
+                    $query->whereRaw('BINARY COALESCE(gp.status, form_order.pickup_status) = BINARY ?', [$status])
+                        ->whereRaw('BINARY gp.status <> 0x7069636b65645f7570 AND BINARY form_order.pickup_status <> 0x7069636b65645f7570');
+                }
             }
         }
 
@@ -109,7 +131,12 @@ class CustomerServiceController extends Controller
             'b.status as billing_status',
             'b.health_insurance',
             'b.receipt_number',
-            'gp.status as pickup_status',
+            DB::raw("CASE
+                WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 'picked_up'
+                WHEN BINARY gp.status = 0x6e6f746966696564 OR BINARY form_order.pickup_status = 0x6e6f746966696564 THEN 'notified'
+                WHEN BINARY gp.status = 0x7265616479 OR BINARY form_order.pickup_status = 0x7265616479 THEN 'ready'
+                ELSE COALESCE(gp.status, form_order.pickup_status)
+            END as pickup_status"),
             'gp.created_at as pickup_created_at',
             'gp.prescription_id',
         ];
@@ -129,9 +156,9 @@ class CustomerServiceController extends Controller
         $records = $query
             ->orderByRaw("
                 CASE
-                    WHEN gp.status = 'ready' THEN 1
-                    WHEN gp.status = 'notified' THEN 2
-                    WHEN gp.status = 'picked_up' THEN 3
+                    WHEN BINARY gp.status = 0x7265616479 OR BINARY form_order.pickup_status = 0x7265616479 THEN 1
+                    WHEN BINARY gp.status = 0x6e6f746966696564 OR BINARY form_order.pickup_status = 0x6e6f746966696564 THEN 2
+                    WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 3
                     ELSE 4
                 END
             ")
@@ -182,22 +209,35 @@ class CustomerServiceController extends Controller
                 $this->applyBranchScope($query, 'b.branch_id', $branchId);
             })
             ->distinct()
-            ->leftJoin('patient_records as pr', 'b.folder_id', '=', 'pr.folder_id')
+            ->leftJoin('patient_records as pr', function ($join): void {
+                $join->whereRaw('BINARY b.folder_id = BINARY pr.folder_id');
+            })
+            ->leftJoin('patient_form_data as pfd', function ($join): void {
+                $join->whereRaw('BINARY pfd.folder_id = BINARY pr.folder_id');
+            })
             ->leftJoin('glasses_prescriptions as gp', function ($join) use ($branchId): void {
                 $join->on('b.id', '=', 'gp.prescription_id')
                     ->orOn(function ($orJoin): void {
                         $orJoin->on('b.patient_id', '=', 'gp.patient_id')
-                            ->on('b.folder_id', '=', 'gp.folder_id');
+                            ->whereRaw('BINARY b.folder_id = BINARY gp.folder_id');
                     });
                 if ($branchId > 0) {
                     $join->where('gp.branch_id', '=', $branchId);
                 }
             })
-            ->whereIn('gp.status', ['ready', 'notified'])
+            ->leftJoin('lens_order_requests as form_order', function ($join) use ($branchId): void {
+                $join->whereRaw("BINARY form_order.source_id = CONCAT(0x464f524d2d, pr.id, 0x2d, pfd.version)")
+                    ->whereRaw('BINARY form_order.source = 0x6578616d5f666f726d')
+                    ->whereRaw('BINARY form_order.status = 0x706c61636564');
+                if ($branchId > 0) {
+                    $join->where('form_order.branch_id', '=', $branchId);
+                }
+            })
+            ->whereRaw('BINARY gp.status IN (0x7265616479, 0x6e6f746966696564) OR BINARY form_order.pickup_status IN (0x7265616479, 0x6e6f746966696564)')
             ->orderByRaw("
                 CASE
-                    WHEN gp.status = 'ready' THEN 1
-                    WHEN gp.status = 'notified' THEN 2
+                    WHEN BINARY COALESCE(gp.status, form_order.pickup_status) = 0x7265616479 THEN 1
+                    WHEN BINARY COALESCE(gp.status, form_order.pickup_status) = 0x6e6f746966696564 THEN 2
                     ELSE 3
                 END
             ")
@@ -213,7 +253,7 @@ class CustomerServiceController extends Controller
                 'b.balance',
                 'b.date as billing_date',
                 'pr.phone',
-                'gp.status as pickup_status',
+                DB::raw('COALESCE(gp.status, form_order.pickup_status) as pickup_status'),
             ])
             ->map(function ($record) {
                 $record->pickup_status_display = match ($record->pickup_status) {
@@ -613,8 +653,19 @@ class CustomerServiceController extends Controller
             return $response;
         }
 
+        $billing = DB::table('billing')
+            ->where('id', $billingId)
+            ->where('branch_id', $branchId)
+            ->first(['id', 'patient_id', 'folder_id']);
+
         $updateQuery = DB::table('glasses_prescriptions')
-            ->where('prescription_id', $billingId);
+            ->where(function ($query) use ($billing): void {
+                $query->where('prescription_id', $billing->id)
+                    ->orWhere(function ($identityQuery) use ($billing): void {
+                        $identityQuery->where('patient_id', $billing->patient_id)
+                            ->where('folder_id', $billing->folder_id);
+                    });
+            });
 
         if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
             $updateQuery->where('branch_id', $branchId);
@@ -625,7 +676,12 @@ class CustomerServiceController extends Controller
             $payload['updated_at'] = now();
         }
 
-        $updateQuery->update($payload);
+        $updated = $updateQuery->update($payload);
+        $examFormUpdated = $billing ? $this->updateExamFormPickupStatus($billing, $branchId, 'picked_up') : 0;
+
+        if (! $updated && ! $examFormUpdated) {
+            return response()->json(['message' => 'Pickup record was not found.'], 404);
+        }
 
         AuditLog::logManual($request, 'edit', 'pickup', 'billing_id: '.$billingId, [
             'status' => 'picked_up',
@@ -643,8 +699,19 @@ class CustomerServiceController extends Controller
             return $response;
         }
 
+        $billing = DB::table('billing')
+            ->where('id', $billingId)
+            ->where('branch_id', $branchId)
+            ->first(['id', 'patient_id', 'folder_id']);
+
         $updateQuery = DB::table('glasses_prescriptions')
-            ->where('prescription_id', $billingId)
+            ->where(function ($query) use ($billing): void {
+                $query->where('prescription_id', $billing->id)
+                    ->orWhere(function ($identityQuery) use ($billing): void {
+                        $identityQuery->where('patient_id', $billing->patient_id)
+                            ->where('folder_id', $billing->folder_id);
+                    });
+            })
             ->whereIn('status', ['ready', 'notified', 'picked_up']);
 
         if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
@@ -657,7 +724,8 @@ class CustomerServiceController extends Controller
         }
 
         $updated = $updateQuery->update($payload);
-        if (! $updated) {
+        $examFormUpdated = $billing ? $this->updateExamFormPickupStatus($billing, $branchId, 'pending') : 0;
+        if (! $updated && ! $examFormUpdated) {
             return response()->json([
                 'message' => 'Only ready, notified, or picked-up entries can be reversed.',
             ], 422);
@@ -670,6 +738,28 @@ class CustomerServiceController extends Controller
         return response()->json([
             'message' => 'Marked as not ready.',
         ]);
+    }
+
+    private function updateExamFormPickupStatus(object $billing, int $branchId, string $status): int
+    {
+        if (! Schema::hasTable('lens_order_requests')) {
+            return 0;
+        }
+
+        $this->ensureLensOrderPickupSchema();
+        if (empty($billing->patient_id)) {
+            return 0;
+        }
+
+        return DB::table('lens_order_requests')
+            ->where('branch_id', $branchId)
+            ->whereRaw('BINARY source = 0x6578616d5f666f726d')
+            ->whereRaw('BINARY status = 0x706c61636564')
+            ->whereRaw('BINARY source_id LIKE CONCAT(0x464f524d2d, ?, 0x2d, 0x25)', [(string) $billing->patient_id])
+            ->update([
+                'pickup_status' => $status,
+                'updated_at' => now(),
+            ]);
     }
 
     private function resolveBranchId(Request $request): int
@@ -767,6 +857,19 @@ class CustomerServiceController extends Controller
                 'branch_id' => null,
                 'updated_at' => now(),
             ]);
+    }
+
+    private function ensureLensOrderPickupSchema(): void
+    {
+        if (! Schema::hasTable('lens_order_requests')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('lens_order_requests', 'pickup_status')) {
+            Schema::table('lens_order_requests', function (Blueprint $table): void {
+                $table->string('pickup_status', 30)->default('pending')->after('status');
+            });
+        }
     }
 
     private function defaultSmsTemplates(): array

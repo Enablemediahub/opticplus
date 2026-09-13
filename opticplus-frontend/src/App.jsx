@@ -4287,16 +4287,25 @@ function App() {
     try {
       const branchId = session.is_admin ? selectedBranchId : session.branch_id
       const persistableIds = pickupIds.filter(isNumericPickupId)
+      const sourceIds = pickupIds.filter((pickupId) => !isNumericPickupId(pickupId))
 
-      if (persistableIds.length) {
-        await Promise.all(
-          persistableIds.map((billingId) => apiFetch(`/customer-service/pickups/${billingId}/${action}`, {
-            method: 'POST',
-            token,
-            body: { branch_id: branchId },
-          })),
-        )
-      }
+      await Promise.all([
+        ...persistableIds.map((billingId) => apiFetch(`/customer-service/pickups/${billingId}/${action}`, {
+          method: 'POST',
+          token,
+          body: { branch_id: branchId },
+        })),
+        ...sourceIds.map((sourceId) => apiFetch('/inventory/lens-orders/pickup-status', {
+          method: 'POST',
+          token,
+          body: {
+            branch_id: branchId,
+            source: String(sourceId).startsWith('FORM-') ? 'exam_form' : 'legacy',
+            source_id: sourceId,
+            action,
+          },
+        })),
+      ])
 
       const nextStatus = action === 'ready'
         ? 'ready'

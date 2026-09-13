@@ -21,6 +21,31 @@ export default function CustomerServiceSection(props) {
     setSmsPreview((current) => (current ? { ...current, message } : current))
   }
 
+  function resolveFirstName(name) {
+    return String(name ?? '').trim().split(/\s+/)[0] || 'there'
+  }
+
+  function personalizeMessage(message, name) {
+    const firstName = resolveFirstName(name)
+    return String(message ?? '')
+      .replace(/\{\{first[_-]?name\}\}|\{first[_-]?name\}|\[first[_-]?name\]/gi, firstName)
+  }
+
+  function loadSmsPreviewTemplate() {
+    if (!smsPreview?.templateId) return
+
+    const template = (props.customerServiceData?.templates ?? []).find(
+      (item) => String(item.id) === String(smsPreview.templateId),
+    )
+
+    if (template) {
+      setSmsPreview((current) => ({
+        ...current,
+        message: personalizeMessage(template.message_text, current.name),
+      }))
+    }
+  }
+
   function closeTemplateEditor() {
     setEditingTemplate(null)
     props.setTemplateForm({ id: null, template_name: '', message_text: '', is_shared: true })
@@ -56,6 +81,7 @@ export default function CustomerServiceSection(props) {
     props.setMessageForm((current) => ({
       ...current,
       mode: 'single',
+      template_id: smsPreview.templateId ?? '',
       phone: smsPreview.phone ?? '',
       patient_id: smsPreview.patientId ?? '',
       mark_notified: smsPreview.markNotified ?? current.mark_notified,
@@ -63,6 +89,9 @@ export default function CustomerServiceSection(props) {
     }))
     setActiveTab('Messages')
     closeSmsPreview()
+    setTimeout(() => {
+      document.getElementById('customer-service-message-composer')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
   }
 
   async function sendSmsPreview() {
@@ -70,7 +99,7 @@ export default function CustomerServiceSection(props) {
 
     const sent = await props.submitCustomerMessage({
       mode: 'single',
-      template_id: null,
+      template_id: smsPreview.templateId ?? null,
       message: smsPreview.message ?? '',
       phone: smsPreview.phone ?? '',
       patient_id: smsPreview.patientId ?? '',
@@ -169,6 +198,35 @@ export default function CustomerServiceSection(props) {
             </div>
 
             {smsPreview.subtitle ? <p className="muted-copy">{smsPreview.subtitle}</p> : null}
+
+            <div className="customer-service-sms-modal__template-row">
+              <label>
+                Existing template
+                <select
+                  value={smsPreview.templateId ?? ''}
+                  disabled={isMergedView}
+                  onChange={(event) => setSmsPreview((current) => ({
+                    ...current,
+                    templateId: event.target.value,
+                  }))}
+                >
+                  <option value="">Choose a template</option>
+                  {(props.customerServiceData?.templates ?? []).map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.template_name} ({template.scope_label || (template.is_shared ? 'Shared' : 'Branch')})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="mini-action"
+                disabled={isMergedView || !smsPreview.templateId}
+                onClick={loadSmsPreviewTemplate}
+              >
+                Load template
+              </button>
+            </div>
 
             <label className="customer-service-sms-modal__message">
               Draft message
@@ -330,7 +388,7 @@ function MessagesTab(props) {
         )}
       </article>
 
-      <article className="panel">
+      <article id="customer-service-message-composer" className="panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Send Messages</p>
@@ -521,6 +579,10 @@ function MessagesTab(props) {
 function PickupTab(props) {
   const [selectedPickupIds, setSelectedPickupIds] = useState([])
 
+  function resolveFirstName(name) {
+    return String(name ?? '').trim().split(/\s+/)[0] || 'there'
+  }
+
   const pickupRecords = props.customerServiceData?.pickup_records ?? []
   const displayedPickupRecords = useMemo(() => {
     if (props.customerServiceFilters.status === 'all') {
@@ -608,7 +670,7 @@ function PickupTab(props) {
       folderId: record.folder_id,
       patientId: record.patient_id ?? '',
       branchName: record.branch_name,
-      message: `Hello ${resolvePatientName(record) || ''}, your glasses are ${record.pickup_status === 'notified' ? 'still ready' : 'ready'} for pickup at Bealet Optical Center. Kindly visit the branch at your convenience.`,
+      message: `Hello ${resolveFirstName(resolvePatientName(record))}, your glasses are ${record.pickup_status === 'notified' ? 'still ready' : 'ready'} for pickup at Bealet Optical Center. Kindly visit the branch at your convenience.`,
       markNotified: true,
     })
   }
