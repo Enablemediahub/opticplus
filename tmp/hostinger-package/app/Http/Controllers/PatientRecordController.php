@@ -1055,10 +1055,40 @@ class PatientRecordController extends Controller
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
 
+        $hasLensPayment = function ($query, string $folderColumn) use ($branchId): void {
+            $query->whereExists(function ($billingQuery) use ($branchId, $folderColumn): void {
+                $billingQuery
+                    ->select(DB::raw(1))
+                    ->from('billing as paid_billing')
+                    ->whereColumn('paid_billing.folder_id', $folderColumn)
+                    ->where('paid_billing.lens_price', '>', 0)
+                    ->where('paid_billing.status', '!=', 'draft')
+                    ->when($branchId > 0, fn ($nested) => $nested->where('paid_billing.branch_id', $branchId))
+                    ->where(function ($paymentQuery): void {
+                        $paymentQuery
+                            ->whereExists(function ($salesQuery): void {
+                                $salesQuery
+                                    ->select(DB::raw(1))
+                                    ->from('sales as paid_sales')
+                                    ->whereColumn('paid_sales.billing_id', 'paid_billing.id')
+                                    ->where('paid_sales.amount_paid', '>', 0);
+                            })
+                            ->orWhereExists(function ($claimsQuery): void {
+                                $claimsQuery
+                                    ->select(DB::raw(1))
+                                    ->from('insurance_claims as paid_claims')
+                                    ->whereColumn('paid_claims.billing_id', 'paid_billing.id')
+                                    ->where('paid_claims.amount_paid', '>', 0);
+                            });
+                    });
+            });
+        };
+
         $legacyQuery = DB::table('glasses_prescriptions as gp')
             ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id');
         $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
         $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
+        $hasLensPayment($legacyQuery, 'gp.folder_id');
         if ($dateFrom !== '') {
             $legacyQuery->whereDate('gp.date', '>=', $dateFrom);
         }
@@ -1114,6 +1144,7 @@ class PatientRecordController extends Controller
             ->join('patient_records as pr', 'pfd.folder_id', '=', 'pr.folder_id');
         $this->applyBranchScope($formQuery, 'pfd.branch_id', $branchId);
         $this->applyBranchScope($formQuery, 'pr.branch_id', $branchId);
+        $hasLensPayment($formQuery, 'pfd.folder_id');
         if ($dateFrom !== '') {
             $formQuery->whereDate('pfd.updated_at', '>=', $dateFrom);
         }

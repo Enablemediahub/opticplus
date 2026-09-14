@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS `billing` (
   `total_amount` decimal(10,2) NOT NULL,
   `health_insurance` enum('NONE','APEX','ACACIA','GLICO','PREMIERE HEALTH INSURANCE','NATIONWIDE','OTHER') NOT NULL DEFAULT 'NONE',
   `date` date DEFAULT NULL,
-  `status` varchar(20) DEFAULT 'balance_remaining',
+  `status` enum('draft','pending','balance_remaining','insurance_pending','paid','completed') NOT NULL DEFAULT 'balance_remaining',
   `balance` decimal(10,2) NOT NULL DEFAULT 0.00,
   `prescription_id` bigint(20) UNSIGNED DEFAULT NULL,
   `customer_id` int(11) DEFAULT NULL,

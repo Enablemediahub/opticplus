@@ -609,6 +609,13 @@ class InventoryController extends Controller
             ->where('b.lens_price', '>', 0)
             ->where(function ($inner): void {
                 $inner->where('b.health_insurance', '!=', 'NONE')
+                    ->orWhereExists(function ($claimQuery): void {
+                        $claimQuery
+                            ->select(DB::raw(1))
+                            ->from('insurance_claims as linked_claim')
+                            ->whereColumn('linked_claim.billing_id', 'b.id')
+                            ->where('linked_claim.amount_paid', '>', 0);
+                    })
                     ->orWhere(function ($cash): void {
                         $cash->where('b.health_insurance', 'NONE')
                             ->whereIn('b.status', ['paid', 'balance_remaining', 'pending']);
