@@ -716,6 +716,8 @@ function App() {
   const [isInitializingPaystack, setIsInitializingPaystack] = useState(false)
   const [isVerifyingPaystack, setIsVerifyingPaystack] = useState(false)
   const [inventoryData, setInventoryData] = useState(null)
+  const [inventoryStocktakeProducts, setInventoryStocktakeProducts] = useState([])
+  const [isLoadingInventoryStocktakeProducts, setIsLoadingInventoryStocktakeProducts] = useState(false)
   const [inventoryLensData, setInventoryLensData] = useState(null)
   const [lensOrdersData, setLensOrdersData] = useState(null)
   const [inventoryBsmiData, setInventoryBsmiData] = useState(null)
@@ -744,6 +746,7 @@ function App() {
   const [isLoadingInventory, setIsLoadingInventory] = useState(false)
   const [isLoadingLensTracker, setIsLoadingLensTracker] = useState(false)
   const [isSavingInventoryProduct, setIsSavingInventoryProduct] = useState(false)
+  const [isSavingInventoryStocktake, setIsSavingInventoryStocktake] = useState(false)
   const [savingLensBillingId, setSavingLensBillingId] = useState(null)
   const [customerServiceData, setCustomerServiceData] = useState(null)
   const [customerServiceFilters, setCustomerServiceFilters] = useState(defaultCustomerServiceFilters())
@@ -842,18 +845,18 @@ function App() {
     }
   }
 
-  function buildInventoryParams(branchId) {
+  function buildInventoryParams(branchId, query = inventoryQuery) {
     const params = new URLSearchParams({
       branch_id: String(branchId),
-      page: String(inventoryQuery.page),
-      per_page: String(inventoryQuery.per_page),
+      page: String(query.page),
+      per_page: String(query.per_page),
     })
 
-    if (inventoryQuery.search) params.set('search', inventoryQuery.search)
-    if (inventoryQuery.category && inventoryQuery.category !== 'all') params.set('category', inventoryQuery.category)
-    if (inventoryQuery.date_from) params.set('date_from', inventoryQuery.date_from)
-    if (inventoryQuery.date_to) params.set('date_to', inventoryQuery.date_to)
-    if (inventoryQuery.as_of_at) params.set('as_of_at', inventoryQuery.as_of_at)
+    if (query.search) params.set('search', query.search)
+    if (query.category && query.category !== 'all') params.set('category', query.category)
+    if (query.date_from) params.set('date_from', query.date_from)
+    if (query.date_to) params.set('date_to', query.date_to)
+    if (query.as_of_at) params.set('as_of_at', query.as_of_at)
 
     return params
   }
@@ -2106,6 +2109,40 @@ function App() {
       cancelled = true
     }
   }, [activeView, inventoryQuery, scopedBranchId, session, token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadInventoryStocktakeProducts() {
+      if (!token || !session || activeView !== 'Inventory' || !scopedBranchId) {
+        setInventoryStocktakeProducts([])
+        setIsLoadingInventoryStocktakeProducts(false)
+        return
+      }
+
+      if (scopedBranchId === 0) {
+        setInventoryStocktakeProducts([])
+        setIsLoadingInventoryStocktakeProducts(false)
+        return
+      }
+
+      setInventoryStocktakeProducts([])
+      setIsLoadingInventoryStocktakeProducts(true)
+      try {
+        const response = await apiFetch(`/inventory/stocktake-products?branch_id=${scopedBranchId}`, { token })
+        if (!cancelled) setInventoryStocktakeProducts(response.products ?? [])
+      } catch (error) {
+        if (!cancelled) setInventoryError(error.message)
+      } finally {
+        if (!cancelled) setIsLoadingInventoryStocktakeProducts(false)
+      }
+    }
+
+    loadInventoryStocktakeProducts()
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, scopedBranchId, session, token])
 
   useEffect(() => {
     let cancelled = false
@@ -4038,6 +4075,42 @@ function App() {
     }
   }
 
+  async function saveInventoryStocktake(payload) {
+    setIsSavingInventoryStocktake(true)
+    setInventoryError('')
+    setInventorySuccess('')
+
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      const response = await apiFetch('/inventory/stocktakes', {
+        method: 'POST',
+        token,
+        body: { ...payload, branch_id: branchId },
+      })
+      const nextQuery = {
+        ...inventoryQuery,
+        search: response.product_code,
+        category: 'all',
+        as_of_at: payload.counted_at,
+        page: 1,
+      }
+      setInventoryFilters((current) => ({
+        ...current,
+        search: response.product_code,
+        category: 'all',
+        as_of_at: payload.counted_at,
+      }))
+      setInventoryQuery(nextQuery)
+      setInventorySuccess(`${response.product_code} stock count saved for ${response.branch_name}.`)
+      return response
+    } catch (error) {
+      setInventoryError(error.message)
+      throw error
+    } finally {
+      setIsSavingInventoryStocktake(false)
+    }
+  }
+
   async function saveInventoryProduct(payload) {
     setIsSavingInventoryProduct(true)
     setInventoryError('')
@@ -5345,6 +5418,10 @@ function App() {
             {activeView === 'Inventory' ? (
               <InventorySection
                 inventoryData={inventoryData}
+                inventoryBranchId={scopedBranchId}
+                inventoryBranchId={scopedBranchId}
+                inventoryStocktakeProducts={inventoryStocktakeProducts}
+                isLoadingInventoryStocktakeProducts={isLoadingInventoryStocktakeProducts}
                 inventoryFilters={inventoryFilters}
                 setInventoryFilters={setInventoryFilters}
                 setInventoryQuery={setInventoryQuery}
@@ -5355,6 +5432,8 @@ function App() {
                 setLensTrackerFilters={setLensTrackerFilters}
                 setLensTrackerQuery={setLensTrackerQuery}
                 saveInventoryProduct={saveInventoryProduct}
+                saveInventoryStocktake={saveInventoryStocktake}
+                isSavingInventoryStocktake={isSavingInventoryStocktake}
                 deleteInventoryProduct={deleteInventoryProduct}
                 isSavingInventoryProduct={isSavingInventoryProduct}
                 saveLensCostEntry={saveLensCostEntry}
@@ -5373,6 +5452,8 @@ function App() {
                 initialTab="Lens Tracker & Lens Spec"
                 showTabs={false}
                 inventoryData={inventoryData}
+                inventoryStocktakeProducts={inventoryStocktakeProducts}
+                isLoadingInventoryStocktakeProducts={isLoadingInventoryStocktakeProducts}
                 inventoryFilters={inventoryFilters}
                 setInventoryFilters={setInventoryFilters}
                 setInventoryQuery={setInventoryQuery}
@@ -5383,6 +5464,8 @@ function App() {
                 setLensTrackerFilters={setLensTrackerFilters}
                 setLensTrackerQuery={setLensTrackerQuery}
                 saveInventoryProduct={saveInventoryProduct}
+                saveInventoryStocktake={saveInventoryStocktake}
+                isSavingInventoryStocktake={isSavingInventoryStocktake}
                 deleteInventoryProduct={deleteInventoryProduct}
                 isSavingInventoryProduct={isSavingInventoryProduct}
                 inventoryError={inventoryError}

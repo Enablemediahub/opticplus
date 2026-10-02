@@ -26,6 +26,12 @@ function monthEndOptions(count = 24) {
   })
 }
 
+function localDateTimeNow() {
+  const now = new Date()
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+}
+
 export default function InventorySection(props) {
   const [activeTab, setActiveTab] = useState(props.initialTab ?? 'Stock Overview')
   const [lensDrafts, setLensDrafts] = useState({})
@@ -77,6 +83,7 @@ export default function InventorySection(props) {
 
       {activeTab === 'Stock Overview' ? (
         <StockOverviewTab
+          key={props.inventoryBranchId}
           {...props}
           isEditModalOpen={isEditModalOpen}
           setIsEditModalOpen={setIsEditModalOpen}
@@ -93,9 +100,17 @@ export default function InventorySection(props) {
 }
 
 function StockOverviewTab(props) {
+  const [stocktakeForm, setStocktakeForm] = useState(() => ({
+    product_id: '',
+    counted_stock: '',
+    counted_at: localDateTimeNow(),
+    notes: '',
+  }))
+
   const canManageInventory = Boolean(props.session?.is_admin || ['manager', 'accountant', 'ceo'].includes(props.session?.role))
   const movementTrackingEnabled = Boolean(props.inventoryData?.movement_tracking_enabled)
   const inventoryRecords = props.inventoryData?.records ?? []
+  const inventoryBranchReady = props.inventoryData?.branch_id === props.inventoryBranchId
   const movementFeed = props.inventoryData?.movement_feed ?? []
   const frameSalesBreakdown = props.inventoryData?.frame_sales_breakdown ?? []
   const hasSalesRange = Boolean(props.inventoryFilters.date_from || props.inventoryFilters.date_to)
@@ -292,6 +307,105 @@ function StockOverviewTab(props) {
               </button>
             </div>
           </form>
+        </article>
+      ) : null}
+
+      {canManageInventory ? (
+        <article className="panel patient-form-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Stocktake</p>
+              <h3>Record dated stock count</h3>
+            </div>
+            <span className="panel-tag">
+              {inventoryBranchReady ? props.inventoryData?.branch_name : 'Loading selected branch'}
+            </span>
+          </div>
+          <p className="muted-copy">
+            Enter the physical quantity for an existing frame code. The count is recorded at the selected date and time for this branch only.
+          </p>
+          {props.inventoryData?.branch_id === 0 ? (
+            <p className="muted-copy">Switch from Merged to Labadi or Madina to record a stock count.</p>
+          ) : !inventoryBranchReady ? (
+            <p className="muted-copy">Loading inventory for the selected branch...</p>
+          ) : (
+            <form
+              className="patient-form-grid"
+              onSubmit={async (event) => {
+                event.preventDefault()
+                try {
+                  await props.saveInventoryStocktake({
+                    product_id: Number(stocktakeForm.product_id),
+                    counted_stock: Number(stocktakeForm.counted_stock),
+                    counted_at: stocktakeForm.counted_at,
+                    notes: stocktakeForm.notes,
+                  })
+                  setStocktakeForm((current) => ({ ...current, counted_stock: '', notes: '' }))
+                } catch {}
+              }}
+            >
+              <label>
+                Existing frame code
+                <select
+                  value={stocktakeForm.product_id}
+                  onChange={(event) => setStocktakeForm((current) => ({ ...current, product_id: event.target.value }))}
+                  required
+                  disabled={props.isLoadingInventoryStocktakeProducts || !props.inventoryStocktakeProducts?.length}
+                >
+                  <option value="">
+                    {props.isLoadingInventoryStocktakeProducts
+                      ? 'Loading frame codes...'
+                      : props.inventoryStocktakeProducts?.length
+                        ? 'Choose frame code'
+                        : 'No frame codes at this branch'}
+                  </option>
+                  {(props.inventoryStocktakeProducts ?? []).map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.code} - {product.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Counted stock units
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={stocktakeForm.counted_stock}
+                  onChange={(event) => setStocktakeForm((current) => ({ ...current, counted_stock: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Counted at
+                <input
+                  type="datetime-local"
+                  value={stocktakeForm.counted_at}
+                  onChange={(event) => setStocktakeForm((current) => ({ ...current, counted_at: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Notes
+                <input
+                  value={stocktakeForm.notes}
+                  onChange={(event) => setStocktakeForm((current) => ({ ...current, notes: event.target.value }))}
+                  maxLength="200"
+                  placeholder="Optional count details"
+                />
+              </label>
+              <div className="filter-actions-row full-span">
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={props.isSavingInventoryStocktake || props.isLoadingInventoryStocktakeProducts || !props.inventoryStocktakeProducts?.length}
+                >
+                  {props.isSavingInventoryStocktake ? 'Saving count...' : 'Record stock count'}
+                </button>
+              </div>
+            </form>
+          )}
         </article>
       ) : null}
 

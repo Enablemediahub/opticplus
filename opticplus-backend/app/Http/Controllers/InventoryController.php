@@ -166,6 +166,120 @@ class InventoryController extends Controller
         ], 201);
     }
 
+    public function stocktakeProducts(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+
+        if ($branchId === 0) {
+            return response()->json(['branch_id' => 0, 'products' => []]);
+        }
+
+        $products = DB::table('products')
+            ->where('branch_id', $branchId)
+            ->where('category', 'Frame')
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'stock']);
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'products' => $products,
+        ]);
+    }
+
+    public function recordStocktake(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user?->isAdmin() && ! in_array($user?->normalized_role, ['manager', 'accountant', 'ceo'], true)) {
+            return response()->json(['message' => 'You do not have permission to record stock counts.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if (! in_array($branchId, [1, 2], true)) {
+            return response()->json(['message' => 'Choose Labadi or Madina before recording a stock count.'], 422);
+        }
+
+        if (! Schema::hasTable('inventory_movements')) {
+            return response()->json(['message' => 'Inventory movement tracking is not available.'], 503);
+        }
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer', 'min:1'],
+            'counted_stock' => ['required', 'integer', 'min:0'],
+            'counted_at' => ['required', 'date'],
+            'notes' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $countedAt = Carbon::parse($validated['counted_at']);
+        if ($countedAt->copy()->startOfMinute()->isAfter(now()->startOfMinute())) {
+            return response()->json(['message' => 'The stock count date cannot be in the future.'], 422);
+        }
+        if (strlen((string) $validated['counted_at']) === 16) {
+            $countedAt->endOfMinute();
+        }
+
+        return DB::transaction(function () use ($validated, $countedAt, $branchId, $user): JsonResponse {
+            $product = DB::table('products')
+                ->where('id', $validated['product_id'])
+                ->where('branch_id', $branchId)
+                ->lockForUpdate()
+                ->first(['id', 'code', 'name']);
+
+            if (! $product) {
+                return response()->json(['message' => 'Frame code was not found at this branch.'], 404);
+            }
+
+            $stockBefore = (int) DB::table('inventory_movements')
+                ->where('product_id', $product->id)
+                ->where('branch_id', $branchId)
+                ->where('movement_at', '<=', $countedAt->toDateTimeString())
+                ->sum('quantity_change');
+            $countedStock = (int) $validated['counted_stock'];
+            $quantityChange = $countedStock - $stockBefore;
+            $notes = 'Stocktake count: '.$countedStock.' units.';
+            if (! empty($validated['notes'])) {
+                $notes .= ' '.trim($validated['notes']);
+            }
+
+            DB::table('inventory_movements')->insert([
+                'product_id' => $product->id,
+                'branch_id' => $branchId,
+                'movement_type' => 'adjustment',
+                'quantity_change' => $quantityChange,
+                'stock_before' => $stockBefore,
+                'stock_after' => $countedStock,
+                'reference_table' => 'stocktake',
+                'reference_id' => null,
+                'notes' => $notes,
+                'created_by' => $user?->id,
+                'movement_at' => $countedAt->toDateTimeString(),
+                'created_at' => now(),
+            ]);
+
+            $currentStock = (int) DB::table('inventory_movements')
+                ->where('product_id', $product->id)
+                ->where('branch_id', $branchId)
+                ->sum('quantity_change');
+
+            DB::table('products')
+                ->where('id', $product->id)
+                ->where('branch_id', $branchId)
+                ->update(['stock' => $currentStock]);
+
+            return response()->json([
+                'message' => 'Stock count recorded successfully.',
+                'branch_id' => $branchId,
+                'branch_name' => $this->branchName($branchId),
+                'product_code' => $product->code,
+                'counted_stock' => $countedStock,
+                'stock_before_count' => $stockBefore,
+                'quantity_change' => $quantityChange,
+                'current_stock' => $currentStock,
+                'counted_at' => $countedAt->toDateTimeString(),
+            ], 201);
+        });
+    }
+
     public function update(Request $request, int $productId): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);

@@ -109,6 +109,14 @@
 }
 
 @media print {
+  #root,
+  .app-shell {
+    zoom: 1;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -135,8 +143,10 @@
   }
 }
 .app-shell {
-  min-height: 100vh;
-  height: 100vh;
+  zoom: 0.8;
+  width: 125vw;
+  min-height: 125vh;
+  height: 125vh;
   overflow: hidden;
   color: var(--text-primary);
   background:
@@ -155,15 +165,15 @@
 
 .login-shell,
 .portal-shell {
-  min-height: 100vh;
+  min-height: 125vh;
 }
 
 .login-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 560px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 480px);
   position: relative;
   isolation: isolate;
-  height: 100vh;
+  height: 125vh;
   overflow: hidden;
   align-items: center;
 }
@@ -174,7 +184,7 @@
 }
 
 .login-shell-modern {
-  min-height: 100vh;
+  min-height: 125vh;
   align-items: stretch;
   box-sizing: border-box;
   background:
@@ -319,7 +329,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 24px;
+  gap: 16px;
   background: rgba(11, 20, 38, 0.74);
   backdrop-filter: blur(26px);
 }
@@ -329,8 +339,9 @@
 }
 
 .login-shell-modern .login-panel {
-  width: min(100%, 560px);
-  min-height: min(720px, calc(100vh - 56px));
+  width: min(100%, 480px);
+  min-height: auto;
+  padding: 24px;
   align-self: center;
   justify-self: end;
   margin: 0;
@@ -375,7 +386,7 @@
   background: transparent;
   color: #eff6ff;
   padding: 20px 20px 20px 28px;
-  min-height: min(720px, calc(100vh - 56px));
+  min-height: min(720px, calc(125vh - 70px));
   justify-content: center;
   align-items: flex-start;
 }
@@ -393,7 +404,7 @@
 .login-brand-stack {
   display: grid;
   gap: 8px;
-  padding: 18px 20px;
+  padding: 14px 16px;
   border-radius: 22px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(15, 23, 42, 0.16));
@@ -425,7 +436,7 @@
 }
 
 .login-hero-logo-wrap {
-  width: clamp(160px, 20vw, 220px);
+  width: clamp(140px, 16vw, 190px);
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -443,7 +454,7 @@
 .login-hero-copy h1 {
   margin: 0;
   color: #ffffff;
-  font-size: clamp(4rem, 12vw, 10rem);
+  font-size: clamp(3.25rem, 8vw, 7rem);
   line-height: 0.88;
   font-weight: 800;
   letter-spacing: -0.07em;
@@ -585,17 +596,29 @@
 
 .login-form {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
-.login-form label,
+.login-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
 .branch-select {
   display: grid;
   gap: 8px;
   color: var(--text-secondary);
 }
 
-.login-form input,
+.login-form input {
+  padding: 14px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
 .branch-select select {
   padding: 16px 20px;
   border-radius: 999px;
@@ -624,7 +647,8 @@
 
 .password-toggle {
   min-width: 76px;
-  padding: 12px 14px;
+  min-height: 44px;
+  padding: 8px 12px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
@@ -705,7 +729,7 @@
 .portal-shell {
   display: grid;
   grid-template-columns: 280px 1fr;
-  height: 100vh;
+  height: 125vh;
   overflow: hidden;
 }
 
@@ -717,7 +741,7 @@
   display: flex;
   flex-direction: column;
   padding: 28px 20px;
-  height: calc(100vh - 32px);
+  height: calc(125vh - 40px);
   overflow-y: auto;
   margin: 16px 0 16px 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1060,7 +1084,7 @@
 
 .portal-main {
   min-width: 0;
-  height: 100vh;
+  height: 125vh;
   overflow-y: auto;
   padding: 28px;
 }
@@ -1083,12 +1107,12 @@
 }
 
 .patient-form-fullscreen-main .patients-section {
-  min-height: 100vh;
+  min-height: 125vh;
   padding: 20px 24px 24px;
 }
 
 .patient-form-fullscreen-main .optometrist-form-page-full {
-  min-height: calc(100vh - 112px);
+  min-height: calc(125vh - 140px);
 }
 
 .portal-header {
@@ -1845,7 +1869,7 @@
 
 .extract-report-preview-frame {
   width: 100%;
-  min-height: min(78vh, 860px);
+  min-height: min(97.5vh, 860px);
   border: 1px solid var(--border-soft);
   border-radius: 18px;
   background: #ffffff;
@@ -1963,7 +1987,7 @@
 }
 
 .report-editor-shell {
-  max-height: min(68vh, 760px);
+  max-height: min(85vh, 760px);
   overflow: auto;
 }
 
@@ -4468,14 +4492,14 @@
 .optometrist-exam-modal {
   max-width: 1680px;
   width: min(1680px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
+  max-height: calc(125vh - 30px);
   overflow: hidden;
 }
 
 .optometrist-exam-workspace.is-page {
   display: grid;
   gap: 16px;
-  min-height: calc(100vh - 240px);
+  min-height: calc(125vh - 300px);
 }
 
 .optometrist-exam-workspace.is-page .optometrist-exam-tabs {
@@ -4508,13 +4532,13 @@
 
 .patient-records-modal {
   width: min(1680px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
+  max-height: calc(125vh - 30px);
   overflow-y: auto;
 }
 
 .patient-management-modal {
   width: min(1680px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
+  max-height: calc(125vh - 30px);
   overflow-y: auto;
 }
 
@@ -6844,7 +6868,7 @@
 
 .modal-panel {
   width: min(1080px, 100%);
-  max-height: calc(100vh - 48px);
+  max-height: calc(125vh - 60px);
   overflow: auto;
   border: 1px solid var(--border-soft);
   border-radius: 24px;
@@ -7746,7 +7770,7 @@
   bottom: 102px;
   z-index: 44;
   width: min(960px, calc(100vw - 32px));
-  max-height: min(78vh, 760px);
+  max-height: min(97.5vh, 760px);
   padding: 20px;
   overflow: auto;
   border-radius: 28px;
@@ -9633,6 +9657,7 @@ td.billing-balance-due,
 @media (max-width: 920px) {
   .app-shell {
     height: auto;
+    min-height: 125vh;
     overflow: auto;
   }
 
@@ -9640,7 +9665,7 @@ td.billing-balance-due,
   .portal-shell {
     grid-template-columns: 1fr;
     height: auto;
-    min-height: 100vh;
+    min-height: 125vh;
     overflow: visible;
   }
 
@@ -9653,7 +9678,7 @@ td.billing-balance-due,
     width: min(320px, calc(100vw - 32px));
     margin: 0;
     height: auto;
-    max-height: calc(100vh - 32px);
+    max-height: calc(125vh - 40px);
     overflow-y: auto;
     border-right: 0;
     border-bottom: 0;
@@ -9716,10 +9741,10 @@ td.billing-balance-due,
   }
 
   .login-shell-modern .login-panel {
-    width: 100%;
+    width: min(100%, 480px);
     min-height: auto;
-    align-self: stretch;
-    justify-self: stretch;
+    align-self: center;
+    justify-self: center;
     margin: 0;
     border-radius: 28px;
   }
@@ -9736,11 +9761,11 @@ td.billing-balance-due,
   }
 
   .login-hero-logo-wrap {
-    width: min(100%, 260px);
+    width: min(100%, 210px);
   }
 
   .login-hero-copy h1 {
-    font-size: clamp(2.8rem, 13vw, 5.2rem);
+    font-size: clamp(2.5rem, 9vw, 4.25rem);
   }
 
   .portal-main {
@@ -9906,7 +9931,7 @@ td.billing-balance-due,
   .modal-panel {
     padding: 18px;
     border-radius: 20px;
-    max-height: calc(100vh - 24px);
+    max-height: calc(125vh - 30px);
   }
 
   .patient-payment-row {
@@ -9995,14 +10020,13 @@ td.billing-balance-due,
   }
 }
 
-@media (max-height: 900px) {
+@media (max-height: 900px) and (min-width: 921px) {
   .login-shell-modern {
     padding: 16px;
   }
 
-  .brand-panel-modern,
-  .login-shell-modern .login-panel {
-    min-height: min(640px, calc(100vh - 32px));
+  .brand-panel-modern {
+    min-height: min(640px, calc(125vh - 40px));
   }
 }
 /* The Monitor: annual workbook */

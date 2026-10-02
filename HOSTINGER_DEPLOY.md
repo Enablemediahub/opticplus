@@ -35,6 +35,16 @@ That script:
 - places the built frontend files into `tmp/hostinger-package/public`
 - removes the local backend `.env` from the package
 - writes a production starter file to `tmp/hostinger-package/.env.hostinger.example`
+- writes `tmp/hostinger-filezilla-manifest.txt` with package-relative files to upload and files to delete manually
+- remembers file sizes and last-write times in `tmp/hostinger-filezilla-baseline.json` to list changes against the previous local package build
+
+The first run has no local baseline, so the manifest marks every package file for upload. Later runs list added or changed files compared with the previous package build. This is a local comparison only; it cannot detect edits made directly on Hostinger. Incremental comparison uses file size and last-write time, so use `-FullUpload` if you are unsure whether a same-size edit preserved its timestamp:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-hostinger-package.ps1 -FullUpload
+```
+
+Review the manifest before using FileZilla. Upload each listed path to the same relative path under the Laravel application root, and manually remove any listed deleted paths. The local `.env` and Laravel runtime logs/cache/session/view files are excluded. Each build recreates the generated `tmp/hostinger-package` staging folder from the current backend and frontend; do not keep manual-only files there.
 
 ## Hostinger Upload Layout
 

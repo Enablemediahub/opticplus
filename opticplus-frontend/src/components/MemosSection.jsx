@@ -281,6 +281,19 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
       setSelectedMemoId(response.memo_id ?? null)
       await reloadListAndDetail(response.memo_id)
     } catch (saveError) {
+      const savedDetail = await apiFetch(`/memos/${selectedMemoId}?branch_id=${decisionBranchId}`, { token }).catch(() => null)
+      if (savedDetail?.memo?.approval_status === decisionForm.decision) {
+        const message = `Memo ${decisionForm.decision} successfully.`
+        setSuccess(message)
+        pushSuccessToast?.(message)
+        setDecisionForm(defaultDecisionForm())
+        const nextFilters = { ...defaultFilters(), status: 'all', scope: 'workspace', page: 1 }
+        setFilters(nextFilters)
+        setQuery(nextFilters)
+        await reloadListAndDetail(selectedMemoId)
+        return
+      }
+
       setError(saveError.message)
     } finally {
       setIsSaving(false)
@@ -341,6 +354,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
     setIsDeciding(true)
     setError('')
     setSuccess('')
+    const decisionBranchId = detail?.memo?.branch_id ?? branchId
 
     try {
       const payload = new FormData()
@@ -348,7 +362,6 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
       payload.append('approval_notes', decisionForm.approval_notes)
       if (decisionForm.gm_signature) payload.append('gm_signature', decisionForm.gm_signature)
 
-      const decisionBranchId = detail?.memo?.branch_id ?? branchId
       const response = await apiFetch(`/memos/${selectedMemoId}/decision?branch_id=${decisionBranchId}`, {
         method: 'POST',
         token,
@@ -356,6 +369,7 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
       })
 
       setSuccess(response.message)
+      pushSuccessToast?.(response.message)
       setDecisionForm(defaultDecisionForm())
       // Return to workspace register so the newly approved/rejected memo stays visible.
       const nextFilters = { ...defaultFilters(), status: 'all', scope: 'workspace', page: 1 }
@@ -737,6 +751,37 @@ export default function MemosSection({ apiFetch, token, session, selectedBranchI
               </tbody>
             </table>
           </div>
+
+          {memoData?.pagination ? (
+            <div className="pagination-bar">
+              <span>
+                Showing {memoData.pagination.total
+                  ? (memoData.pagination.page - 1) * memoData.pagination.per_page + 1
+                  : 0}
+                -{Math.min(memoData.pagination.page * memoData.pagination.per_page, memoData.pagination.total)}
+                {' '}of {memoData.pagination.total} memos
+              </span>
+              <div className="pagination-actions">
+                <span>Page {memoData.pagination.page} of {Math.max(memoData.pagination.total_pages, 1)}</span>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={isLoading || memoData.pagination.page <= 1}
+                  onClick={() => setQuery((current) => ({ ...current, page: memoData.pagination.page - 1 }))}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={isLoading || memoData.pagination.page >= memoData.pagination.total_pages}
+                  onClick={() => setQuery((current) => ({ ...current, page: memoData.pagination.page + 1 }))}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
         </article>
 
         <article className="panel">

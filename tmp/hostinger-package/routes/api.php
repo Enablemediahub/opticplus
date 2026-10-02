@@ -118,6 +118,8 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::patch('/insurance/claims/{claimId}/mark-paid', [InsuranceController::class, 'markPaid']);
         Route::patch('/insurance/claims/{claimId}/mark-pending', [InsuranceController::class, 'markPending']);
         Route::get('/inventory', [InventoryController::class, 'overview']);
+        Route::get('/inventory/stocktake-products', [InventoryController::class, 'stocktakeProducts']);
+        Route::post('/inventory/stocktakes', [InventoryController::class, 'recordStocktake']);
         Route::post('/inventory', [InventoryController::class, 'store']);
         Route::put('/inventory/{productId}', [InventoryController::class, 'update']);
         Route::delete('/inventory/{productId}', [InventoryController::class, 'destroy']);
