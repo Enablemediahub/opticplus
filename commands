@@ -1,0 +1,3 @@
+cd "c:\xampp\htdocs\opticplus"
+powershell -ExecutionPolicy Bypass -File .\start-portal.ps1
+powershell -ExecutionPolicy Bypass -File .\stop-portal.ps1

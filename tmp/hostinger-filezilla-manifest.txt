@@ -1,0 +1,17 @@
+﻿Hostinger FileZilla sync manifest
+Generated: 2026-09-30 22:08:53
+Local package: C:\xampp\htdocs\opticplus\tmp\hostinger-package
+Remote destination: Laravel application root; keep each package-relative path unchanged.
+Mode: Incremental; compared with the previous local package build, not the Hostinger server.
+
+Files to upload (3):
+  public/assets/index-DivSOlnC.js
+  public/assets/index-MC8oK_GS.css
+  public/index.html
+
+Files to delete manually on Hostinger (1):
+  public/assets/index-B_S_YFeK.js
+
+The local .env and Laravel runtime logs/cache/session/view files are excluded.
+Incremental comparison uses file size and last-write time; use -FullUpload if unsure about a same-size, preserved-time edit.
+Review the list before uploading. A local baseline cannot confirm what is currently on Hostinger.
