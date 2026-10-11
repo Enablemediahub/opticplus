@@ -656,7 +656,8 @@ CREATE TABLE IF NOT EXISTS `products` (
   `stock` int(11) NOT NULL,
   `manufacturer_id` int(11) DEFAULT NULL,
   `min_price` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `max_price` decimal(10,2) NOT NULL DEFAULT 0.00
+  `max_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `cost_price` decimal(10,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 ALTER TABLE `products` ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `code` (`code`),

@@ -328,6 +328,46 @@ class InventoryController extends Controller
         ]);
     }
 
+    public function updateFrameCost(Request $request, int $productId): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! ($user?->isAdmin() ?? false) && ! in_array($role, ['manager', 'accountant', 'ceo'], true)) {
+            return response()->json(['message' => 'You do not have permission to update frame cost prices.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $product = DB::table('products')
+            ->where('id', $productId)
+            ->where('branch_id', $branchId)
+            ->first(['id', 'category']);
+
+        if (! $product) {
+            return response()->json(['message' => 'Inventory item not found for this branch.'], 404);
+        }
+
+        if (! in_array(strtolower(trim((string) $product->category)), ['frame', 'frames'], true)) {
+            return response()->json(['message' => 'Cost prices can only be set for frame products.'], 422);
+        }
+
+        DB::table('products')
+            ->where('id', $productId)
+            ->where('branch_id', $branchId)
+            ->update([
+                'cost_price' => isset($validated['cost_price']) ? round((float) $validated['cost_price'], 2) : null,
+            ]);
+
+        return response()->json(['message' => 'Frame cost price updated successfully.']);
+    }
+
     public function destroy(Request $request, int $productId): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
@@ -404,6 +444,7 @@ class InventoryController extends Controller
                 'stock',
                 'min_price',
                 'max_price',
+                'cost_price',
                 'branch_id',
             ]);
 
@@ -517,6 +558,7 @@ class InventoryController extends Controller
                 ->join('billing as b', 'bf.billing_id', '=', 'b.id')
                 ->join('products as p', function ($join) use ($branchId): void {
                     $join->on('bf.frame_code_id', '=', 'p.code');
+                    $join->on('p.branch_id', '=', 'b.branch_id');
                     if ($branchId > 0) {
                         $join->where('p.branch_id', '=', $branchId);
                     }
@@ -528,7 +570,7 @@ class InventoryController extends Controller
                 })
                 ->when($dateFrom !== '', fn ($query) => $query->whereDate('b.date', '>=', $dateFrom))
                 ->when($dateTo !== '', fn ($query) => $query->whereDate('b.date', '<=', $dateTo))
-                ->groupBy('p.id', 'p.code', 'p.name', 'p.category', 'p.grade')
+                ->groupBy('p.id', 'p.code', 'p.name', 'p.category', 'p.grade', 'p.cost_price')
                 ->orderByDesc(DB::raw('COUNT(*)'))
                 ->orderBy('p.name')
                 ->get([
@@ -537,8 +579,12 @@ class InventoryController extends Controller
                     'p.name as product_name',
                     'p.category as product_category',
                     'p.grade as product_grade',
+                    'p.cost_price',
                     DB::raw('COUNT(*) as sold_count'),
                     DB::raw('SUM(COALESCE(bf.frame_price, 0)) as sold_value'),
+                    DB::raw('SUM(CASE WHEN p.cost_price IS NOT NULL THEN p.cost_price ELSE 0 END) as total_cost'),
+                    DB::raw('SUM(CASE WHEN p.cost_price IS NOT NULL THEN COALESCE(bf.frame_price, 0) - p.cost_price ELSE 0 END) as total_profit'),
+                    DB::raw('SUM(CASE WHEN p.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count'),
                     DB::raw('MAX(b.date) as last_sold_at'),
                 ]);
 
@@ -556,8 +602,12 @@ class InventoryController extends Controller
                 'product_name' => $row->product_name,
                 'product_category' => $row->product_category,
                 'product_grade' => $row->product_grade,
+                'cost_price' => $row->cost_price !== null ? round((float) $row->cost_price, 2) : null,
                 'sold_count' => (int) $row->sold_count,
                 'sold_value' => round((float) $row->sold_value, 2),
+                'total_cost' => round((float) $row->total_cost, 2),
+                'total_profit' => round((float) $row->total_profit, 2),
+                'missing_cost_count' => (int) $row->missing_cost_count,
                 'last_sold_at' => $row->last_sold_at,
             ])->values();
 

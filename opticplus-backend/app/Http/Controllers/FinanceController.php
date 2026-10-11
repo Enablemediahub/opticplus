@@ -343,6 +343,12 @@ class FinanceController extends Controller
         $this->ensureMonitorBudgetsSchema();
         $start = sprintf('%d-01-01', $year);
         $end = sprintf('%d-12-31', $year);
+        $extractionFilters = $request->validate([
+            'extraction_from' => ['nullable', 'date', 'required_with:extraction_to', 'before_or_equal:extraction_to'],
+            'extraction_to' => ['nullable', 'date', 'required_with:extraction_from', 'after_or_equal:extraction_from'],
+        ]);
+        $extractionStart = $extractionFilters['extraction_from'] ?? $start;
+        $extractionEnd = $extractionFilters['extraction_to'] ?? $end;
         $scope = fn ($query, string $column = 'branch_id') => $this->applyBranchScope($query, $column, $branchId);
 
         $billing = tap(DB::table('billing')->whereBetween('date', [$start, $end]), $scope)
@@ -677,6 +683,108 @@ class FinanceController extends Controller
         $daily = tap(DB::table('sales')->whereBetween('date', [$start, $end])->where('payment_method', '!=', 'Insurance'), $scope)
             ->selectRaw('date, SUM(amount_paid) total')->groupBy('date')->orderBy('date')->get();
 
+        $dailyExtractionByDate = [];
+        $lensExtractionRows = tap(
+            DB::table('billing as b')
+                ->leftJoin('lens_costs as lc', function ($join): void {
+                    $join->on('lc.billing_id', '=', 'b.id')
+                        ->on('lc.branch_id', '=', 'b.branch_id');
+                })
+                ->whereBetween('b.date', [$extractionStart, $extractionEnd])
+                ->where('b.lens_price', '>', 0),
+            fn ($query) => $scope($query, 'b.branch_id')
+        )
+            ->selectRaw('
+                DATE(b.date) as sale_date,
+                SUM(b.lens_price) as sales,
+                SUM(CASE WHEN lc.cost_price IS NOT NULL THEN lc.cost_price ELSE 0 END) as cost,
+                SUM(CASE WHEN lc.cost_price IS NOT NULL THEN b.lens_price - lc.cost_price ELSE 0 END) as profit,
+                COUNT(b.id) as sold_count,
+                SUM(CASE WHEN lc.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count
+            ')
+            ->groupByRaw('DATE(b.date)')
+            ->get();
+
+        foreach ($lensExtractionRows as $row) {
+            $date = (string) $row->sale_date;
+            $dailyExtractionByDate[$date] ??= [
+                'date' => $date,
+                'lens_sales' => 0.0,
+                'lens_cost' => 0.0,
+                'lens_profit' => 0.0,
+                'lens_sold_count' => 0,
+                'lens_missing_cost_count' => 0,
+                'frame_sales' => 0.0,
+                'frame_cost' => 0.0,
+                'frame_profit' => 0.0,
+                'frames_sold_count' => 0,
+                'frame_missing_cost_count' => 0,
+            ];
+            $dailyExtractionByDate[$date]['lens_sales'] = (float) $row->sales;
+            $dailyExtractionByDate[$date]['lens_cost'] = (float) $row->cost;
+            $dailyExtractionByDate[$date]['lens_profit'] = (float) $row->profit;
+            $dailyExtractionByDate[$date]['lens_sold_count'] = (int) $row->sold_count;
+            $dailyExtractionByDate[$date]['lens_missing_cost_count'] = (int) $row->missing_cost_count;
+        }
+
+        $frameExtractionRows = tap(
+            DB::table('billing_frames as bf')
+                ->join('billing as b', 'bf.billing_id', '=', 'b.id')
+                ->leftJoin('products as p', function ($join): void {
+                    $join->on('p.code', '=', 'bf.frame_code_id')
+                        ->on('p.branch_id', '=', 'b.branch_id');
+                })
+                ->whereBetween('b.date', [$extractionStart, $extractionEnd]),
+            fn ($query) => $scope($query, 'b.branch_id')
+        )
+            ->selectRaw('
+                DATE(b.date) as sale_date,
+                SUM(COALESCE(bf.frame_price, 0)) as sales,
+                SUM(CASE WHEN p.cost_price IS NOT NULL THEN p.cost_price ELSE 0 END) as cost,
+                SUM(CASE WHEN p.cost_price IS NOT NULL THEN COALESCE(bf.frame_price, 0) - p.cost_price ELSE 0 END) as profit,
+                COUNT(*) as sold_count,
+                SUM(CASE WHEN p.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count
+            ')
+            ->groupByRaw('DATE(b.date)')
+            ->get();
+
+        foreach ($frameExtractionRows as $row) {
+            $date = (string) $row->sale_date;
+            $dailyExtractionByDate[$date] ??= [
+                'date' => $date,
+                'lens_sales' => 0.0,
+                'lens_cost' => 0.0,
+                'lens_profit' => 0.0,
+                'lens_sold_count' => 0,
+                'lens_missing_cost_count' => 0,
+                'frame_sales' => 0.0,
+                'frame_cost' => 0.0,
+                'frame_profit' => 0.0,
+                'frames_sold_count' => 0,
+                'frame_missing_cost_count' => 0,
+            ];
+            $dailyExtractionByDate[$date]['frame_sales'] = (float) $row->sales;
+            $dailyExtractionByDate[$date]['frame_cost'] = (float) $row->cost;
+            $dailyExtractionByDate[$date]['frame_profit'] = (float) $row->profit;
+            $dailyExtractionByDate[$date]['frames_sold_count'] = (int) $row->sold_count;
+            $dailyExtractionByDate[$date]['frame_missing_cost_count'] = (int) $row->missing_cost_count;
+        }
+
+        $dailyExtraction = collect($dailyExtractionByDate)
+            ->sortKeys()
+            ->values()
+            ->map(fn (array $day) => [
+                ...$day,
+                'lens_sales' => round($day['lens_sales'], 2),
+                'lens_cost' => round($day['lens_cost'], 2),
+                'lens_profit' => round($day['lens_profit'], 2),
+                'frame_sales' => round($day['frame_sales'], 2),
+                'frame_cost' => round($day['frame_cost'], 2),
+                'frame_profit' => round($day['frame_profit'], 2),
+                'total_cost_to_set_aside' => round($day['lens_cost'] + $day['frame_cost'], 2),
+                'gross_profit_to_bank' => round($day['lens_profit'] + $day['frame_profit'], 2),
+            ]);
+
         return response()->json([
             'year' => $year,
             'branch_id' => $branchId,
@@ -696,6 +804,7 @@ class FinanceController extends Controller
             'collection_sources' => collect($collectionSources)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($amount) => round($amount, 2), $values)])->values(),
             'budgets' => Schema::hasTable('monitor_budgets') ? DB::table('monitor_budgets')->where('branch_id', $branchId)->where('year', $year)->pluck('amount', 'line_key') : [],
             'daily_sales' => $daily,
+            'daily_extraction' => $dailyExtraction,
         ]);
     }
 

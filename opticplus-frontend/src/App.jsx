@@ -746,6 +746,7 @@ function App() {
   const [isLoadingInventory, setIsLoadingInventory] = useState(false)
   const [isLoadingLensTracker, setIsLoadingLensTracker] = useState(false)
   const [isSavingInventoryProduct, setIsSavingInventoryProduct] = useState(false)
+  const [savingFrameCostId, setSavingFrameCostId] = useState(null)
   const [isSavingInventoryStocktake, setIsSavingInventoryStocktake] = useState(false)
   const [savingLensBillingId, setSavingLensBillingId] = useState(null)
   const [customerServiceData, setCustomerServiceData] = useState(null)
@@ -4148,6 +4149,32 @@ function App() {
     }
   }
 
+  async function saveFrameCost(productId, costPrice) {
+    setSavingFrameCostId(productId)
+    setInventoryError('')
+    setInventorySuccess('')
+
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      await apiFetch(`/inventory/${productId}/cost-price`, {
+        method: 'PUT',
+        token,
+        body: {
+          branch_id: branchId,
+          cost_price: costPrice === '' ? null : Number(costPrice),
+        },
+      })
+
+      const inventoryResponse = await apiFetch(`/inventory?${buildInventoryParams(branchId).toString()}`, { token })
+      setInventoryData(inventoryResponse)
+      setInventorySuccess('Frame cost price saved successfully.')
+    } catch (error) {
+      setInventoryError(error.message)
+    } finally {
+      setSavingFrameCostId(null)
+    }
+  }
+
   async function deleteInventoryProduct(productId) {
     setIsSavingInventoryProduct(true)
     setInventoryError('')
@@ -5432,6 +5459,8 @@ function App() {
                 setLensTrackerFilters={setLensTrackerFilters}
                 setLensTrackerQuery={setLensTrackerQuery}
                 saveInventoryProduct={saveInventoryProduct}
+                saveFrameCost={saveFrameCost}
+                savingFrameCostId={savingFrameCostId}
                 saveInventoryStocktake={saveInventoryStocktake}
                 isSavingInventoryStocktake={isSavingInventoryStocktake}
                 deleteInventoryProduct={deleteInventoryProduct}

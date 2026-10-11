@@ -1,17 +1,23 @@
 ﻿Hostinger FileZilla sync manifest
-Generated: 2026-09-30 22:08:53
-Local package: C:\xampp\htdocs\opticplus\tmp\hostinger-package
+Generated: 2026-10-11 21:00:02
+Local package: C:\xampp\htdocs\Opticplus\tmp\hostinger-package
 Remote destination: Laravel application root; keep each package-relative path unchanged.
-Mode: Incremental; compared with the previous local package build, not the Hostinger server.
+Mode: Incremental deployment for the current inventory and Monitor changes; this is not a full upload.
 
-Files to upload (3):
-  public/assets/index-DivSOlnC.js
-  public/assets/index-MC8oK_GS.css
+Files to upload (9):
+  app/Http/Controllers/FinanceController.php
+  app/Http/Controllers/InventoryController.php
+  database/migrations/2026_10_11_000001_add_cost_price_to_products_table.php
+  database/schema/generated_schema_manifest.php
+  database/schema/opticplus_full_schema.mysql.sql
+  routes/api.php
+  public/assets/index-Beej20LZ.css
+  public/assets/index-d3FUpwMd.js
   public/index.html
 
-Files to delete manually on Hostinger (1):
-  public/assets/index-B_S_YFeK.js
+Files to delete manually on Hostinger (2):
+  public/assets/index-DivSOlnC.js
+  public/assets/index-MC8oK_GS.css
 
-The local .env and Laravel runtime logs/cache/session/view files are excluded.
-Incremental comparison uses file size and last-write time; use -FullUpload if unsure about a same-size, preserved-time edit.
-Review the list before uploading. A local baseline cannot confirm what is currently on Hostinger.
+After upload, run `php artisan migrate --force` once to add products.cost_price. Do not overwrite the production .env.
+Only upload the paths above; the staging folder contains the full Laravel package for reference.
