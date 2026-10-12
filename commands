@@ -1,3 +1,7 @@
-cd "c:\xampp\htdocs\opticplus"
+# macOS
+./start-portal.sh
+./stop-portal.sh
+
+# Windows PowerShell (run from the project root)
 powershell -ExecutionPolicy Bypass -File .\start-portal.ps1
 powershell -ExecutionPolicy Bypass -File .\stop-portal.ps1
