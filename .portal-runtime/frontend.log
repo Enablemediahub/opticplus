@@ -3,6 +3,10 @@
 > vite --configLoader runner --host 127.0.0.1 --port 5173
 
 
-  VITE v8.0.7  ready in 705 ms
+  VITE v8.0.7  ready in 68 ms
 
   ➜  Local:   http://127.0.0.1:5173/
+12:17:12 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+12:17:19 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+12:19:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+12:19:29 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
