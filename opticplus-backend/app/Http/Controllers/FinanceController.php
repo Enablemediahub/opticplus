@@ -1340,6 +1340,8 @@ class FinanceController extends Controller
             ->map(function ($expense) {
                 $isLensLinked = Schema::hasColumn('expenses', 'source_type')
                     && (string) ($expense->source_type ?? '') === 'lens_cost';
+                $isFrameReserved = Schema::hasColumn('expenses', 'source_type')
+                    && (string) ($expense->source_type ?? '') === 'frame_reservation';
 
                 return [
                     'expense_id' => $expense->expense_id,
@@ -1351,6 +1353,7 @@ class FinanceController extends Controller
                     'source_type' => $expense->source_type ?? null,
                     'source_id' => isset($expense->source_id) ? (int) $expense->source_id : null,
                     'is_lens_linked' => $isLensLinked,
+                    'is_frame_reserved' => $isFrameReserved,
                 ];
             });
 
@@ -1514,6 +1517,11 @@ class FinanceController extends Controller
                 'message' => 'Lens cost expenses are controlled by Lens Tracker. Update the lens cost there instead.',
             ], 422);
         }
+        if ($this->isLinkedFrameReservationExpense($current)) {
+            return response()->json([
+                'message' => 'Frame reservation expenses are controlled by Frames Tracker.',
+            ], 422);
+        }
 
         $validated = $request->validate([
             'description' => ['required', 'string', 'max:255'],
@@ -1577,6 +1585,10 @@ class FinanceController extends Controller
                     'message' => 'Lens cost expenses are controlled by Lens Tracker. Only the General Manager can remove duplicate lens expense rows here.',
                 ], 422);
             }
+        } elseif ($this->isLinkedFrameReservationExpense($current)) {
+            return response()->json([
+                'message' => 'Frame reservation expenses are controlled by Frames Tracker.',
+            ], 422);
         } elseif ($response = $this->ensureExpenseWriteAccess($request)) {
             return $response;
         }
@@ -3398,6 +3410,12 @@ class FinanceController extends Controller
     {
         return Schema::hasColumn('expenses', 'source_type')
             && (string) ($expense->source_type ?? '') === 'lens_cost';
+    }
+
+    private function isLinkedFrameReservationExpense(object $expense): bool
+    {
+        return Schema::hasColumn('expenses', 'source_type')
+            && (string) ($expense->source_type ?? '') === 'frame_reservation';
     }
 
     private function canDeleteLinkedLensCostExpense(?object $user): bool

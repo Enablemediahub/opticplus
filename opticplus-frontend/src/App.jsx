@@ -152,7 +152,7 @@ const receptionistNavSections = [
       { label: 'Expenses', navLabel: 'Add Expenses', icon: 'alert' },
       { label: 'Insurance', navLabel: 'Insurance', icon: 'shield' },
       { label: 'Inventory', navLabel: 'Inventory', icon: 'inventory' },
-      { label: 'Lens Tracker', navLabel: 'Lens Tracker', icon: 'glasses' },
+      { label: 'Product Tracker', navLabel: 'Product Tracker', icon: 'inventory' },
       { label: 'Notes', navLabel: 'Notes & Reminders', icon: 'message' },
     ],
   },
@@ -317,6 +317,7 @@ const viewHashMap = {
   'BSMI Tracking': '#/bsmi-tracking',
   'Assets Register': '#/assets-register',
   'Lens Tracker': '#/lens-tracker',
+  'Product Tracker': '#/product-tracker',
   'Lens Orders': '#/lens-orders',
   'Place Lens Order': '#/place-lens-order',
   'Prescription Reference': '#/prescription-reference',
@@ -347,7 +348,7 @@ const viewHashMap = {
 const financeViews = ['Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Extract', 'Reports']
 const paymentDetailViews = ['Billing', ...financeViews]
 const insuranceViews = ['Insurance', 'Insurance Claims']
-const inventoryViews = ['Inventory', 'Lens Tracker', 'BSMI Tracking', 'Assets Register', 'Memos']
+const inventoryViews = ['Inventory', 'Lens Tracker', 'Product Tracker', 'BSMI Tracking', 'Assets Register', 'Memos']
 const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Notes']
 const optometristPatientViews = [
   'Patient Management',
@@ -719,6 +720,7 @@ function App() {
   const [inventoryStocktakeProducts, setInventoryStocktakeProducts] = useState([])
   const [isLoadingInventoryStocktakeProducts, setIsLoadingInventoryStocktakeProducts] = useState(false)
   const [inventoryLensData, setInventoryLensData] = useState(null)
+  const [frameTrackerData, setFrameTrackerData] = useState(null)
   const [lensOrdersData, setLensOrdersData] = useState(null)
   const [inventoryBsmiData, setInventoryBsmiData] = useState(null)
   const [placedLensOrders, setPlacedLensOrders] = useState(() => {
@@ -745,8 +747,10 @@ function App() {
   const [isLoadingLensOrders, setIsLoadingLensOrders] = useState(false)
   const [isLoadingInventory, setIsLoadingInventory] = useState(false)
   const [isLoadingLensTracker, setIsLoadingLensTracker] = useState(false)
+  const [isLoadingFrameTracker, setIsLoadingFrameTracker] = useState(false)
   const [isSavingInventoryProduct, setIsSavingInventoryProduct] = useState(false)
   const [savingFrameCostId, setSavingFrameCostId] = useState(null)
+  const [reservingFrameProductId, setReservingFrameProductId] = useState(null)
   const [isSavingInventoryStocktake, setIsSavingInventoryStocktake] = useState(false)
   const [savingLensBillingId, setSavingLensBillingId] = useState(null)
   const [customerServiceData, setCustomerServiceData] = useState(null)
@@ -2182,6 +2186,33 @@ function App() {
       cancelled = true
     }
   }, [activeView, lensTrackerQuery, scopedBranchId, session, token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadFrameTracker() {
+      if (!token || !session || !inventoryViews.includes(activeView)) return
+      setIsLoadingFrameTracker(true)
+      try {
+        const branchId = scopedBranchId ?? session.branch_id
+        const params = new URLSearchParams({ branch_id: String(branchId) })
+        if (inventoryQuery.search) params.set('search', inventoryQuery.search)
+        if (inventoryQuery.date_from) params.set('date_from', inventoryQuery.date_from)
+        if (inventoryQuery.date_to) params.set('date_to', inventoryQuery.date_to)
+        const response = await apiFetch(`/inventory/frame-tracker?${params.toString()}`, { token })
+        if (!cancelled) setFrameTrackerData(response)
+      } catch (error) {
+        if (!cancelled) setInventoryError(error.message)
+      } finally {
+        if (!cancelled) setIsLoadingFrameTracker(false)
+      }
+    }
+
+    loadFrameTracker()
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, inventoryQuery.date_from, inventoryQuery.date_to, inventoryQuery.search, scopedBranchId, session, token])
 
   useEffect(() => {
     let cancelled = false
@@ -3994,6 +4025,35 @@ function App() {
     }
   }
 
+  async function reserveFrameProduct(frameSaleId) {
+    if (!frameSaleId) return
+
+    setReservingFrameProductId(frameSaleId)
+    setInventoryError('')
+    setInventorySuccess('')
+
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      await apiFetch(`/inventory/frame-tracker/${frameSaleId}/reserve`, {
+        method: 'POST',
+        token,
+        body: { branch_id: branchId },
+      })
+
+      const params = new URLSearchParams({ branch_id: String(branchId) })
+      if (inventoryQuery.search) params.set('search', inventoryQuery.search)
+      if (inventoryQuery.date_from) params.set('date_from', inventoryQuery.date_from)
+      if (inventoryQuery.date_to) params.set('date_to', inventoryQuery.date_to)
+      const response = await apiFetch(`/inventory/frame-tracker?${params.toString()}`, { token })
+      setFrameTrackerData(response)
+      setInventorySuccess('Frame cost reserved and recorded as an expense.')
+    } catch (error) {
+      setInventoryError(error.message)
+    } finally {
+      setReservingFrameProductId(null)
+    }
+  }
+
   async function saveLensCostEntry(billingId, payload) {
     if (!billingId) return
 
@@ -5455,6 +5515,10 @@ function App() {
                 inventoryForm={inventoryForm}
                 setInventoryForm={setInventoryForm}
                 inventoryLensData={inventoryLensData}
+                frameTrackerData={frameTrackerData}
+                isLoadingFrameTracker={isLoadingFrameTracker}
+                reserveFrameProduct={reserveFrameProduct}
+                reservingFrameProductId={reservingFrameProductId}
                 lensTrackerFilters={lensTrackerFilters}
                 setLensTrackerFilters={setLensTrackerFilters}
                 setLensTrackerQuery={setLensTrackerQuery}
@@ -5476,10 +5540,11 @@ function App() {
               />
             ) : null}
 
-            {activeView === 'Lens Tracker' ? (
+            {activeView === 'Lens Tracker' || activeView === 'Product Tracker' ? (
               <InventorySection
                 initialTab="Lens Tracker & Lens Spec"
-                showTabs={false}
+                showTabs={activeView === 'Product Tracker'}
+                productTrackerMode={activeView === 'Product Tracker'}
                 inventoryData={inventoryData}
                 inventoryStocktakeProducts={inventoryStocktakeProducts}
                 isLoadingInventoryStocktakeProducts={isLoadingInventoryStocktakeProducts}
@@ -5489,6 +5554,10 @@ function App() {
                 inventoryForm={inventoryForm}
                 setInventoryForm={setInventoryForm}
                 inventoryLensData={inventoryLensData}
+                frameTrackerData={frameTrackerData}
+                isLoadingFrameTracker={isLoadingFrameTracker}
+                reserveFrameProduct={reserveFrameProduct}
+                reservingFrameProductId={reservingFrameProductId}
                 lensTrackerFilters={lensTrackerFilters}
                 setLensTrackerFilters={setLensTrackerFilters}
                 setLensTrackerQuery={setLensTrackerQuery}
@@ -5682,7 +5751,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>

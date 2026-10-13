@@ -8,6 +8,10 @@ const currency = new Intl.NumberFormat('en-GH', {
 })
 
 const inventoryTabs = ['Stock Overview', 'Lens Tracker & Lens Spec', 'Frames Tracker']
+const productTrackerTabs = [
+  { label: 'Lens Tracker', value: 'Lens Tracker & Lens Spec' },
+  { label: 'Frames Tracker', value: 'Frames Tracker' },
+]
 
 const monthFormatter = new Intl.DateTimeFormat('en-GH', { month: 'long', year: 'numeric' })
 
@@ -37,6 +41,9 @@ export default function InventorySection(props) {
   const [lensDrafts, setLensDrafts] = useState({})
   const [frameCostDrafts, setFrameCostDrafts] = useState({})
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const tabs = props.productTrackerMode
+    ? productTrackerTabs
+    : inventoryTabs.map((tab) => ({ label: tab, value: tab }))
 
   useEffect(() => {
     if (!props.initialTab) return
@@ -58,9 +65,13 @@ export default function InventorySection(props) {
     <section className="finance-section">
       <div className="patients-header">
         <div>
-          <p className="eyebrow">Inventory</p>
-          <h3>Track stock, lens sales, and frame profitability</h3>
-          <p className="header-copy">Manage frame costs by product code, review frame profits, and keep the Lens Tracker and Lens Spec workflows together.</p>
+          <p className="eyebrow">{props.productTrackerMode ? 'Product Tracker' : 'Inventory'}</p>
+          <h3>{props.productTrackerMode ? 'Track lens and frame costs' : 'Track stock, lens sales, and frame profitability'}</h3>
+          <p className="header-copy">
+            {props.productTrackerMode
+              ? 'Use the tabs to manage lens costs and reserve frame costs from stock.'
+              : 'Manage frame costs by product code, review frame profits, and keep the Lens Tracker and Lens Spec workflows together.'}
+          </p>
         </div>
       </div>
 
@@ -69,14 +80,14 @@ export default function InventorySection(props) {
 
       {props.showTabs !== false ? (
         <div className="finance-tabs">
-          {inventoryTabs.map((tab) => (
+          {tabs.map((tab) => (
             <button
-              key={tab}
+              key={tab.value}
               type="button"
-              className={tab === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-              onClick={() => setActiveTab(tab)}
+              className={tab.value === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
+              onClick={() => setActiveTab(tab.value)}
             >
-              {tab}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -919,30 +930,27 @@ function StockOverviewTab(props) {
 }
 
 function FramesTrackerTab(props) {
-  const records = props.inventoryData?.frame_sales_breakdown ?? []
-  const totalSold = records.reduce((sum, record) => sum + Number(record.sold_count ?? 0), 0)
-  const totalSales = records.reduce((sum, record) => sum + Number(record.sold_value ?? 0), 0)
-  const totalCost = records.reduce((sum, record) => sum + Number(record.total_cost ?? 0), 0)
-  const totalProfit = records.reduce((sum, record) => sum + Number(record.total_profit ?? 0), 0)
-  const missingCosts = records.reduce((sum, record) => sum + Number(record.missing_cost_count ?? 0), 0)
+  const records = props.frameTrackerData?.records ?? []
+  const reservedRecords = records.filter((record) => record.reserved)
+  const totalReservedCost = reservedRecords.reduce((sum, record) => sum + Number(record.reserved_cost ?? record.cost_price ?? 0), 0)
 
   return (
     <section className="finance-layout">
       <section className="stats-grid patient-stats-grid">
-        <StatWidget label="Frames Sold" value={String(totalSold)} note="Frame units sold in the selected range" icon="inventory" className="total" />
-        <StatWidget label="Frame Sales" value={currency.format(totalSales)} note="Sales value for the selected range" icon="money" className="seen" />
-        <StatWidget label="Cost to Recover" value={currency.format(totalCost)} note="Cost from frame codes with a saved price" icon="alert" className="pending" />
-        <StatWidget label="Tracked Profit" value={currency.format(totalProfit)} note="Sales less saved frame costs" icon="trend" className="today" />
+        <StatWidget label="Frames Sold" value={String(records.length)} note="Frame sales in the selected range" icon="inventory" className="total" />
+        <StatWidget label="Reserved" value={String(reservedRecords.length)} note="Frame costs recorded as expenses" icon="check-badge" className="seen" />
+        <StatWidget label="Not Reserved" value={String(records.length - reservedRecords.length)} note="Frame sales awaiting cost reservation" icon="alert" className="pending" />
+        <StatWidget label="Reserved Cost" value={currency.format(totalReservedCost)} note="Recorded frame reservation expenses" icon="money" className="today" />
       </section>
 
       <article className="panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Frames Tracker</p>
-            <h3>Frame profit by product code</h3>
-            <p className="muted-copy">Set each frame's cost price in Stock Overview. Profit is calculated per sold frame using that code's saved cost.</p>
+            <h3>Reserve costs for frame sales</h3>
+            <p className="muted-copy">Each frame sale uses its product's saved cost from Stock Overview. Reserving records that cost as an expense.</p>
           </div>
-          <span className="panel-tag">{props.inventoryData?.branch_name ?? 'Inventory'}</span>
+          <span className="panel-tag">{props.frameTrackerData?.branch_name ?? 'Inventory'}</span>
         </div>
 
         <form
@@ -951,11 +959,11 @@ function FramesTrackerTab(props) {
             event.preventDefault()
             props.setInventoryQuery((current) => ({
               ...current,
-              ...props.inventoryFilters,
-              category: 'all',
+              search: props.inventoryFilters.search,
+              date_from: props.inventoryFilters.date_from,
+              date_to: props.inventoryFilters.date_to,
               page: 1,
             }))
-            props.setInventoryFilters((current) => ({ ...current, category: 'all' }))
           }}
         >
           <label>
@@ -975,7 +983,7 @@ function FramesTrackerTab(props) {
             />
           </label>
           <label>
-            Search frame code or name
+            Search frame, patient, folder, or receipt
             <input
               value={props.inventoryFilters.search}
               onChange={(event) => props.setInventoryFilters((current) => ({ ...current, search: event.target.value }))}
@@ -987,47 +995,56 @@ function FramesTrackerTab(props) {
           </div>
         </form>
 
-        {props.inventoryData?.frame_sales_breakdown ? (
+        {props.isLoadingFrameTracker ? (
+          <p className="muted-copy">Loading frame products...</p>
+        ) : props.frameTrackerData ? (
           <div className="table-shell">
             <table className="portal-table inventory-table-wide">
               <thead>
                 <tr>
+                  <th>Patient / Date</th>
+                  <th>Folder</th>
+                  <th>Receipt</th>
                   <th>Frame Code</th>
                   <th>Name</th>
-                  <th>Units Sold</th>
+                  <th>Sale</th>
                   <th>Unit Cost</th>
-                  <th>Sales</th>
-                  <th>Cost to Recover</th>
-                  <th>Profit</th>
-                  <th>Missing Costs</th>
-                  <th>Last Sold</th>
+                  <th>Reservation</th>
                 </tr>
               </thead>
               <tbody>
                 {records.map((record) => (
-                  <tr key={record.product_id}>
-                    <td>{record.product_code}</td>
-                    <td>{record.product_name}</td>
-                    <td>{record.sold_count}</td>
+                  <tr key={record.id}>
+                    <td>
+                      <strong>{record.patient_name || 'N/A'}</strong>
+                      <div className="table-inline-meta">{record.billing_date}</div>
+                    </td>
+                    <td>{record.folder_id || 'N/A'}</td>
+                    <td>{record.receipt_number || 'Pending'}</td>
+                    <td>{record.code}</td>
+                    <td>{record.name}</td>
+                    <td>{currency.format(Number(record.selling_price ?? 0))}</td>
                     <td>{record.cost_price === null ? 'Not set' : currency.format(Number(record.cost_price))}</td>
-                    <td>{currency.format(Number(record.sold_value ?? 0))}</td>
-                    <td>{currency.format(Number(record.total_cost ?? 0))}</td>
-                    <td>{currency.format(Number(record.total_profit ?? 0))}</td>
-                    <td>{record.missing_cost_count ?? 0}</td>
-                    <td>{record.last_sold_at ? formatDateTime(record.last_sold_at) : 'N/A'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className={record.reserved ? 'mini-action frame-reserved' : 'mini-action'}
+                        disabled={record.reserved || !Number(record.cost_price) || props.reservingFrameProductId === record.id}
+                        onClick={() => props.reserveFrameProduct(record.id)}
+                      >
+                        {record.reserved ? 'Reserved' : props.reservingFrameProductId === record.id ? 'Reserving...' : 'Reserve'}
+                      </button>
+                      {!record.reserved && !Number(record.cost_price) ? <div className="table-inline-meta">Add a cost in Stock Overview to reserve.</div> : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!records.length ? <p className="muted-copy">No frame sales were found for the selected filters.</p> : null}
+            {!records.length ? <p className="muted-copy">No frame products were found for this branch.</p> : null}
           </div>
         ) : (
-          <p className="muted-copy">Loading frame sales...</p>
+          <p className="muted-copy">Frame products are not available.</p>
         )}
-
-        {missingCosts > 0 ? (
-          <p className="monitor-disclaimer">{missingCosts} sold frame(s) do not have a saved cost price, so their profit is excluded until cost prices are entered in Stock Overview.</p>
-        ) : null}
       </article>
     </section>
   )

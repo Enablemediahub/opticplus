@@ -1690,10 +1690,11 @@ function ExpensesTab(props) {
     category: '',
   })
   const isSelectedLensLinked = Boolean(selectedExpense?.is_lens_linked)
-  const canEditSelectedExpense = canManageExpenses && !isSelectedLensLinked
+  const isSelectedFrameReserved = Boolean(selectedExpense?.is_frame_reserved)
+  const canEditSelectedExpense = canManageExpenses && !isSelectedLensLinked && !isSelectedFrameReserved
   const canDeleteSelectedExpense = isSelectedLensLinked
     ? canDeleteLinkedLensExpense
-    : canManageExpenses
+    : !isSelectedFrameReserved && canManageExpenses
   const categoryOptions = props.financeExpenses?.categories ?? []
   const managementExpenseDefaults = {
     filter: 'all',
@@ -2131,6 +2132,11 @@ function ExpensesTab(props) {
               <div className="message-banner">
                 This expense was created from Lens Tracker. Amount and details are controlled there.
                 {canDeleteLinkedLensExpense ? ' You can delete duplicate rows from here.' : ''}
+              </div>
+            ) : null}
+            {selectedExpense.is_frame_reserved ? (
+              <div className="message-banner">
+                This expense was created from Frames Tracker. Amount and details are controlled there.
               </div>
             ) : null}
 
