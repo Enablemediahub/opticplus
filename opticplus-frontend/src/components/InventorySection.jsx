@@ -7,7 +7,7 @@ const currency = new Intl.NumberFormat('en-GH', {
   maximumFractionDigits: 2,
 })
 
-const inventoryTabs = ['Stock Overview', 'Lens Tracker & Lens Spec']
+const inventoryTabs = ['Stock Overview', 'Lens Tracker & Lens Spec', 'Frames Tracker']
 
 const monthFormatter = new Intl.DateTimeFormat('en-GH', { month: 'long', year: 'numeric' })
 
@@ -35,6 +35,7 @@ function localDateTimeNow() {
 export default function InventorySection(props) {
   const [activeTab, setActiveTab] = useState(props.initialTab ?? 'Stock Overview')
   const [lensDrafts, setLensDrafts] = useState({})
+  const [frameCostDrafts, setFrameCostDrafts] = useState({})
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
@@ -58,8 +59,8 @@ export default function InventorySection(props) {
       <div className="patients-header">
         <div>
           <p className="eyebrow">Inventory</p>
-          <h3>Track stock, lens sales, and prescription-linked profitability</h3>
-          <p className="header-copy">Built around live frame inventory, the legacy lens tracker workflow, and Lens Spec visibility in one products area.</p>
+          <h3>Track stock, lens sales, and frame profitability</h3>
+          <p className="header-copy">Manage frame costs by product code, review frame profits, and keep the Lens Tracker and Lens Spec workflows together.</p>
         </div>
       </div>
 
@@ -85,15 +86,19 @@ export default function InventorySection(props) {
         <StockOverviewTab
           key={props.inventoryBranchId}
           {...props}
+          frameCostDrafts={frameCostDrafts}
+          setFrameCostDrafts={setFrameCostDrafts}
           isEditModalOpen={isEditModalOpen}
           setIsEditModalOpen={setIsEditModalOpen}
         />
-      ) : (
+      ) : activeTab === 'Lens Tracker & Lens Spec' ? (
         <LensTrackerTab
           {...props}
           lensDrafts={lensDrafts}
           setLensDrafts={setLensDrafts}
         />
+      ) : (
+        <FramesTrackerTab {...props} />
       )}
     </section>
   )
@@ -616,42 +621,73 @@ function StockOverviewTab(props) {
                 <th>Last Movement</th>
                 <th>Min Price</th>
                 <th>Max Price</th>
+                <th>Frame Cost Price</th>
                 {canManageInventory ? <th>Action</th> : null}
               </tr>
             </thead>
             <tbody>
-              {(props.inventoryData?.records ?? []).map((record) => (
-                <tr key={record.id}>
-                  <td>{record.code}</td>
-                  <td>{record.name}</td>
-                  <td>{record.category}</td>
-                  <td>{record.grade || 'N/A'}</td>
-                  <td>{record.current_stock ?? record.stock}</td>
-                  <td>{record.stock_at_snapshot ?? record.stock}</td>
-                  <td>{record.sold_in_range ?? 0}</td>
-                  <td>{formatSignedNumber(record.net_change ?? 0)}</td>
-                  <td>{record.last_movement_at ? formatDateTime(record.last_movement_at) : 'No movement log'}</td>
-                  <td>{currency.format(Number(record.min_price ?? 0))}</td>
-                  <td>{currency.format(Number(record.max_price ?? 0))}</td>
-                  {canManageInventory ? (
+              {(props.inventoryData?.records ?? []).map((record) => {
+                const isFrameProduct = /^frames?$/i.test(String(record.category ?? ''))
+                const frameCostDraftKey = `${props.inventoryBranchId ?? 'default'}:${record.id}`
+
+                return (
+                  <tr key={record.id}>
+                    <td>{record.code}</td>
+                    <td>{record.name}</td>
+                    <td>{record.category}</td>
+                    <td>{record.grade || 'N/A'}</td>
+                    <td>{record.current_stock ?? record.stock}</td>
+                    <td>{record.stock_at_snapshot ?? record.stock}</td>
+                    <td>{record.sold_in_range ?? 0}</td>
+                    <td>{formatSignedNumber(record.net_change ?? 0)}</td>
+                    <td>{record.last_movement_at ? formatDateTime(record.last_movement_at) : 'No movement log'}</td>
+                    <td>{currency.format(Number(record.min_price ?? 0))}</td>
+                    <td>{currency.format(Number(record.max_price ?? 0))}</td>
                     <td>
-                      <div className="filter-actions-row">
-                        <button type="button" className="mini-action" onClick={() => startEdit(record)}>
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="mini-action danger"
-                          disabled={props.isSavingInventoryProduct}
-                          onClick={() => handleDelete(record)}
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {isFrameProduct ? canManageInventory ? (
+                        <div className="filter-actions-row">
+                          <input
+                            className="inventory-inline-input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={props.frameCostDrafts[frameCostDraftKey] ?? record.cost_price ?? ''}
+                            aria-label={`Frame cost price for ${record.code}`}
+                            placeholder="Enter cost"
+                            onChange={(event) => props.setFrameCostDrafts((current) => ({ ...current, [frameCostDraftKey]: event.target.value }))}
+                          />
+                          <button
+                            type="button"
+                            className="mini-action"
+                            disabled={props.savingFrameCostId !== null}
+                            onClick={() => props.saveFrameCost(record.id, props.frameCostDrafts[frameCostDraftKey] ?? record.cost_price ?? '')}
+                          >
+                            {props.savingFrameCostId === record.id ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      ) : record.cost_price === null || record.cost_price === undefined ? 'Not set' : currency.format(Number(record.cost_price))
+                        : '—'}
                     </td>
-                  ) : null}
-                </tr>
-              ))}
+                    {canManageInventory ? (
+                      <td>
+                        <div className="filter-actions-row">
+                          <button type="button" className="mini-action" onClick={() => startEdit(record)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="mini-action danger"
+                            disabled={props.isSavingInventoryProduct}
+                            onClick={() => handleDelete(record)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -878,6 +914,121 @@ function StockOverviewTab(props) {
           </article>
         </div>
       ) : null}
+    </section>
+  )
+}
+
+function FramesTrackerTab(props) {
+  const records = props.inventoryData?.frame_sales_breakdown ?? []
+  const totalSold = records.reduce((sum, record) => sum + Number(record.sold_count ?? 0), 0)
+  const totalSales = records.reduce((sum, record) => sum + Number(record.sold_value ?? 0), 0)
+  const totalCost = records.reduce((sum, record) => sum + Number(record.total_cost ?? 0), 0)
+  const totalProfit = records.reduce((sum, record) => sum + Number(record.total_profit ?? 0), 0)
+  const missingCosts = records.reduce((sum, record) => sum + Number(record.missing_cost_count ?? 0), 0)
+
+  return (
+    <section className="finance-layout">
+      <section className="stats-grid patient-stats-grid">
+        <StatWidget label="Frames Sold" value={String(totalSold)} note="Frame units sold in the selected range" icon="inventory" className="total" />
+        <StatWidget label="Frame Sales" value={currency.format(totalSales)} note="Sales value for the selected range" icon="money" className="seen" />
+        <StatWidget label="Cost to Recover" value={currency.format(totalCost)} note="Cost from frame codes with a saved price" icon="alert" className="pending" />
+        <StatWidget label="Tracked Profit" value={currency.format(totalProfit)} note="Sales less saved frame costs" icon="trend" className="today" />
+      </section>
+
+      <article className="panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Frames Tracker</p>
+            <h3>Frame profit by product code</h3>
+            <p className="muted-copy">Set each frame's cost price in Stock Overview. Profit is calculated per sold frame using that code's saved cost.</p>
+          </div>
+          <span className="panel-tag">{props.inventoryData?.branch_name ?? 'Inventory'}</span>
+        </div>
+
+        <form
+          className="patient-filter-grid"
+          onSubmit={(event) => {
+            event.preventDefault()
+            props.setInventoryQuery((current) => ({
+              ...current,
+              ...props.inventoryFilters,
+              category: 'all',
+              page: 1,
+            }))
+            props.setInventoryFilters((current) => ({ ...current, category: 'all' }))
+          }}
+        >
+          <label>
+            Date from
+            <input
+              type="date"
+              value={props.inventoryFilters.date_from}
+              onChange={(event) => props.setInventoryFilters((current) => ({ ...current, date_from: event.target.value }))}
+            />
+          </label>
+          <label>
+            Date to
+            <input
+              type="date"
+              value={props.inventoryFilters.date_to}
+              onChange={(event) => props.setInventoryFilters((current) => ({ ...current, date_to: event.target.value }))}
+            />
+          </label>
+          <label>
+            Search frame code or name
+            <input
+              value={props.inventoryFilters.search}
+              onChange={(event) => props.setInventoryFilters((current) => ({ ...current, search: event.target.value }))}
+              placeholder="Search code, name, or grade"
+            />
+          </label>
+          <div className="filter-actions-row full-span">
+            <button type="submit" className="primary-button">Refresh tracker</button>
+          </div>
+        </form>
+
+        {props.inventoryData?.frame_sales_breakdown ? (
+          <div className="table-shell">
+            <table className="portal-table inventory-table-wide">
+              <thead>
+                <tr>
+                  <th>Frame Code</th>
+                  <th>Name</th>
+                  <th>Units Sold</th>
+                  <th>Unit Cost</th>
+                  <th>Sales</th>
+                  <th>Cost to Recover</th>
+                  <th>Profit</th>
+                  <th>Missing Costs</th>
+                  <th>Last Sold</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={record.product_id}>
+                    <td>{record.product_code}</td>
+                    <td>{record.product_name}</td>
+                    <td>{record.sold_count}</td>
+                    <td>{record.cost_price === null ? 'Not set' : currency.format(Number(record.cost_price))}</td>
+                    <td>{currency.format(Number(record.sold_value ?? 0))}</td>
+                    <td>{currency.format(Number(record.total_cost ?? 0))}</td>
+                    <td>{currency.format(Number(record.total_profit ?? 0))}</td>
+                    <td>{record.missing_cost_count ?? 0}</td>
+                    <td>{record.last_sold_at ? formatDateTime(record.last_sold_at) : 'N/A'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!records.length ? <p className="muted-copy">No frame sales were found for the selected filters.</p> : null}
+          </div>
+        ) : (
+          <p className="muted-copy">Loading frame sales...</p>
+        )}
+
+        {missingCosts > 0 ? (
+          <p className="monitor-disclaimer">{missingCosts} sold frame(s) do not have a saved cost price, so their profit is excluded until cost prices are entered in Stock Overview.</p>
+        ) : null}
+      </article>
     </section>
   )
 }
