@@ -859,7 +859,7 @@
 }
 
 :root[data-theme='light'] .sidebar .sidebar-nav-title {
-  color: #7a909d;
+  color: #1d4ed8;
 }
 
 .sidebar-nav {
@@ -876,7 +876,7 @@
 .sidebar-nav-title {
   margin: 0;
   padding: 0 10px;
-  color: var(--text-muted);
+  color: #60a5fa;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -10036,10 +10036,10 @@ td.billing-balance-due,
   }
 }
 /* The Monitor: annual workbook */
-.monitor-workspace { gap: 22px; }
-.monitor-hero { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; padding:30px; border-radius:18px; color:#fff; background:linear-gradient(120deg,#093c48,#0e6975 60%,#58a2a1); box-shadow:0 14px 34px rgba(9,60,72,.16); }
-.monitor-hero h3 { margin:6px 0; font-size:26px; color:#fff; }.monitor-hero p:not(.eyebrow) { max-width:680px; margin:0; color:#d9f1ef; }.monitor-hero .eyebrow { color:#9eddd7; }
-.monitor-hero-actions { display:flex; gap:10px; flex-wrap:wrap; }.monitor-hero .ghost-button { color:#063f49; border-color:#fff; background:#fff; font-weight:800; }.monitor-hero .ghost-button:hover:not(:disabled),.monitor-hero .ghost-button:focus-visible { color:#fff; border-color:#063f49; background:#063f49; }.monitor-hero .primary-button { background:#fff; color:#07525d; }
+.monitor-workspace { gap: 22px; margin-top: 24px; }
+.monitor-hero { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; padding:30px; border-radius:18px; color:#153b40; background:#fff; border:1px solid #dbe9e8; box-shadow:0 3px 14px rgba(32,85,84,.05); }
+.monitor-hero h3 { margin:6px 0; font-size:26px; color:#153b40; }.monitor-hero p:not(.eyebrow) { max-width:680px; margin:0; color:#526b6d; }.monitor-hero .eyebrow { color:#0b6671; }
+.monitor-hero-actions { display:flex; gap:10px; flex-wrap:wrap; }.monitor-hero .ghost-button { color:#153b40; border-color:#c9d9d9; background:#fff; font-weight:800; }.monitor-hero .ghost-button:hover:not(:disabled),.monitor-hero .ghost-button:focus-visible { color:#fff; border-color:#063f49; background:#063f49; }.monitor-hero .primary-button { background:#0b6671; color:#fff; }
 .monitor-controls { display:flex; align-items:end; gap:16px; padding:18px 22px; background:#fff; border:1px solid #dbe9e8; border-radius:14px; }.monitor-controls label { display:grid; gap:6px; min-width:180px; color:#4d6264; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }.monitor-controls select,.monitor-controls input { min-height:40px; border:1px solid #c9d9d9; border-radius:8px; padding:0 10px; color:#153b40; background:#fff; }.monitor-controls span { margin-left:auto; padding-bottom:10px; color:#71878a; font-size:13px; }
 .monitor-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }.monitor-kpis>div { padding:20px; border-radius:12px; background:#fff; border:1px solid #dce8e8; }.monitor-kpis span,.monitor-kpis small { display:block; color:#708587; font-size:12px; }.monitor-kpis span { font-weight:800; text-transform:uppercase; letter-spacing:.06em; }.monitor-kpis strong { display:block; margin:7px 0; color:#0a4e59; font-size:24px; }
 .monitor-tabs { display:flex; gap:6px; overflow:auto; padding:5px; border-bottom:1px solid #dce8e8; }.monitor-tabs button { white-space:nowrap; border:0; border-radius:8px; background:transparent; padding:10px 15px; color:#657c7f; font:inherit; font-weight:700; cursor:pointer; }.monitor-tabs button.is-active { background:#0b6671; color:#fff; box-shadow:0 3px 8px rgba(9,90,100,.2); }
@@ -10061,6 +10061,7 @@ td.billing-balance-due,
   .monitor-hero-actions,.monitor-controls,.monitor-tabs,.portal-sidebar,.portal-topbar { display:none!important; }
   .portal-shell { display:block!important; }
   .portal-main,.monitor-workspace { display:block!important; overflow:visible!important; padding:0!important; }
+  .monitor-workspace { margin-top:0; }
   .monitor-hero { display:block; margin:0 0 6mm; padding:0 0 4mm; color:#111!important; background:#fff!important; border:0; border-bottom:2px solid #0b6671; border-radius:0; box-shadow:none; }
   .monitor-hero h3,.monitor-hero p,.monitor-hero .eyebrow { color:#111!important; }
   .monitor-hero h3 { font-size:18pt; }

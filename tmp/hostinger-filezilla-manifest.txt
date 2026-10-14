@@ -1,23 +1,27 @@
-﻿Hostinger FileZilla sync manifest
-Generated: 2026-10-11 21:00:02
-Local package: C:\xampp\htdocs\Opticplus\tmp\hostinger-package
-Remote destination: Laravel application root; keep each package-relative path unchanged.
-Mode: Incremental deployment for the current inventory and Monitor changes; this is not a full upload.
+Hostinger FileZilla sync manifest
+Updated: 2026-10-14
+Local package: /Users/mindsurgeon/Herd/opticplus/tmp/hostinger-package
+Remote destination: Laravel application root; preserve package-relative paths.
+Status: Frontend UI updates pending upload.
 
-Files to upload (9):
-  app/Http/Controllers/FinanceController.php
-  app/Http/Controllers/InventoryController.php
-  database/migrations/2026_10_11_000001_add_cost_price_to_products_table.php
-  database/schema/generated_schema_manifest.php
-  database/schema/opticplus_full_schema.mysql.sql
-  routes/api.php
-  public/assets/index-Beej20LZ.css
-  public/assets/index-d3FUpwMd.js
+Files to upload:
   public/index.html
+  public/assets/index-yDJKmfTd.css
+  public/assets/index-BXQ6bjQr.js
 
-Files to delete manually on Hostinger (2):
-  public/assets/index-DivSOlnC.js
-  public/assets/index-MC8oK_GS.css
+After confirming the new site loads, old frontend bundles may be removed from
+public/assets:
+  index-Beej20LZ.css
+  index-B3D2fw-M.css
+  index-D-8dzYFs.css
+  index-FHc7oS7X.css
+  index-d3FUpwMd.js
+  index-C8-Rx0jJ.js
+  index-CO_6ojjH.js
+  index-DfUmuSbb.js
+  index-DMd2H6R6.js
+  index-Cx0YcJn9.js
+  index-zfpCsnEF.js
 
-After upload, run `php artisan migrate --force` once to add products.cost_price. Do not overwrite the production .env.
-Only upload the paths above; the staging folder contains the full Laravel package for reference.
+No database changes are required for this frontend spacing update.
+Do not upload or replace the production .env.

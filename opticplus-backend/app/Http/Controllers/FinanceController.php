@@ -1374,7 +1374,7 @@ class FinanceController extends Controller
             ->orderByDesc('total')
             ->get();
 
-        $trendRecords = (clone $query)
+        $trendRecords = (clone $filteredStatsQuery)
             ->selectRaw('DATE(date) as expense_date, SUM(amount) as total')
             ->groupBy(DB::raw('DATE(date)'))
             ->orderBy('expense_date')

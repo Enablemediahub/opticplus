@@ -391,6 +391,251 @@ class InventoryController extends Controller
         ]);
     }
 
+    public function frameTracker(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'reservation_status' => ['sometimes', 'in:all,reserved,not_reserved'],
+        ]);
+        $branchId = $this->resolveBranchId($request);
+        $search = trim($request->string('search')->toString());
+        $dateFrom = $request->string('date_from')->toString();
+        $dateTo = $request->string('date_to')->toString();
+        $reservationStatus = $validated['reservation_status'] ?? 'all';
+
+        $records = DB::table('billing_frames as bf')
+            ->join('billing as b', function ($join): void {
+                $join->on('b.id', '=', 'bf.billing_id')
+                    ->on('b.branch_id', '=', 'bf.branch_id');
+            })
+            ->join('products as p', function ($join): void {
+                $join->on('p.code', '=', 'bf.frame_code_id')
+                    ->on('p.branch_id', '=', 'bf.branch_id');
+            })
+            ->leftJoin('frame_cost_reservations as fcr', function ($join): void {
+                $join->on('fcr.frame_sale_id', '=', 'bf.id')
+                    ->on('fcr.branch_id', '=', 'bf.branch_id');
+            })
+            ->whereIn(DB::raw('LOWER(p.category)'), ['frame', 'frames'])
+            ->when($branchId > 0, fn ($query) => $query->where('bf.branch_id', $branchId))
+            ->when($reservationStatus === 'reserved', fn ($query) => $query->whereNotNull('fcr.id'))
+            ->when($reservationStatus === 'not_reserved', fn ($query) => $query->whereNull('fcr.id'))
+            ->when($dateFrom !== '', fn ($query) => $query->whereDate('b.date', '>=', $dateFrom))
+            ->when($dateTo !== '', fn ($query) => $query->whereDate('b.date', '<=', $dateTo))
+            ->when($search !== '', function ($query) use ($search): void {
+                $like = '%'.$search.'%';
+                $query->where(function ($inner) use ($like): void {
+                    $inner->where('p.code', 'like', $like)
+                        ->orWhere('p.name', 'like', $like)
+                        ->orWhere('b.name', 'like', $like)
+                        ->orWhere('b.folder_id', 'like', $like)
+                        ->orWhere('b.receipt_number', 'like', $like);
+                });
+            })
+            ->orderByDesc('b.date')
+            ->orderByDesc('bf.id')
+            ->get([
+                'bf.id as frame_sale_id',
+                'bf.branch_id',
+                'bf.billing_id',
+                'bf.frame_code_id',
+                'bf.frame_price',
+                'b.date as billing_date',
+                'b.name as patient_name',
+                'b.folder_id',
+                'b.receipt_number',
+                'p.id as product_id',
+                'p.name as product_name',
+                'p.cost_price',
+                'fcr.id as reservation_id',
+                'fcr.reserved_cost',
+            ])
+            ->map(fn ($record) => [
+                'id' => (int) $record->frame_sale_id,
+                'branch_id' => (int) $record->branch_id,
+                'billing_id' => (int) $record->billing_id,
+                'billing_date' => $record->billing_date,
+                'patient_name' => $record->patient_name,
+                'folder_id' => $record->folder_id,
+                'receipt_number' => $record->receipt_number,
+                'product_id' => (int) $record->product_id,
+                'code' => $record->frame_code_id,
+                'name' => $record->product_name,
+                'selling_price' => round((float) $record->frame_price, 2),
+                'cost_price' => $record->cost_price !== null ? round((float) $record->cost_price, 2) : null,
+                'reserved' => $record->reservation_id !== null,
+                'reserved_cost' => $record->reserved_cost !== null ? round((float) $record->reserved_cost, 2) : null,
+            ])
+            ->values();
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'records' => $records,
+        ]);
+    }
+
+    public function reserveFrameCost(Request $request, int $frameSaleId): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $frame = DB::table('billing_frames as bf')
+            ->join('billing as b', function ($join): void {
+                $join->on('b.id', '=', 'bf.billing_id')
+                    ->on('b.branch_id', '=', 'bf.branch_id');
+            })
+            ->join('products as p', function ($join): void {
+                $join->on('p.code', '=', 'bf.frame_code_id')
+                    ->on('p.branch_id', '=', 'bf.branch_id');
+            })
+            ->where('bf.id', $frameSaleId)
+            ->where('bf.branch_id', $branchId)
+            ->whereIn(DB::raw('LOWER(p.category)'), ['frame', 'frames'])
+            ->first([
+                'bf.id as frame_sale_id',
+                'bf.branch_id',
+                'bf.frame_code_id',
+                'b.name as patient_name',
+                'b.folder_id',
+                'p.id as product_id',
+                'p.name as product_name',
+                'p.cost_price',
+            ]);
+
+        if (! $frame) {
+            return response()->json(['message' => 'Frame sale was not found for this branch.'], 404);
+        }
+
+        $costPrice = $frame->cost_price !== null ? round((float) $frame->cost_price, 2) : 0.0;
+        if ($costPrice <= 0) {
+            return response()->json(['message' => 'Set a frame cost price in Stock Overview before reserving it.'], 422);
+        }
+
+        $this->ensureLensExpenseSchema();
+        if (! Schema::hasTable('expenses')
+            || ! Schema::hasColumn('expenses', 'source_type')
+            || ! Schema::hasColumn('expenses', 'source_id')) {
+            return response()->json(['message' => 'Expense tracking is not available on this database.'], 503);
+        }
+
+        $userId = $request->user()?->id;
+        $created = DB::transaction(function () use ($branchId, $frame, $costPrice, $userId): bool {
+            $lockedFrameSale = DB::table('billing_frames')
+                ->where('id', $frame->frame_sale_id)
+                ->where('branch_id', $branchId)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if (! $lockedFrameSale) {
+                abort(response()->json(['message' => 'Frame sale was not found for this branch.'], 404));
+            }
+
+            $reservation = DB::table('frame_cost_reservations')
+                ->where('branch_id', $branchId)
+                ->where('frame_sale_id', $frame->frame_sale_id)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($reservation) {
+                return false;
+            }
+
+            $this->ensureExpenseCategory('Frames');
+            $now = now();
+            DB::table('frame_cost_reservations')->insert([
+                'branch_id' => $branchId,
+                'frame_sale_id' => $frame->frame_sale_id,
+                'product_id' => $frame->product_id,
+                'reserved_cost' => $costPrice,
+                'reserved_by' => $userId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $expense = [
+                'description' => 'Frame cost - '.$frame->product_name.' ('.$frame->frame_code_id.')'
+                    .($frame->patient_name ? ' - '.$frame->patient_name : '')
+                    .($frame->folder_id ? ' - Folder '.$frame->folder_id : ''),
+                'amount' => $costPrice,
+                'date' => $now->toDateString(),
+                'category' => 'Frames',
+                'branch_id' => $branchId,
+                'created_by' => $userId,
+                'source_type' => 'frame_reservation',
+                'source_id' => $frame->frame_sale_id,
+            ];
+            if (Schema::hasColumn('expenses', 'created_at')) {
+                $expense['created_at'] = $now;
+            }
+            if (Schema::hasColumn('expenses', 'updated_at')) {
+                $expense['updated_at'] = $now;
+            }
+
+            DB::table('expenses')->insert($expense);
+
+            return true;
+        });
+
+        return response()->json([
+            'message' => $created ? 'Frame cost reserved and recorded as an expense.' : 'Frame cost is already reserved.',
+            'reserved' => true,
+        ], $created ? 201 : 200);
+    }
+
+    public function reverseFrameCostReservation(Request $request, int $frameSaleId): JsonResponse
+    {
+        if ($request->user()?->normalized_role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can reverse a frame cost reservation.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        if (! Schema::hasTable('frame_cost_reservations')
+            || ! Schema::hasTable('expenses')
+            || ! Schema::hasColumn('expenses', 'source_type')
+            || ! Schema::hasColumn('expenses', 'source_id')) {
+            return response()->json(['message' => 'Frame reservation tracking is not available on this database.'], 503);
+        }
+
+        $reversed = DB::transaction(function () use ($branchId, $frameSaleId): bool {
+            $reservation = DB::table('frame_cost_reservations')
+                ->where('branch_id', $branchId)
+                ->where('frame_sale_id', $frameSaleId)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if (! $reservation) {
+                return false;
+            }
+
+            DB::table('expenses')
+                ->where('branch_id', $branchId)
+                ->where('source_type', 'frame_reservation')
+                ->where('source_id', $frameSaleId)
+                ->delete();
+
+            DB::table('frame_cost_reservations')
+                ->where('id', $reservation->id)
+                ->delete();
+
+            return true;
+        });
+
+        if (! $reversed) {
+            return response()->json(['message' => 'Frame cost reservation was not found for this branch.'], 404);
+        }
+
+        return response()->json([
+            'message' => 'Frame cost reservation and its linked expense were reversed.',
+            'reserved' => false,
+        ]);
+    }
+
     public function overview(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);

@@ -77,16 +77,17 @@ const managerNavSections = [
     items: [
       { label: 'Patients', navLabel: 'Patient Records', icon: 'patients' },
       { label: 'Billing', navLabel: 'Billing / Invoicing', icon: 'receipt' },
-      { label: 'Place Lens Order', navLabel: 'Place Lens Order', icon: 'glasses' },
+      { label: 'Insurance Claims', navLabel: 'Insurance Claims', icon: 'shield' },
     ],
   },
   {
     title: 'Inventory & Products',
     items: [
-      { label: 'Inventory', navLabel: 'Products', icon: 'inventory' },
+      { label: 'Inventory', navLabel: 'Product Tracker', icon: 'inventory' },
+      { label: 'Place Lens Order', navLabel: 'Place Lens Order', icon: 'glasses' },
       { label: 'Lens Orders', navLabel: 'Lens Orders', icon: 'receipt' },
+      { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
       { label: 'Assets Register', navLabel: 'Company Assets', icon: 'briefcase' },
-      { label: 'Memos', navLabel: 'Memos', icon: 'message' },
     ],
   },
   {
@@ -97,12 +98,15 @@ const managerNavSections = [
       { label: 'Sales', navLabel: 'Daily Sales', icon: 'money' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
       { label: 'Working Capital Liabilities', navLabel: 'Working Capital Entries', icon: 'finance' },
-      { label: 'Insurance Claims', navLabel: 'Insurance Claims', icon: 'shield' },
       { label: 'Debts', navLabel: 'Company Debts', icon: 'receipt' },
-      { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
+      { label: 'Bank Deposits', navLabel: 'Bank Deposits', icon: 'finance' },
+    ],
+  },
+  {
+    title: 'Reports & Audit',
+    items: [
       { label: 'Reports', navLabel: 'Reports', icon: 'reports' },
       { label: 'Extract', navLabel: 'Extract', icon: 'reports' },
-      { label: 'Bank Deposits', navLabel: 'Bank Deposits', icon: 'finance' },
       { label: 'Audit Log', navLabel: 'Audit Log', icon: 'reports' },
     ],
   },
@@ -120,7 +124,10 @@ const managerNavSections = [
   },
   {
     title: 'Customer Relations',
-    items: [{ label: 'Customer Service', navLabel: 'Customer Relations', icon: 'support' }],
+    items: [
+      { label: 'Customer Service', navLabel: 'Customer Relations', icon: 'support' },
+      { label: 'Memos', navLabel: 'Memos', icon: 'message' },
+    ],
   },
   {
     title: 'System Administration',
@@ -151,7 +158,6 @@ const receptionistNavSections = [
       { label: 'Finance', navLabel: 'Receipt Reprints', icon: 'receipt' },
       { label: 'Expenses', navLabel: 'Add Expenses', icon: 'alert' },
       { label: 'Insurance', navLabel: 'Insurance', icon: 'shield' },
-      { label: 'Inventory', navLabel: 'Inventory', icon: 'inventory' },
       { label: 'Product Tracker', navLabel: 'Product Tracker', icon: 'inventory' },
       { label: 'Notes', navLabel: 'Notes & Reminders', icon: 'message' },
     ],
@@ -223,22 +229,23 @@ const optometristNavSections = [
 
 const accountantNavSections = [
   {
-    title: 'Dashboard',
+    title: 'Overview',
     items: [{ label: 'Dashboard', navLabel: 'Financial Overview', icon: 'dashboard' }],
+  },
+  {
+    title: 'Patients & Receivables',
+    items: [
+      { label: 'Billing', navLabel: 'Billing / Invoicing', icon: 'receipt' },
+      { label: 'Debts', navLabel: 'Debt Management', icon: 'money' },
+      { label: 'Insurance Claims', navLabel: 'Insurance Claims', icon: 'shield' },
+    ],
   },
   {
     title: 'Inventory & Products',
     items: [
       { label: 'Inventory', navLabel: 'Inventory', icon: 'inventory' },
-      { label: 'Lens Tracker', navLabel: 'Lens Tracker', icon: 'glasses' },
-      { label: 'Memos', navLabel: 'Memos', icon: 'message' },
-    ],
-  },
-  {
-    title: 'Receivables & Billing',
-    items: [
-      { label: 'Billing', navLabel: 'Billing / Invoicing', icon: 'receipt' },
-      { label: 'Debts', navLabel: 'Debt Management', icon: 'money' },
+      { label: 'Product Tracker', navLabel: 'Product Tracker', icon: 'glasses' },
+      { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
     ],
   },
   {
@@ -250,22 +257,21 @@ const accountantNavSections = [
       { label: 'The Monitor', navLabel: 'The Monitor', icon: 'dashboard' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
       { label: 'Working Capital Liabilities', navLabel: 'Working Capital Entries', icon: 'finance' },
-      { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
-      { label: 'Reports', navLabel: 'Reports', icon: 'reports' },
-      { label: 'Payroll', navLabel: 'Staff Payroll', icon: 'money' },
       { label: 'Bank Deposits', navLabel: 'Bank Deposits', icon: 'finance' },
     ],
   },
   {
-    title: 'Claims & Records',
+    title: 'Reports & Records',
     items: [
-      { label: 'Insurance Claims', navLabel: 'Insurance Claims', icon: 'shield' },
+      { label: 'Reports', navLabel: 'Reports', icon: 'reports' },
       { label: 'Extract', navLabel: 'Extract / Exports', icon: 'reports' },
+      { label: 'Memos', navLabel: 'Memos', icon: 'message' },
     ],
   },
   {
-    title: 'Profile',
+    title: 'Staff & Preferences',
     items: [
+      { label: 'Payroll', navLabel: 'Staff Payroll', icon: 'money' },
       { label: 'Notes', navLabel: 'Notes & Reminders', icon: 'message' },
       { label: 'Settings', navLabel: 'My Profile & Settings', icon: 'settings' },
     ],
@@ -496,6 +502,13 @@ const defaultInventoryFilters = () => ({
   as_of_at: '',
   page: 1,
   per_page: 15,
+})
+
+const defaultFrameTrackerFilters = () => ({
+  search: '',
+  date_from: todayIso(),
+  date_to: todayIso(),
+  reservation_status: 'all',
 })
 
 const defaultInventoryProductForm = () => ({
@@ -735,6 +748,8 @@ function App() {
   })
   const [inventoryFilters, setInventoryFilters] = useState(defaultInventoryFilters())
   const [inventoryQuery, setInventoryQuery] = useState(defaultInventoryFilters())
+  const [frameTrackerFilters, setFrameTrackerFilters] = useState(defaultFrameTrackerFilters())
+  const [frameTrackerQuery, setFrameTrackerQuery] = useState(defaultFrameTrackerFilters())
   const [inventoryForm, setInventoryForm] = useState(defaultInventoryProductForm())
   const [lensTrackerFilters, setLensTrackerFilters] = useState(defaultLensTrackerFilters())
   const [lensTrackerQuery, setLensTrackerQuery] = useState(defaultLensTrackerFilters())
@@ -2094,7 +2109,7 @@ function App() {
     let cancelled = false
 
     async function loadInventory() {
-      if (!token || !session || !inventoryViews.includes(activeView)) return
+      if (!token || !session || session.role === 'receptionist' || !inventoryViews.includes(activeView)) return
       setIsLoadingInventory(true)
       setInventoryError('')
       try {
@@ -2119,7 +2134,7 @@ function App() {
     let cancelled = false
 
     async function loadInventoryStocktakeProducts() {
-      if (!token || !session || activeView !== 'Inventory' || !scopedBranchId) {
+      if (!token || !session || session.role === 'receptionist' || activeView !== 'Inventory' || !scopedBranchId) {
         setInventoryStocktakeProducts([])
         setIsLoadingInventoryStocktakeProducts(false)
         return
@@ -2153,7 +2168,7 @@ function App() {
     let cancelled = false
 
     async function loadLensTracker() {
-      if (!token || !session || !inventoryViews.includes(activeView)) return
+      if (!token || !session || (session.role === 'receptionist' && activeView !== 'Product Tracker') || !inventoryViews.includes(activeView)) return
       setIsLoadingLensTracker(true)
       setInventoryError('')
       try {
@@ -2191,14 +2206,15 @@ function App() {
     let cancelled = false
 
     async function loadFrameTracker() {
-      if (!token || !session || !inventoryViews.includes(activeView)) return
+      if (!token || !session || (session.role === 'receptionist' && activeView !== 'Product Tracker') || !inventoryViews.includes(activeView)) return
       setIsLoadingFrameTracker(true)
       try {
         const branchId = scopedBranchId ?? session.branch_id
         const params = new URLSearchParams({ branch_id: String(branchId) })
-        if (inventoryQuery.search) params.set('search', inventoryQuery.search)
-        if (inventoryQuery.date_from) params.set('date_from', inventoryQuery.date_from)
-        if (inventoryQuery.date_to) params.set('date_to', inventoryQuery.date_to)
+        if (frameTrackerQuery.search) params.set('search', frameTrackerQuery.search)
+        if (frameTrackerQuery.date_from) params.set('date_from', frameTrackerQuery.date_from)
+        if (frameTrackerQuery.date_to) params.set('date_to', frameTrackerQuery.date_to)
+        if (frameTrackerQuery.reservation_status !== 'all') params.set('reservation_status', frameTrackerQuery.reservation_status)
         const response = await apiFetch(`/inventory/frame-tracker?${params.toString()}`, { token })
         if (!cancelled) setFrameTrackerData(response)
       } catch (error) {
@@ -2212,7 +2228,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeView, inventoryQuery.date_from, inventoryQuery.date_to, inventoryQuery.search, scopedBranchId, session, token])
+  }, [activeView, frameTrackerQuery.date_from, frameTrackerQuery.date_to, frameTrackerQuery.reservation_status, frameTrackerQuery.search, scopedBranchId, session, token])
 
   useEffect(() => {
     let cancelled = false
@@ -2748,7 +2764,10 @@ function App() {
       return stripSettings(managerNavSections)
     }
 
-    return stripSettings(receptionistNavSections)
+    return stripSettings(receptionistNavSections.map((section) => ({
+      ...section,
+      items: section.items.filter((item) => item.label !== 'Inventory'),
+    })))
   }, [canAccessSystemSettings, hasManagerSidebar, isAccountant, isExecutive, isOptometrist, session?.role])
 
   const visibleNavItems = useMemo(
@@ -2782,6 +2801,11 @@ function App() {
     if (session?.role !== 'receptionist' || activeView !== 'Reports') return
     setActiveView('Notes')
   }, [activeView, session])
+
+  useEffect(() => {
+    if (session?.role !== 'receptionist' || !['Inventory', 'Lens Tracker'].includes(activeView)) return
+    setActiveView('Dashboard')
+  }, [activeView, session?.role])
 
   useEffect(() => {
     if (session?.role !== 'technician' || technicianViews.includes(activeView)) return
@@ -4041,12 +4065,43 @@ function App() {
       })
 
       const params = new URLSearchParams({ branch_id: String(branchId) })
-      if (inventoryQuery.search) params.set('search', inventoryQuery.search)
-      if (inventoryQuery.date_from) params.set('date_from', inventoryQuery.date_from)
-      if (inventoryQuery.date_to) params.set('date_to', inventoryQuery.date_to)
+      if (frameTrackerQuery.search) params.set('search', frameTrackerQuery.search)
+      if (frameTrackerQuery.date_from) params.set('date_from', frameTrackerQuery.date_from)
+      if (frameTrackerQuery.date_to) params.set('date_to', frameTrackerQuery.date_to)
+      if (frameTrackerQuery.reservation_status !== 'all') params.set('reservation_status', frameTrackerQuery.reservation_status)
       const response = await apiFetch(`/inventory/frame-tracker?${params.toString()}`, { token })
       setFrameTrackerData(response)
       setInventorySuccess('Frame cost reserved and recorded as an expense.')
+    } catch (error) {
+      setInventoryError(error.message)
+    } finally {
+      setReservingFrameProductId(null)
+    }
+  }
+
+  async function reverseFrameReservation(frameSaleId) {
+    if (!frameSaleId || !isGeneralManager) return
+
+    setReservingFrameProductId(frameSaleId)
+    setInventoryError('')
+    setInventorySuccess('')
+
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      await apiFetch(`/inventory/frame-tracker/${frameSaleId}/reserve`, {
+        method: 'DELETE',
+        token,
+        body: { branch_id: branchId },
+      })
+
+      const params = new URLSearchParams({ branch_id: String(branchId) })
+      if (frameTrackerQuery.search) params.set('search', frameTrackerQuery.search)
+      if (frameTrackerQuery.date_from) params.set('date_from', frameTrackerQuery.date_from)
+      if (frameTrackerQuery.date_to) params.set('date_to', frameTrackerQuery.date_to)
+      if (frameTrackerQuery.reservation_status !== 'all') params.set('reservation_status', frameTrackerQuery.reservation_status)
+      const response = await apiFetch(`/inventory/frame-tracker?${params.toString()}`, { token })
+      setFrameTrackerData(response)
+      setInventorySuccess('Frame cost reservation and its linked expense were reversed.')
     } catch (error) {
       setInventoryError(error.message)
     } finally {
@@ -5516,8 +5571,12 @@ function App() {
                 setInventoryForm={setInventoryForm}
                 inventoryLensData={inventoryLensData}
                 frameTrackerData={frameTrackerData}
+                frameTrackerFilters={frameTrackerFilters}
+                setFrameTrackerFilters={setFrameTrackerFilters}
+                setFrameTrackerQuery={setFrameTrackerQuery}
                 isLoadingFrameTracker={isLoadingFrameTracker}
                 reserveFrameProduct={reserveFrameProduct}
+                reverseFrameReservation={reverseFrameReservation}
                 reservingFrameProductId={reservingFrameProductId}
                 lensTrackerFilters={lensTrackerFilters}
                 setLensTrackerFilters={setLensTrackerFilters}
@@ -5555,8 +5614,12 @@ function App() {
                 setInventoryForm={setInventoryForm}
                 inventoryLensData={inventoryLensData}
                 frameTrackerData={frameTrackerData}
+                frameTrackerFilters={frameTrackerFilters}
+                setFrameTrackerFilters={setFrameTrackerFilters}
+                setFrameTrackerQuery={setFrameTrackerQuery}
                 isLoadingFrameTracker={isLoadingFrameTracker}
                 reserveFrameProduct={reserveFrameProduct}
+                reverseFrameReservation={reverseFrameReservation}
                 reservingFrameProductId={reservingFrameProductId}
                 lensTrackerFilters={lensTrackerFilters}
                 setLensTrackerFilters={setLensTrackerFilters}

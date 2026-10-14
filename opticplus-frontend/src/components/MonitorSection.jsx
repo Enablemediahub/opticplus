@@ -205,6 +205,7 @@ function DailyExtractionSheet({ report, loading, periodLabel }) {
 }
 
 export default function MonitorSection({ apiFetch, token, selectedBranchId, session }) {
+  const canViewMonitor = ['manager', 'accountant'].includes(session?.role)
   const [branchSelection, setBranchSelection] = useState(() => ({
     source: selectedBranchId,
     value: String(selectedBranchId ?? 1),
@@ -225,7 +226,7 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
   })
 
   useEffect(() => {
-    if (!token || !['manager', 'accountant'].includes(session?.role)) return
+    if (!token || !canViewMonitor) return
     let cancelled = false
     const params = new URLSearchParams({
       branch_id: branchId,
@@ -248,8 +249,8 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
       }
     })
     return () => { cancelled = true }
-  }, [apiFetch, appliedExtractionRange, branchId, session?.role, token, year])
-  if (!['manager', 'accountant'].includes(session?.role)) return <section className="finance-section"><div className="message-banner error">Only the General Manager and Accountant can access The Monitor.</div></section>
+  }, [apiFetch, appliedExtractionRange, branchId, canViewMonitor, session?.role, token, year])
+  if (!canViewMonitor) return <section className="finance-section"><div className="message-banner error">The Monitor is not available for this account.</div></section>
 
   function printReport() { window.print() }
   function exportExcel() { saveFile(workbookXml(report), `bealet-daily-extraction-${report?.branch_name?.toLowerCase().replace(/\s+/g, '-') || 'branch'}.xls`, 'application/vnd.ms-excel') }

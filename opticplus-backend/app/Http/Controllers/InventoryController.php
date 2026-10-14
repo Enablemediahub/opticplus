@@ -393,10 +393,14 @@ class InventoryController extends Controller
 
     public function frameTracker(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'reservation_status' => ['sometimes', 'in:all,reserved,not_reserved'],
+        ]);
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
         $dateFrom = $request->string('date_from')->toString();
         $dateTo = $request->string('date_to')->toString();
+        $reservationStatus = $validated['reservation_status'] ?? 'all';
 
         $records = DB::table('billing_frames as bf')
             ->join('billing as b', function ($join): void {
@@ -413,6 +417,8 @@ class InventoryController extends Controller
             })
             ->whereIn(DB::raw('LOWER(p.category)'), ['frame', 'frames'])
             ->when($branchId > 0, fn ($query) => $query->where('bf.branch_id', $branchId))
+            ->when($reservationStatus === 'reserved', fn ($query) => $query->whereNotNull('fcr.id'))
+            ->when($reservationStatus === 'not_reserved', fn ($query) => $query->whereNull('fcr.id'))
             ->when($dateFrom !== '', fn ($query) => $query->whereDate('b.date', '>=', $dateFrom))
             ->when($dateTo !== '', fn ($query) => $query->whereDate('b.date', '<=', $dateTo))
             ->when($search !== '', function ($query) use ($search): void {
@@ -576,6 +582,58 @@ class InventoryController extends Controller
             'message' => $created ? 'Frame cost reserved and recorded as an expense.' : 'Frame cost is already reserved.',
             'reserved' => true,
         ], $created ? 201 : 200);
+    }
+
+    public function reverseFrameCostReservation(Request $request, int $frameSaleId): JsonResponse
+    {
+        if ($request->user()?->normalized_role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can reverse a frame cost reservation.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        if (! Schema::hasTable('frame_cost_reservations')
+            || ! Schema::hasTable('expenses')
+            || ! Schema::hasColumn('expenses', 'source_type')
+            || ! Schema::hasColumn('expenses', 'source_id')) {
+            return response()->json(['message' => 'Frame reservation tracking is not available on this database.'], 503);
+        }
+
+        $reversed = DB::transaction(function () use ($branchId, $frameSaleId): bool {
+            $reservation = DB::table('frame_cost_reservations')
+                ->where('branch_id', $branchId)
+                ->where('frame_sale_id', $frameSaleId)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if (! $reservation) {
+                return false;
+            }
+
+            DB::table('expenses')
+                ->where('branch_id', $branchId)
+                ->where('source_type', 'frame_reservation')
+                ->where('source_id', $frameSaleId)
+                ->delete();
+
+            DB::table('frame_cost_reservations')
+                ->where('id', $reservation->id)
+                ->delete();
+
+            return true;
+        });
+
+        if (! $reversed) {
+            return response()->json(['message' => 'Frame cost reservation was not found for this branch.'], 404);
+        }
+
+        return response()->json([
+            'message' => 'Frame cost reservation and its linked expense were reversed.',
+            'reserved' => false,
+        ]);
     }
 
     public function overview(Request $request): JsonResponse

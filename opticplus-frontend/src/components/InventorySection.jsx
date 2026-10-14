@@ -945,7 +945,9 @@ function FramesTrackerTab(props) {
         <StatWidget label="Frames Sold" value={String(records.length)} note="Frame units sold in the selected range" icon="inventory" className="total" />
         <StatWidget label="Frame Sales" value={currency.format(totalSales)} note="Sales value for the selected range" icon="money" className="seen" />
         <StatWidget label="Cost to Recover" value={currency.format(totalCost)} note="Cost from frame codes with a saved price" icon="alert" className="pending" />
-        <StatWidget label="Tracked Profit" value={currency.format(totalProfit)} note="Sales less saved frame costs" icon="trend" className="today" />
+        {props.session?.role !== 'receptionist' ? (
+          <StatWidget label="Tracked Profit" value={currency.format(totalProfit)} note="Sales less saved frame costs" icon="trend" className="today" />
+        ) : null}
         <StatWidget label="Reserved" value={String(reservedRecords.length)} note="Frame costs recorded as expenses" icon="check-badge" className="seen" />
         <StatWidget label="Not Reserved" value={String(records.length - reservedRecords.length)} note="Frame sales awaiting cost reservation" icon="alert" className="pending" />
         <StatWidget label="Reserved Cost" value={currency.format(totalReservedCost)} note="Recorded frame reservation expenses" icon="money" className="today" />
@@ -965,37 +967,41 @@ function FramesTrackerTab(props) {
           className="patient-filter-grid"
           onSubmit={(event) => {
             event.preventDefault()
-            props.setInventoryQuery((current) => ({
-              ...current,
-              search: props.inventoryFilters.search,
-              date_from: props.inventoryFilters.date_from,
-              date_to: props.inventoryFilters.date_to,
-              category: 'all',
-              page: 1,
-            }))
+            props.setFrameTrackerQuery({ ...props.frameTrackerFilters })
           }}
         >
           <label>
             Date from
             <input
               type="date"
-              value={props.inventoryFilters.date_from}
-              onChange={(event) => props.setInventoryFilters((current) => ({ ...current, date_from: event.target.value }))}
+              value={props.frameTrackerFilters.date_from}
+              onChange={(event) => props.setFrameTrackerFilters((current) => ({ ...current, date_from: event.target.value }))}
             />
           </label>
           <label>
             Date to
             <input
               type="date"
-              value={props.inventoryFilters.date_to}
-              onChange={(event) => props.setInventoryFilters((current) => ({ ...current, date_to: event.target.value }))}
+              value={props.frameTrackerFilters.date_to}
+              onChange={(event) => props.setFrameTrackerFilters((current) => ({ ...current, date_to: event.target.value }))}
             />
+          </label>
+          <label>
+            Reservation status
+            <select
+              value={props.frameTrackerFilters.reservation_status}
+              onChange={(event) => props.setFrameTrackerFilters((current) => ({ ...current, reservation_status: event.target.value }))}
+            >
+              <option value="all">All frames</option>
+              <option value="reserved">Reserved</option>
+              <option value="not_reserved">Not reserved</option>
+            </select>
           </label>
           <label>
             Search frame, patient, folder, or receipt
             <input
-              value={props.inventoryFilters.search}
-              onChange={(event) => props.setInventoryFilters((current) => ({ ...current, search: event.target.value }))}
+              value={props.frameTrackerFilters.search}
+              onChange={(event) => props.setFrameTrackerFilters((current) => ({ ...current, search: event.target.value }))}
               placeholder="Search code, name, or grade"
             />
           </label>
@@ -1035,14 +1041,29 @@ function FramesTrackerTab(props) {
                     <td>{currency.format(Number(record.selling_price ?? 0))}</td>
                     <td>{record.cost_price == null ? 'Not set' : currency.format(Number(record.cost_price))}</td>
                     <td>
-                      <button
-                        type="button"
-                        className={record.reserved ? 'mini-action frame-reserved' : 'mini-action'}
-                        disabled={record.reserved || !Number(record.cost_price) || props.reservingFrameProductId === record.id}
-                        onClick={() => props.reserveFrameProduct(record.id)}
-                      >
-                        {record.reserved ? 'Reserved' : props.reservingFrameProductId === record.id ? 'Reserving...' : 'Reserve'}
-                      </button>
+                      {record.reserved && props.session?.role === 'manager' ? (
+                        <button
+                          type="button"
+                          className="mini-action danger"
+                          disabled={props.reservingFrameProductId === record.id}
+                          onClick={() => {
+                            if (window.confirm('Reverse this frame cost reservation and delete its linked expense?')) {
+                              props.reverseFrameReservation(record.id)
+                            }
+                          }}
+                        >
+                          {props.reservingFrameProductId === record.id ? 'Reversing...' : 'Reverse reservation'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={record.reserved ? 'mini-action frame-reserved' : 'mini-action'}
+                          disabled={record.reserved || !Number(record.cost_price) || props.reservingFrameProductId === record.id}
+                          onClick={() => props.reserveFrameProduct(record.id)}
+                        >
+                          {record.reserved ? 'Reserved' : props.reservingFrameProductId === record.id ? 'Reserving...' : 'Reserve'}
+                        </button>
+                      )}
                       {!record.reserved && !Number(record.cost_price) ? <div className="table-inline-meta">Add a cost in Stock Overview to reserve.</div> : null}
                     </td>
                   </tr>
