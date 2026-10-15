@@ -245,10 +245,11 @@ function RevenueTrackingView(props) {
           end_date: props.financeExpenseFilters.end_date,
           category: props.financeExpenseFilters.category,
           search: props.financeExpenseFilters.search,
+          sort: props.financeExpenseFilters.sort ?? 'date_desc',
           page: 1,
         }
 
-        return ['filter', 'start_date', 'end_date', 'category', 'search', 'page']
+        return ['filter', 'start_date', 'end_date', 'category', 'search', 'sort', 'page']
           .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
           ? current
           : next
@@ -277,6 +278,7 @@ function RevenueTrackingView(props) {
       end_date: props.financeExpenseFilters.end_date,
       category: props.financeExpenseFilters.category,
       search: props.financeExpenseFilters.search,
+      sort: props.financeExpenseFilters.sort ?? 'date_desc',
       page: 1,
     }))
   }
@@ -296,6 +298,7 @@ function RevenueTrackingView(props) {
       end_date: '',
       category: 'all',
       search: '',
+      sort: 'date_desc',
       page: 1,
       per_page: 12,
     }
@@ -540,7 +543,27 @@ function RevenueTrackingView(props) {
               <p className="eyebrow">Expense Ledger</p>
               <h3>Tracked expense entries</h3>
             </div>
-            <span className="panel-tag">{props.financeExpenses?.pagination?.total ?? 0} records</span>
+            <div className="expense-ledger-heading-actions">
+              <label>
+                Sort ledger
+                <select
+                  value={props.financeExpenseFilters.sort ?? 'date_desc'}
+                  onChange={(event) => {
+                    const sort = event.target.value
+                    props.setFinanceExpenseFilters((current) => ({ ...current, sort, page: 1 }))
+                    props.setFinanceExpenseQuery((current) => ({ ...current, sort, page: 1 }))
+                  }}
+                >
+                  <option value="date_desc">Date: newest first</option>
+                  <option value="date_asc">Date: oldest first</option>
+                  <option value="amount_desc">Amount: highest first</option>
+                  <option value="amount_asc">Amount: lowest first</option>
+                  <option value="category_asc">Category: A to Z</option>
+                  <option value="category_desc">Category: Z to A</option>
+                </select>
+              </label>
+              <span className="panel-tag">{props.financeExpenses?.pagination?.total ?? 0} records</span>
+            </div>
           </div>
 
           <TableShell>
@@ -1691,7 +1714,11 @@ function ExpensesTab(props) {
   })
   const isSelectedLensLinked = Boolean(selectedExpense?.is_lens_linked)
   const isSelectedFrameReserved = Boolean(selectedExpense?.is_frame_reserved)
-  const canEditSelectedExpense = canManageExpenses && !isSelectedLensLinked && !isSelectedFrameReserved
+  const canEditFrameReservationDate = ['manager', 'general-manager'].includes(props.session?.role) && !props.readOnly
+  const canEditSelectedExpense = canManageExpenses
+    && !isSelectedLensLinked
+    && (!isSelectedFrameReserved || canEditFrameReservationDate)
+  const canEditSelectedExpenseDetails = canEditSelectedExpense && !isSelectedFrameReserved
   const canDeleteSelectedExpense = isSelectedLensLinked
     ? canDeleteLinkedLensExpense
     : !isSelectedFrameReserved && canManageExpenses
@@ -1702,6 +1729,7 @@ function ExpensesTab(props) {
     end_date: '',
     category: 'all',
     search: '',
+    sort: 'date_desc',
     page: 1,
     per_page: 12,
   }
@@ -1710,6 +1738,7 @@ function ExpensesTab(props) {
     ...currentMonthDateRange(),
     category: 'all',
     search: '',
+    sort: 'date_desc',
     page: 1,
     per_page: 12,
   }
@@ -1745,11 +1774,12 @@ function ExpensesTab(props) {
           end_date: props.financeExpenseFilters.end_date,
           category: props.financeExpenseFilters.category,
           search: props.financeExpenseFilters.search,
+          sort: props.financeExpenseFilters.sort ?? 'date_desc',
           page: 1,
           per_page: current?.per_page ?? props.financeExpenseFilters.per_page ?? 12,
         }
 
-        return ['filter', 'start_date', 'end_date', 'category', 'search', 'page', 'per_page']
+        return ['filter', 'start_date', 'end_date', 'category', 'search', 'sort', 'page', 'per_page']
           .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
           ? current
           : next
@@ -1870,6 +1900,20 @@ function ExpensesTab(props) {
                   onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, end_date: event.target.value, page: 1 })}
                 />
               </label>
+              <label>
+                Sort ledger
+                <select
+                  value={props.financeExpenseFilters.sort ?? 'date_desc'}
+                  onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, sort: event.target.value, page: 1 })}
+                >
+                  <option value="date_desc">Date: newest first</option>
+                  <option value="date_asc">Date: oldest first</option>
+                  <option value="amount_desc">Amount: highest first</option>
+                  <option value="amount_asc">Amount: lowest first</option>
+                  <option value="category_asc">Category: A to Z</option>
+                  <option value="category_desc">Category: Z to A</option>
+                </select>
+              </label>
               <div className="filter-actions-row full-span">
                 <button type="submit" className="primary-button">Apply filters</button>
                 <button
@@ -1904,6 +1948,7 @@ function ExpensesTab(props) {
                   <th>Date</th>
                   <th>Amount</th>
                   <th>Branch</th>
+                  <th>Entered by</th>
                   <th></th>
                 </tr>
               </thead>
@@ -1920,6 +1965,7 @@ function ExpensesTab(props) {
                     <td>{expense.date}</td>
                     <td>{currency.format(Number(expense.amount ?? 0))}</td>
                     <td>{props.financeExpenses?.branch_name ?? 'Active branch'}</td>
+                    <td>{expense.entered_by || 'Unknown'}</td>
                     <td>
                       <button
                         type="button"
@@ -1929,7 +1975,7 @@ function ExpensesTab(props) {
                           openExpenseModal(expense)
                         }}
                       >
-                        {canManageExpenses ? 'Edit' : 'View'}
+                        {canManageExpenses && (!expense.is_frame_reserved || canEditFrameReservationDate) ? 'Edit' : 'View'}
                       </button>
                     </td>
                   </tr>
@@ -1980,15 +2026,13 @@ function ExpensesTab(props) {
 
         {isCategoryManager ? (
           <article className="panel panel-wide">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Manage Expense Categories</p>
-                <h3>Keep category names clean and consistent</h3>
-              </div>
-              <span className="panel-tag">{props.financeExpenses?.category_records?.length ?? 0} categories</span>
-            </div>
+            <div className="category-manager-inline">
+              <details>
+                <summary>
+                  Manage Expense Categories ({props.financeExpenses?.category_records?.length ?? 0})
+                </summary>
 
-            <div className="stack-list">
+              <div className="stack-list category-manager-content">
               <form
                 className="patient-filter-grid"
                 onSubmit={(event) => {
@@ -2090,6 +2134,8 @@ function ExpensesTab(props) {
                   </div>
                 )
               })}
+              </div>
+              </details>
             </div>
           </article>
         ) : null}
@@ -2136,7 +2182,7 @@ function ExpensesTab(props) {
             ) : null}
             {selectedExpense.is_frame_reserved ? (
               <div className="message-banner">
-                This expense was created from Frames Tracker. Amount and details are controlled there.
+                This expense was created from Frames Tracker. Its amount and description stay linked to the reservation; the General Manager can correct its date here.
               </div>
             ) : null}
 
@@ -2158,7 +2204,7 @@ function ExpensesTab(props) {
                   rows="4"
                   value={expenseModalForm.description}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, description: event.target.value }))}
-                  readOnly={!canEditSelectedExpense}
+                  readOnly={!canEditSelectedExpenseDetails}
                   required
                 />
               </label>
@@ -2170,7 +2216,7 @@ function ExpensesTab(props) {
                   step="0.01"
                   value={expenseModalForm.amount}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, amount: event.target.value }))}
-                  readOnly={!canEditSelectedExpense}
+                  readOnly={!canEditSelectedExpenseDetails}
                   required
                 />
               </label>
@@ -2189,7 +2235,7 @@ function ExpensesTab(props) {
                 <select
                   value={expenseModalForm.category}
                   onChange={(event) => setExpenseModalForm((current) => ({ ...current, category: event.target.value }))}
-                  disabled={!canEditSelectedExpense}
+                  disabled={!canEditSelectedExpenseDetails}
                 >
                   {categoryOptions.map((category) => (
                     <option key={category} value={category}>{category}</option>
@@ -2200,7 +2246,7 @@ function ExpensesTab(props) {
               {canEditSelectedExpense ? (
                 <div className="filter-actions-row full-span">
                   <button type="submit" className="primary-button" disabled={props.isUpdatingExpenseRecord}>
-                    {props.isUpdatingExpenseRecord ? 'Saving changes...' : 'Save changes'}
+                    {props.isUpdatingExpenseRecord ? 'Saving changes...' : isSelectedFrameReserved ? 'Save date' : 'Save changes'}
                   </button>
                 </div>
               ) : null}
@@ -2508,11 +2554,12 @@ function CeoExpenseReviewView(props) {
           end_date: props.financeExpenseFilters.end_date,
           category: props.financeExpenseFilters.category,
           search: props.financeExpenseFilters.search,
+          sort: props.financeExpenseFilters.sort ?? 'date_desc',
           page: 1,
           per_page: current?.per_page ?? props.financeExpenseFilters.per_page ?? 12,
         }
 
-        return ['filter', 'start_date', 'end_date', 'category', 'search', 'page', 'per_page']
+        return ['filter', 'start_date', 'end_date', 'category', 'search', 'sort', 'page', 'per_page']
           .every((key) => (current?.[key] ?? '') === (next?.[key] ?? ''))
           ? current
           : next
@@ -2535,7 +2582,7 @@ function CeoExpenseReviewView(props) {
   }
 
   function resetCeoExpenseFilters() {
-    const defaults = { filter: 'all', start_date: '', end_date: '', category: 'all', search: '', page: 1, per_page: 12 }
+    const defaults = { filter: 'all', start_date: '', end_date: '', category: 'all', search: '', sort: 'date_desc', page: 1, per_page: 12 }
     commitExpenseFilters(defaults)
   }
 
@@ -2587,6 +2634,20 @@ function CeoExpenseReviewView(props) {
               value={props.financeExpenseFilters.end_date}
               onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, end_date: event.target.value, page: 1 })}
             />
+          </label>
+          <label>
+            Sort ledger
+            <select
+              value={props.financeExpenseFilters.sort ?? 'date_desc'}
+              onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, sort: event.target.value, page: 1 })}
+            >
+              <option value="date_desc">Date: newest first</option>
+              <option value="date_asc">Date: oldest first</option>
+              <option value="amount_desc">Amount: highest first</option>
+              <option value="amount_asc">Amount: lowest first</option>
+              <option value="category_asc">Category: A to Z</option>
+              <option value="category_desc">Category: Z to A</option>
+            </select>
           </label>
           <div className="filter-actions-row full-span">
             <button type="submit" className="primary-button">Apply review filters</button>

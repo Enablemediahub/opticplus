@@ -1,27 +1,48 @@
 Hostinger FileZilla sync manifest
-Updated: 2026-10-14
+Updated: 2026-10-14 13:02:58 UTC
 Local package: /Users/mindsurgeon/Herd/opticplus/tmp/hostinger-package
 Remote destination: Laravel application root; preserve package-relative paths.
-Status: Frontend UI updates pending upload.
+Status: Ready to upload billing, expense sorting across expense views, audit, inventory, and patient-classification updates.
 
 Files to upload:
+  app/Http/Controllers/BillingController.php
+  app/Http/Controllers/FinanceController.php
+  app/Http/Controllers/ManagerController.php
+  app/Http/Controllers/PatientRecordController.php
+  routes/api.php
+  database/migrations/2026_10_14_000001_add_created_by_to_billing_table.php
+  database/migrations/2026_10_14_000002_add_patient_type_to_patient_records_table.php
+  database/migrations/2026_10_14_000003_backfill_patient_type_from_comments.php
   public/index.html
-  public/assets/index-yDJKmfTd.css
-  public/assets/index-BXQ6bjQr.js
+  public/assets/index-CtCOAVg4.css
+  public/assets/index-BoY0TUej.js
 
-After confirming the new site loads, old frontend bundles may be removed from
-public/assets:
-  index-Beej20LZ.css
-  index-B3D2fw-M.css
-  index-D-8dzYFs.css
-  index-FHc7oS7X.css
-  index-d3FUpwMd.js
-  index-C8-Rx0jJ.js
-  index-CO_6ojjH.js
-  index-DfUmuSbb.js
-  index-DMd2H6R6.js
-  index-Cx0YcJn9.js
-  index-zfpCsnEF.js
+Expense tables and lists support date (newest/oldest), amount (highest/lowest), and
+category (A-Z/Z-A) sorting where shown. Date, newest first, is the default. Category
+management is collapsed until opened.
 
-No database changes are required for this frontend spacing update.
+The migrations add billing.created_by and nullable patient_records.patient_type,
+then backfill records whose comments explicitly contain “new patient” or “old patient”.
+Comments containing both labels or neither are left unclassified. New entries use the
+intake dropdown; dropdown selections take precedence because the backfill only fills NULLs.
+Run `php artisan migrate --force` from the Hostinger application root after upload.
+If applying the patient classification change manually in MySQL instead, use:
+  ALTER TABLE `patient_records`
+    ADD COLUMN `patient_type` VARCHAR(10) NULL AFTER `purpose`,
+    ADD INDEX `patient_records_patient_type_index` (`patient_type`);
+To backfill legacy classifications manually after adding the column, run:
+  UPDATE `patient_records`
+  SET `patient_type` = CASE
+    WHEN LOWER(`comment`) LIKE '%new patient%' AND LOWER(`comment`) NOT LIKE '%old patient%' THEN 'new'
+    WHEN LOWER(`comment`) LIKE '%old patient%' AND LOWER(`comment`) NOT LIKE '%new patient%' THEN 'old'
+    ELSE `patient_type`
+  END
+  WHERE `patient_type` IS NULL
+    AND `comment` IS NOT NULL
+    AND (LOWER(`comment`) LIKE '%new patient%' OR LOWER(`comment`) LIKE '%old patient%');
+
+After confirming the new site loads, remove the replaced assets from public/assets:
+  index-L3UU5qOj.css
+  index-C29F7br-.js
+
 Do not upload or replace the production .env.

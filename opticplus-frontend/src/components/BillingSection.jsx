@@ -34,6 +34,8 @@ export default function BillingSection({
   billingForm,
   setBillingForm,
   saveBillingRecord,
+  updateBillingRecord,
+  deleteBillingRecord,
   isSavingBill,
   isLoadingBilling,
   isLoadingBillingMeta,
@@ -176,6 +178,7 @@ export default function BillingSection({
         <ManagerBillingWorkspace
           billingMeta={billingMeta}
           billingData={billingData}
+          session={session}
           billingFilters={billingFilters}
           setBillingFilters={setBillingFilters}
           setBillingQuery={setBillingQuery}
@@ -184,6 +187,8 @@ export default function BillingSection({
           setIsBillingSummaryOpen={setIsBillingSummaryOpen}
           openBillingPayment={openBillingPayment}
           setIsBillingModalOpen={setIsBillingModalOpen}
+          updateBillingRecord={updateBillingRecord}
+          deleteBillingRecord={deleteBillingRecord}
           pricingForm={pricingForm}
           setPricingForm={setPricingForm}
           submitPricing={submitPricing}
@@ -303,6 +308,7 @@ export default function BillingSection({
                       <th>Folder ID</th>
                       <th>Receipt</th>
                       <th>Date</th>
+                      <th>Entered by</th>
                       <th>Status</th>
                       <th>Total</th>
                       <th>Discount</th>
@@ -319,6 +325,7 @@ export default function BillingSection({
                         <td>{record.folder_id}</td>
                         <td>{record.receipt_number || 'No receipt yet'}</td>
                         <td>{record.date}</td>
+                        <td>{record.entered_by || 'Unknown'}</td>
                         <td>
                           <span className={`status-pill status-${billingStatusLabel(record).toLowerCase().replaceAll(' ', '-')}`}>
                             {billingStatusLabel(record)}
@@ -963,6 +970,7 @@ export default function BillingSection({
 }
 
 function ManagerBillingWorkspace({
+  session,
   billingMeta,
   billingData,
   billingFilters,
@@ -973,6 +981,8 @@ function ManagerBillingWorkspace({
   setIsBillingSummaryOpen,
   openBillingPayment,
   setIsBillingModalOpen,
+  updateBillingRecord,
+  deleteBillingRecord,
   pricingForm,
   setPricingForm,
   submitPricing,
@@ -980,6 +990,11 @@ function ManagerBillingWorkspace({
   exportBillingData,
 }) {
   const stats = billingData?.stats ?? {}
+  const canEditBilling = ['manager', 'general-manager'].includes(session?.role)
+  const canDeleteBilling = canEditBilling || session?.role === 'accountant'
+  const [editingRecord, setEditingRecord] = useState(null)
+  const [editingForm, setEditingForm] = useState({ name: '', date: '' })
+  const [isSavingRecord, setIsSavingRecord] = useState(false)
 
   return (
     <section className="manager-billing-shell">
@@ -1202,7 +1217,7 @@ function ManagerBillingWorkspace({
                       <td>
                         <div className="patient-table-primary">
                           <strong>{record.name}</strong>
-                          <span>{record.patient_phone || record.customer_phone || 'No contact'}</span>
+                          <span>{record.patient_phone || record.customer_phone || 'No contact'} · Entered by {record.entered_by || 'Unknown'}</span>
                         </div>
                       </td>
                       <td>{record.branch_name}</td>
@@ -1233,6 +1248,33 @@ function ManagerBillingWorkspace({
                           >
                             Summary
                           </button>
+                          {canEditBilling ? (
+                            <button
+                              type="button"
+                              className="mini-action"
+                              onClick={() => {
+                                setEditingRecord(record)
+                                setEditingForm({
+                                  name: record.name ?? '',
+                                  date: String(record.date ?? '').slice(0, 10),
+                                })
+                              }}
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {canDeleteBilling ? (
+                            <button
+                              type="button"
+                              className="mini-action danger-outline"
+                              onClick={async () => {
+                                if (!window.confirm(`Delete billing record ${record.folder_id} for ${record.name}? Deletion is blocked if payments, claims, or linked products exist.`)) return
+                                await deleteBillingRecord(record.id)
+                              }}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -1250,6 +1292,48 @@ function ManagerBillingWorkspace({
           </>
         ) : null}
       </article>
+
+      {editingRecord ? (
+        <div className="modal-overlay" onClick={() => setEditingRecord(null)}>
+          <article className="modal-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Billing Record</p>
+                <h3>Edit bill details</h3>
+                <p className="muted-copy">Patient name and billing date only. Payment, folder, and product details remain unchanged.</p>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setEditingRecord(null)}>Close</button>
+            </div>
+            <form
+              className="patient-form-grid"
+              onSubmit={async (event) => {
+                event.preventDefault()
+                setIsSavingRecord(true)
+                try {
+                  const saved = await updateBillingRecord(editingRecord.id, editingForm)
+                  if (saved) setEditingRecord(null)
+                } finally {
+                  setIsSavingRecord(false)
+                }
+              }}
+            >
+              <label>
+                Patient name
+                <input required value={editingForm.name} onChange={(event) => setEditingForm((current) => ({ ...current, name: event.target.value }))} />
+              </label>
+              <label>
+                Billing date
+                <input type="date" required value={editingForm.date} onChange={(event) => setEditingForm((current) => ({ ...current, date: event.target.value }))} />
+              </label>
+              <div className="filter-actions-row full-span">
+                <button type="submit" className="primary-button" disabled={isSavingRecord}>
+                  {isSavingRecord ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </article>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -36,19 +36,36 @@ function localDateTimeNow() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
+function readInventoryTab(storageKey, allowedTabs, fallback) {
+  if (typeof window === 'undefined') return fallback
+
+  try {
+    const savedTab = window.sessionStorage.getItem(storageKey)
+    return allowedTabs.includes(savedTab) ? savedTab : fallback
+  } catch (error) {
+    console.error('Unable to restore the selected inventory tab.', error)
+    return fallback
+  }
+}
+
 export default function InventorySection(props) {
-  const [activeTab, setActiveTab] = useState(props.initialTab ?? 'Stock Overview')
-  const [lensDrafts, setLensDrafts] = useState({})
-  const [frameCostDrafts, setFrameCostDrafts] = useState({})
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const tabs = props.productTrackerMode
     ? productTrackerTabs
     : inventoryTabs.map((tab) => ({ label: tab, value: tab }))
+  const storageKey = `opticplus:inventory-tab:v1:${props.productTrackerMode ? 'product-tracker' : 'inventory'}:${props.inventoryBranchId ?? 'active'}`
+  const defaultTab = props.initialTab ?? tabs[0].value
+  const [activeTab, setActiveTab] = useState(() => readInventoryTab(storageKey, tabs.map((tab) => tab.value), defaultTab))
+  const [lensDrafts, setLensDrafts] = useState({})
+  const [frameCostDrafts, setFrameCostDrafts] = useState({})
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
-    if (!props.initialTab) return
-    setActiveTab(props.initialTab)
-  }, [props.initialTab])
+    try {
+      window.sessionStorage.setItem(storageKey, activeTab)
+    } catch (error) {
+      console.error('Unable to remember the selected inventory tab.', error)
+    }
+  }, [activeTab, storageKey])
 
   useEffect(() => {
     const nextDrafts = {}
@@ -1094,7 +1111,11 @@ function LensTrackerTab(props) {
         <StatWidget label="Total Lenses" value={stats.total_lenses ?? '...'} note="Lens bills in the selected range" icon="glasses" className="total" />
         <StatWidget label="Tracked" value={stats.tracked_count ?? '...'} note="Rows with recorded cost prices" icon="check-badge" className="seen" />
         <StatWidget label="Untracked" value={stats.untracked_count ?? '...'} note="Rows still waiting for lens cost entry" icon="alert" className="pending" />
-        <StatWidget label="Total Profit" value={currency.format(Number(stats.total_profit ?? 0))} note="Profit from tracked lens rows" icon="trend" className="today" />
+        {props.session?.role === 'receptionist' ? (
+          <StatWidget label="Cost Price Tracked" value={currency.format(Number(stats.total_cost ?? 0))} note="Total cost price recorded for tracked lenses" icon="money" className="today" />
+        ) : (
+          <StatWidget label="Total Profit" value={currency.format(Number(stats.total_profit ?? 0))} note="Profit from tracked lens rows" icon="trend" className="today" />
+        )}
       </section>
 
       <article className="panel">

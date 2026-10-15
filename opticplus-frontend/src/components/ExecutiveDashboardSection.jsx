@@ -161,9 +161,27 @@ export default function ExecutiveDashboardSection(props) {
         <article className="panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Recent Expenses</p>
-              <h3>Latest spending entries</h3>
+              <p className="eyebrow">Expense Entries</p>
+              <h3>Recent spending entries</h3>
             </div>
+            <label className="executive-expense-sort">
+              Sort
+              <select
+                value={props.financeExpenseFilters?.sort ?? 'date_desc'}
+                onChange={(event) => {
+                  const sort = event.target.value
+                  props.setFinanceExpenseFilters((current) => ({ ...current, sort, page: 1 }))
+                  props.setFinanceExpenseQuery((current) => ({ ...current, sort, page: 1 }))
+                }}
+              >
+                <option value="date_desc">Newest date</option>
+                <option value="date_asc">Oldest date</option>
+                <option value="amount_desc">Highest amount</option>
+                <option value="amount_asc">Lowest amount</option>
+                <option value="category_asc">Category A to Z</option>
+                <option value="category_desc">Category Z to A</option>
+              </select>
+            </label>
           </div>
 
           <div className="stack-list">

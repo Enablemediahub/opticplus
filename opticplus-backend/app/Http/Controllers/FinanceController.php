@@ -1306,6 +1306,16 @@ class FinanceController extends Controller
         $perPage = min(max((int) $request->integer('per_page', 12), 5), 50);
         $page = max((int) $request->integer('page', 1), 1);
         $offset = ($page - 1) * $perPage;
+        $sort = $request->string('sort')->toString() ?: 'date_desc';
+        $sortColumns = [
+            'date_desc' => ['date', 'desc'],
+            'date_asc' => ['date', 'asc'],
+            'amount_desc' => ['amount', 'desc'],
+            'amount_asc' => ['amount', 'asc'],
+            'category_asc' => ['category', 'asc'],
+            'category_desc' => ['category', 'desc'],
+        ];
+        abort_unless(array_key_exists($sort, $sortColumns), 422, 'Invalid expense sort order.');
 
         $query = DB::table('expenses');
         $this->applyBranchScope($query, 'branch_id', $branchId);
@@ -1330,10 +1340,15 @@ class FinanceController extends Controller
         if (Schema::hasColumn('expenses', 'source_id')) {
             $selectColumns[] = 'source_id';
         }
+        if (Schema::hasTable('users')) {
+            $selectColumns[] = DB::raw('(SELECT users.name FROM users WHERE users.id = expenses.created_by LIMIT 1) as entered_by');
+        }
 
+        [$sortColumn, $sortDirection] = $sortColumns[$sort];
         $records = $query
-            ->orderByDesc('expense_id')
+            ->orderBy($sortColumn, $sortDirection)
             ->orderByDesc('date')
+            ->orderByDesc('expense_id')
             ->limit($perPage)
             ->offset($offset)
             ->get($selectColumns)
@@ -1352,6 +1367,7 @@ class FinanceController extends Controller
                     'branch_id' => (int) $expense->branch_id,
                     'source_type' => $expense->source_type ?? null,
                     'source_id' => isset($expense->source_id) ? (int) $expense->source_id : null,
+                    'entered_by' => $expense->entered_by ?? null,
                     'is_lens_linked' => $isLensLinked,
                     'is_frame_reserved' => $isFrameReserved,
                 ];
@@ -1390,6 +1406,7 @@ class FinanceController extends Controller
                 'end_date' => $request->string('end_date')->toString(),
                 'category' => $request->string('category')->toString(),
                 'search' => $request->string('search')->toString(),
+                'sort' => $sort,
             ],
             'pagination' => [
                 'page' => $page,
@@ -1475,7 +1492,7 @@ class FinanceController extends Controller
 
             $expenseId = DB::table('expenses')->insertGetId($expenseData);
 
-            AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
+            AuditLog::logManual($request, 'create', 'expenses', 'expense_id: '.$expenseId, [
                 'description' => $validated['description'],
                 'amount' => $validated['amount'],
                 'date' => $validated['date'],
@@ -1517,48 +1534,50 @@ class FinanceController extends Controller
                 'message' => 'Lens cost expenses are controlled by Lens Tracker. Update the lens cost there instead.',
             ], 422);
         }
-        if ($this->isLinkedFrameReservationExpense($current)) {
+        $isFrameReservationExpense = $this->isLinkedFrameReservationExpense($current);
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if ($isFrameReservationExpense && $role !== 'manager') {
             return response()->json([
-                'message' => 'Frame reservation expenses are controlled by Frames Tracker.',
-            ], 422);
+                'message' => 'Only the General Manager can correct the date of a Frames Tracker expense.',
+            ], 403);
         }
 
-        $validated = $request->validate([
-            'description' => ['required', 'string', 'max:255'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'date' => ['required', 'date'],
-            'category' => ['required', 'string', 'max:50'],
-        ]);
-
-        $category = trim((string) $validated['category']);
-        if ($category === '') {
-            return response()->json([
-                'message' => 'Please select an expense category.',
-            ], 422);
-        }
-
-        if ($response = $this->ensureMiscellaneousExpenseLimit($category, (float) $validated['amount'])) {
-            return $response;
-        }
-
-        $this->upsertExpenseCategory($category);
-
-        DB::table('expenses')
-            ->where('expense_id', $expenseId)
-            ->update([
-                'description' => $validated['description'],
-                'amount' => $validated['amount'],
-                'date' => $validated['date'],
-                'category' => $category,
+        $validated = $request->validate($isFrameReservationExpense
+            ? ['date' => ['required', 'date']]
+            : [
+                'description' => ['required', 'string', 'max:255'],
+                'amount' => ['required', 'numeric', 'min:0.01'],
+                'date' => ['required', 'date'],
+                'category' => ['required', 'string', 'max:50'],
             ]);
 
-        AuditLog::logManual($request, 'edit', 'expenses', 'expense_id: '.$expenseId, [
-            'description' => $validated['description'],
-            'amount' => $validated['amount'],
-            'date' => $validated['date'],
-            'category' => $category,
-            'branch_id' => $branchId,
-        ]);
+        if ($isFrameReservationExpense) {
+            DB::table('expenses')
+                ->where('expense_id', $expenseId)
+                ->update(['date' => $validated['date']]);
+        } else {
+            $category = trim((string) $validated['category']);
+            if ($category === '') {
+                return response()->json([
+                    'message' => 'Please select an expense category.',
+                ], 422);
+            }
+
+            if ($response = $this->ensureMiscellaneousExpenseLimit($category, (float) $validated['amount'])) {
+                return $response;
+            }
+
+            $this->upsertExpenseCategory($category);
+
+            DB::table('expenses')
+                ->where('expense_id', $expenseId)
+                ->update([
+                    'description' => $validated['description'],
+                    'amount' => $validated['amount'],
+                    'date' => $validated['date'],
+                    'category' => $category,
+                ]);
+        }
 
         return response()->json([
             'message' => 'Expense updated successfully.',
@@ -1596,12 +1615,6 @@ class FinanceController extends Controller
         DB::table('expenses')
             ->where('expense_id', $expenseId)
             ->delete();
-
-        AuditLog::logManual($request, 'delete', 'expenses', 'expense_id: '.$expenseId, [
-            'branch_id' => $branchId,
-            'source_type' => $current->source_type ?? null,
-            'source_id' => $current->source_id ?? null,
-        ]);
 
         return response()->json([
             'message' => 'Expense deleted successfully.',

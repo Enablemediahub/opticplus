@@ -429,6 +429,7 @@ const defaultFinanceExpenseFilters = () => ({
   end_date: '',
   category: 'all',
   search: '',
+  sort: 'date_desc',
   page: 1,
   per_page: 12,
 })
@@ -3190,7 +3191,7 @@ function App() {
 
       if (activeView === 'Expenses') {
         const branchId = session.is_admin ? selectedBranchId : session.branch_id
-        const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}`, { token })
+        const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
         setFinanceExpenses(expensesResponse)
       }
     } catch (error) {
@@ -3627,6 +3628,43 @@ function App() {
     }
   }
 
+  async function updateBillingRecord(billingId, values) {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    setBillingError('')
+    setBillingSuccess('')
+    try {
+      const response = await apiFetch(`/billing/${billingId}?branch_id=${branchId}`, {
+        method: 'PUT',
+        token,
+        body: { ...values, branch_id: branchId },
+      })
+      setBillingSuccess(response.message || 'Billing record updated successfully.')
+      setBillingQuery((current) => ({ ...current }))
+      return true
+    } catch (error) {
+      setBillingError(error.message)
+      return false
+    }
+  }
+
+  async function deleteBillingRecord(billingId) {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    setBillingError('')
+    setBillingSuccess('')
+    try {
+      const response = await apiFetch(`/billing/${billingId}?branch_id=${branchId}`, {
+        method: 'DELETE',
+        token,
+      })
+      setBillingSuccess(response.message || 'Billing record deleted successfully.')
+      setBillingQuery((current) => ({ ...current }))
+      return true
+    } catch (error) {
+      setBillingError(error.message)
+      return false
+    }
+  }
+
   async function saveExpenseRecord(event) {
     event?.preventDefault?.()
     const branchId = session.is_admin ? selectedBranchId : session.branch_id
@@ -3754,7 +3792,7 @@ function App() {
         body: { name, branch_id: branchId },
       })
 
-      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}`, { token })
+      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
       setFinanceExpenses(expensesResponse)
       const categoriesResponse = await apiFetch('/finance/expense-categories', { token })
       const nextCategories = categoriesResponse.categories ?? []
@@ -3793,7 +3831,7 @@ function App() {
         body: { name, branch_id: branchId },
       })
 
-      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}`, { token })
+      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
       setFinanceExpenses(expensesResponse)
       const categoriesResponse = await apiFetch('/finance/expense-categories', { token })
       setExpenseCategoryCatalog(categoriesResponse.categories ?? [])
@@ -5016,6 +5054,9 @@ function App() {
                   financeSummary={financeSummary}
                   financeSales={financeSales}
                   financeExpenses={financeExpenses}
+                  financeExpenseFilters={financeExpenseFilters}
+                  setFinanceExpenseFilters={setFinanceExpenseFilters}
+                  setFinanceExpenseQuery={setFinanceExpenseQuery}
                   insuranceData={insuranceData}
                   isLoadingDashboard={isLoadingDashboard}
                   isLoadingFinanceSummary={isLoadingFinanceSummary}
@@ -5167,6 +5208,8 @@ function App() {
                 billingForm={billingForm}
                 setBillingForm={setBillingForm}
                 saveBillingRecord={saveBillingRecord}
+                updateBillingRecord={updateBillingRecord}
+                deleteBillingRecord={deleteBillingRecord}
                 isSavingBill={isSavingBill}
                 isLoadingBilling={isLoadingBilling}
                 isLoadingBillingMeta={isLoadingBillingMeta}

@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -36,6 +37,22 @@ class ManagerController extends Controller
         $monthlyInsuranceSales = (float) tap(DB::table('insurance_claims')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
 
         $monthlyPatients = (int) tap(DB::table('patient_records')->whereBetween(DB::raw('DATE(created_at)'), [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count();
+        $monthlyNewPatients = 0;
+        $monthlyOldPatients = 0;
+        if (Schema::hasColumn('patient_records', 'patient_type')) {
+            $monthlyNewPatients = (int) tap(
+                DB::table('patient_records')
+                    ->where('patient_type', 'new')
+                    ->whereBetween(DB::raw('DATE(created_at)'), [$monthStart->toDateString(), $today->toDateString()]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->count();
+            $monthlyOldPatients = (int) tap(
+                DB::table('patient_records')
+                    ->where('patient_type', 'old')
+                    ->whereBetween(DB::raw('DATE(created_at)'), [$monthStart->toDateString(), $today->toDateString()]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->count();
+        }
 
         $monthlyExpenses = (float) tap(DB::table('expenses')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount');
 
@@ -134,6 +151,8 @@ class ManagerController extends Controller
                 'monthly_insurance_sales' => $monthlyInsuranceSales,
                 'monthly_sales_with_insurance' => $monthlySalesWithInsurance,
                 'monthly_patients' => $monthlyPatients,
+                'monthly_new_patients' => $monthlyNewPatients,
+                'monthly_old_patients' => $monthlyOldPatients,
                 'monthly_expenses' => $monthlyExpenses,
                 'monthly_profit' => $monthlyProfit,
                 'monthly_profit_with_insurance' => $monthlyProfitWithInsurance,

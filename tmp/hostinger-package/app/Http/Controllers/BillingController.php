@@ -217,6 +217,7 @@ class BillingController extends Controller
         $baseQuery = DB::table('billing as b')
             ->leftJoin('patient_records as p', 'b.patient_id', '=', 'p.id')
             ->leftJoin('customers as c', 'b.customer_id', '=', 'c.id')
+            ->leftJoin('users as creator', 'b.created_by', '=', 'creator.id')
             ->leftJoinSub($salesTotals, 'sales_totals', function ($join): void {
                 $join->on('b.id', '=', 'sales_totals.billing_id');
             })
@@ -249,6 +250,7 @@ class BillingController extends Controller
                 'b.discount',
                 'b.health_insurance',
                 'b.receipt_number',
+                'creator.name as entered_by',
                 'p.phone as patient_phone',
                 'c.phone as customer_phone',
                 DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
@@ -337,6 +339,122 @@ class BillingController extends Controller
             ],
             'records' => $records,
         ]);
+    }
+
+    public function update(Request $request, int $billingId): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if ($role !== 'manager') {
+            return response()->json([
+                'message' => 'Only the General Manager can edit billing records.',
+            ], 403);
+        }
+
+        $this->ensureBillingSchema();
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $current = tap(
+            DB::table('billing')->where('id', $billingId),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        )->first();
+
+        if (! $current) {
+            return response()->json(['message' => 'Billing record not found for this branch.'], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'date' => ['required', 'date'],
+        ]);
+
+        DB::table('billing')
+            ->where('id', $billingId)
+            ->where('branch_id', $current->branch_id)
+            ->update([
+                'name' => $validated['name'],
+                'date' => $validated['date'],
+            ]);
+
+        return response()->json(['message' => 'Billing record updated successfully.']);
+    }
+
+    public function destroy(Request $request, int $billingId): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! in_array($role, ['manager', 'accountant'], true)) {
+            return response()->json([
+                'message' => 'Only the General Manager and Accountant can delete billing records.',
+            ], 403);
+        }
+
+        $this->ensureBillingSchema();
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $current = tap(
+            DB::table('billing')->where('id', $billingId),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        )->first();
+
+        if (! $current) {
+            return response()->json(['message' => 'Billing record not found for this branch.'], 404);
+        }
+
+        foreach ([
+            ['sales', 'billing_id', 'payment'],
+            ['insurance_claims', 'billing_id', 'insurance claim'],
+            ['billing_frames', 'billing_id', 'frame'],
+            ['lens_costs', 'billing_id', 'lens cost'],
+        ] as [$table, $column, $label]) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn($table, $column)
+                && DB::table($table)->where($column, $billingId)->exists()
+            ) {
+                return response()->json([
+                    'message' => "This billing record cannot be deleted because it has a linked {$label} record.",
+                ], 409);
+            }
+        }
+
+        if (
+            ! empty($current->prescription_id)
+            && Schema::hasTable('glasses_prescriptions')
+            && Schema::hasColumn('glasses_prescriptions', 'prescription_id')
+            && DB::table('glasses_prescriptions')->where('prescription_id', $current->prescription_id)->exists()
+        ) {
+            return response()->json([
+                'message' => 'This billing record cannot be deleted because it is linked to a prescription.',
+            ], 409);
+        }
+
+        if (
+            Schema::hasTable('inventory_movements')
+            && Schema::hasColumn('inventory_movements', 'reference_table')
+            && Schema::hasColumn('inventory_movements', 'reference_id')
+            && DB::table('inventory_movements')
+                ->where('reference_table', 'billing')
+                ->where('reference_id', $billingId)
+                ->exists()
+        ) {
+            return response()->json([
+                'message' => 'This billing record cannot be deleted because it has a linked inventory movement.',
+            ], 409);
+        }
+
+        DB::table('billing')
+            ->where('id', $billingId)
+            ->where('branch_id', $current->branch_id)
+            ->delete();
+
+        return response()->json(['message' => 'Billing record deleted successfully.']);
     }
 
     public function export(Request $request): JsonResponse
@@ -550,10 +668,12 @@ class BillingController extends Controller
         $vat = $taxBreakdown['vat'];
         $tax = $taxBreakdown['tax'];
         $totalAmount = $this->money(max($subtotal - $discount, 0));
+        $userId = $request->user()?->id;
 
         $billingId = DB::transaction(function () use (
             $validated,
             $branchId,
+            $userId,
             $billingFrameRows,
             $consultationPrice,
             $framePrice,
@@ -593,6 +713,7 @@ class BillingController extends Controller
                 'balance' => $totalAmount,
                 'prescription_id' => $validated['prescription_id'] ?? null,
                 'branch_id' => $branchId,
+                'created_by' => $userId,
             ]);
 
             foreach ($billingFrameRows as $frameItem) {
@@ -627,7 +748,7 @@ class BillingController extends Controller
                         'reference_table' => 'billing',
                         'reference_id' => $billingId,
                         'notes' => 'Frame stock reduced from billing sale.',
-                        'created_by' => null,
+                        'created_by' => $userId,
                         'movement_at' => now(),
                         'created_at' => now(),
                     ]);
@@ -904,6 +1025,12 @@ class BillingController extends Controller
             DB::table('billing')
                 ->where('lens_price', '<=', 0)
                 ->update(['lens_item_count' => 0]);
+        }
+
+        if (! Schema::hasColumn('billing', 'created_by')) {
+            Schema::table('billing', function (Blueprint $table): void {
+                $table->unsignedBigInteger('created_by')->nullable()->index();
+            });
         }
     }
 

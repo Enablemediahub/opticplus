@@ -86,6 +86,8 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
 
   const records = data?.records ?? []
   const pagination = data?.pagination
+  const visibleEdits = records.filter((record) => record.action_type === 'edit').length
+  const visibleDeletions = records.filter((record) => record.action_type === 'delete').length
 
   return (
     <section className="finance-section">
@@ -118,9 +120,14 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
           <p>Entries loaded on this page right now.</p>
         </article>
         <article className="stat-card patient-stat-card pending">
-          <span>Action filter</span>
-          <strong>{query.action_type === 'all' ? 'All' : query.action_type}</strong>
-          <p>Current action type narrowed in the log.</p>
+          <span>Edits on this page</span>
+          <strong>{visibleEdits}</strong>
+          <p>Successful edits in the visible activity list.</p>
+        </article>
+        <article className="stat-card patient-stat-card pending">
+          <span>Deletions on this page</span>
+          <strong>{visibleDeletions}</strong>
+          <p>Successful deletions in the visible activity list.</p>
         </article>
       </section>
 
@@ -149,7 +156,7 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
                 value={query.action_type}
                 onChange={(event) => setQuery((current) => ({ ...current, action_type: event.target.value, page: 1 }))}
               >
-                <option value="all">All actions</option>
+                <option value="all">All activities</option>
                 <option value="edit">Edits</option>
                 <option value="delete">Deletions</option>
               </select>
@@ -168,8 +175,8 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
         <article className="panel panel-wide">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Security Trail</p>
-              <h3>Recent edits and deletions</h3>
+              <p className="eyebrow">Activity Table</p>
+              <h3>Who changed what, and when</h3>
             </div>
             <span className="panel-tag">Page {pagination?.page ?? 1} of {pagination?.last_page ?? 1}</span>
           </div>
@@ -178,11 +185,10 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
             <table className="portal-table">
               <thead>
                 <tr>
-                  <th>When</th>
-                  <th>User</th>
-                  <th>Action</th>
-                  <th>Record</th>
-                  <th>Route</th>
+                  <th>Date and time</th>
+                  <th>Activity</th>
+                  <th>Edit / deletion</th>
+                  <th>By</th>
                   <th>Changes</th>
                 </tr>
               </thead>
@@ -191,21 +197,19 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
                   <tr key={record.id}>
                     <td>{formatTimestamp(record.created_at)}</td>
                     <td>
-                      <strong>{record.user_name || 'Unknown user'}</strong>
-                      <div className="muted-copy">{record.user_role || 'Unknown role'}</div>
+                      <strong>{record.entity_type || 'Unknown target'}</strong>
+                      <div className="muted-copy">{record.target_identifier || 'No record id captured'}</div>
+                      <div>{record.route_uri || record.request_path || 'Unknown route'}</div>
+                      <div className="muted-copy">{record.summary || 'No summary available'}</div>
                     </td>
                     <td>
                       <span className={`status-pill ${record.action_type === 'delete' ? 'status-pending' : 'status-seen'}`}>
-                        {record.action_type}
+                        {record.action_type === 'delete' ? 'Deletion' : 'Edit'}
                       </span>
                     </td>
                     <td>
-                      <strong>{record.entity_type || 'Unknown target'}</strong>
-                      <div className="muted-copy">{record.target_identifier || 'No record id captured'}</div>
-                    </td>
-                    <td>
-                      <div>{record.route_uri || record.request_path || 'Unknown route'}</div>
-                      <div className="muted-copy">{record.summary || 'No summary available'}</div>
+                      <strong>{record.user_name || 'Unknown user'}</strong>
+                      <div className="muted-copy">{record.user_role || 'Unknown role'}</div>
                     </td>
                     <td>
                       {record.payload && Object.keys(record.payload).length ? (
@@ -220,7 +224,7 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="6">{isLoading ? 'Loading audit log...' : 'No audit entries matched the current filters.'}</td>
+                    <td colSpan="5">{isLoading ? 'Loading audit log...' : 'No audit entries matched the current filters.'}</td>
                   </tr>
                 )}
               </tbody>

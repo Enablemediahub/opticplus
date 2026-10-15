@@ -13,6 +13,7 @@ export const patientFormDefaults = {
   address: '',
   residence: '',
   purpose: 'Consultation',
+  patient_type: '',
   comment: '',
   appointment_date: todayIso(),
 }
@@ -451,6 +452,17 @@ export default function PatientsSection({
                 </div>
               </div>
               <div className="patient-form-grid patient-form-grid-nested">
+                <Field label="Patient type" required>
+                  <select
+                    value={patientForm.patient_type}
+                    onChange={(event) => setPatientForm((current) => ({ ...current, patient_type: event.target.value }))}
+                    required
+                  >
+                    <option value="">Select patient type</option>
+                    <option value="new">New Patient</option>
+                    <option value="old">Old Patient</option>
+                  </select>
+                </Field>
                 <Field label="Visit purpose" required>
                   <select
                     value={patientForm.purpose}
@@ -1409,6 +1421,19 @@ export function PatientIntakeModal({ title, form, setForm, patientMeta, isSaving
               </div>
             </div>
             <div className="patient-form-grid patient-form-grid-nested">
+              {title === 'Register patient' ? (
+                <Field label="Patient type" required>
+                  <select
+                    value={form.patient_type ?? ''}
+                    onChange={(event) => setForm((current) => ({ ...current, patient_type: event.target.value }))}
+                    required
+                  >
+                    <option value="">Select patient type</option>
+                    <option value="new">New Patient</option>
+                    <option value="old">Old Patient</option>
+                  </select>
+                </Field>
+              ) : null}
               <Field label="Visit purpose" required>
                 <select
                   value={form.purpose}
@@ -1690,6 +1715,7 @@ function ManagerPatientsWorkspace({
                 <thead>
                   <tr>
                     <th>Patient</th>
+                    <th>Patient Type</th>
                     <th>Folder ID</th>
                     <th>Visit Date</th>
                     <th>Demographics</th>
@@ -1717,6 +1743,7 @@ function ManagerPatientsWorkspace({
                           <span>{record.residence || record.address || 'Location not set'}</span>
                         </div>
                       </td>
+                      <td>{record.patient_type === 'new' ? 'New Patient' : record.patient_type === 'old' ? 'Old Patient' : 'Not recorded'}</td>
                       <td>{record.folder_id}</td>
                       <td>{record.date}</td>
                       <td>{record.sex} / {record.age || 'N/A'} yrs</td>
