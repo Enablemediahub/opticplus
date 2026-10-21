@@ -4,6 +4,7 @@ import AccountantDashboardSection from './components/AccountantDashboardSection.
 import AuditLogSection from './components/AuditLogSection.jsx'
 import DashboardSection from './components/DashboardSection.jsx'
 import BillingSection from './components/BillingSection.jsx'
+import { currentBillingWeekRange } from './billingDateRange.js'
 import BsmiTrackingSection from './components/BsmiTrackingSection.jsx'
 import CustomerServiceSection from './components/CustomerServiceSection.jsx'
 import AssetsRegisterSection from './components/AssetsRegisterSection.jsx'
@@ -1831,12 +1832,22 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
 
     async function loadBillingData() {
       if (!token || !session || activeView !== 'Billing') return
+      const search = billingQuery.search.trim()
+      if (session.role === 'receptionist' && !search && (!billingQuery.date_from || !billingQuery.date_to)) return
       setIsLoadingBilling(true)
       try {
         const branchId = session.is_admin ? selectedBranchId : session.branch_id
+        const weekRange = session.role === 'receptionist' ? currentBillingWeekRange() : null
+        const ignoreDefaultWeekRange = Boolean(
+          search &&
+          weekRange &&
+          billingQuery.date_from === weekRange.date_from &&
+          billingQuery.date_to === weekRange.date_to
+        )
         const params = new URLSearchParams({
           branch_id: String(branchId),
           page: String(billingQuery.page),
@@ -1844,10 +1855,17 @@ function App() {
         })
         for (const [key, value] of Object.entries(billingQuery)) {
           if (!value || key === 'page' || key === 'per_page') continue
+          if (ignoreDefaultWeekRange && (key === 'date_from' || key === 'date_to')) continue
           params.set(key, value)
         }
-        const response = await apiFetch(`/billing?${params.toString()}`, { token })
-        if (!cancelled) setBillingData(response)
+        const isLiveSearch = Boolean(search)
+        const endpoint = isLiveSearch ? '/billing/search' : '/billing'
+        const response = await apiFetch(`${endpoint}?${params.toString()}`, { token, signal: controller.signal })
+        if (!cancelled) {
+          setBillingData((current) => isLiveSearch
+            ? { ...response, stats: { ...current?.stats, ...response.stats } }
+            : response)
+        }
       } catch (error) {
         if (!cancelled) setBillingError(error.message)
       } finally {
@@ -1858,8 +1876,25 @@ function App() {
     loadBillingData()
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [activeView, billingQuery, selectedBranchId, session, token])
+
+  useEffect(() => {
+    if (session?.role !== 'receptionist') return
+
+    const weekRange = currentBillingWeekRange()
+    setBillingFilters((current) => ({
+      ...current,
+      date_from: current.date_from || weekRange.date_from,
+      date_to: current.date_to || weekRange.date_to,
+    }))
+    setBillingQuery((current) => ({
+      ...current,
+      date_from: current.date_from || weekRange.date_from,
+      date_to: current.date_to || weekRange.date_to,
+    }))
+  }, [session])
 
   useEffect(() => {
     if (activeView !== 'Billing') return undefined
@@ -1876,7 +1911,7 @@ function App() {
           page: 1,
         }
       })
-    }, 250)
+    }, 400)
 
     return () => {
       window.clearTimeout(timeoutId)
@@ -6302,6 +6337,7 @@ export async function apiFetch(path, options = {}) {
     method,
     headers,
     body: !options.body ? undefined : isFormData ? options.body : JSON.stringify(options.body),
+    signal: options.signal,
   })
 
   const data = await response.json().catch(() => ({}))

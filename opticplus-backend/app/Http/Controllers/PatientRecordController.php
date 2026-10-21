@@ -371,6 +371,7 @@ class PatientRecordController extends Controller
             'name' => $fullName,
             'appointment_date' => $validated['appointment_date'] ?? null,
             'branch_id' => $branchId,
+            'created_by' => $request->user()?->id,
             'created_at' => now(),
         ]);
 
@@ -2041,6 +2042,12 @@ class PatientRecordController extends Controller
 
         if (! str_contains(strtolower((string) ($column->EXTRA ?? '')), 'auto_increment')) {
             DB::statement('ALTER TABLE patient_records MODIFY id INT NOT NULL AUTO_INCREMENT');
+        }
+
+        if (! Schema::hasColumn('patient_records', 'created_by')) {
+            Schema::table('patient_records', function (Blueprint $table): void {
+                $table->unsignedBigInteger('created_by')->nullable()->index();
+            });
         }
     }
 

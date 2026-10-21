@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { currentBillingWeekRange } from '../billingDateRange.js'
 import StatWidget from './StatWidget.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
@@ -159,16 +160,16 @@ export default function BillingSection({
           </>
         ) : (
           <>
-            <StatWidget label="Total Bills" value={billingData?.stats.total_bills ?? '...'} note="Billing records for the active branch" icon="receipt" className="total" />
-            <StatWidget label="Total Amount" value={currency.format(Number(billingData?.stats.total_amount ?? 0))} note="Gross billed value" icon="money" className="seen" />
-            <StatWidget label="Pending Bills" value={billingData?.stats.pending_bills ?? '...'} note="Pending or balance remaining" icon="clock" className="pending" />
+            <StatWidget label="Bills in Date Range" value={billingData?.stats.filtered_total_bills ?? '...'} note="Bills matching the selected filters" icon="receipt" className="total" />
+            <StatWidget label="Total Amount" value={currency.format(Number(billingData?.stats.filtered_total_amount ?? 0))} note="Gross billed value for the selected date range" icon="money" className="seen" />
+            <StatWidget label="Pending Bills" value={billingData?.stats.filtered_pending_bills ?? '...'} note="Pending bills for the selected date range" icon="clock" className="pending" />
             <StatWidget
               label="Calculated Balance"
-              value={currency.format(Number(billingData?.stats.balance_amount ?? 0))}
-              note="Based on sales and insurance claims"
+              value={currency.format(Number(billingData?.stats.filtered_outstanding_amount ?? 0))}
+              note="Outstanding balance for the selected date range"
               icon="finance"
               className="today"
-              valueClassName={hasBalanceDue(billingData?.stats.balance_amount) ? 'billing-balance-due' : ''}
+              valueClassName={hasBalanceDue(billingData?.stats.filtered_outstanding_amount) ? 'billing-balance-due' : ''}
             />
           </>
         )}
@@ -250,6 +251,9 @@ export default function BillingSection({
                 onChange={(event) => setBillingFilters((current) => ({ ...current, search: event.target.value }))}
                 placeholder="Folder ID, name, receipt, phone"
               />
+              {session?.role === 'receptionist' ? (
+                <small>Search with the default weekly dates searches all dates.</small>
+              ) : null}
             </label>
             <label>
               Status
@@ -286,7 +290,13 @@ export default function BillingSection({
                 type="button"
                 className="ghost-button"
                 onClick={() => {
-                  const defaults = { status: 'all', search: '', date_from: '', date_to: '', page: 1, per_page: 15 }
+                  const defaults = {
+                    status: 'all',
+                    search: '',
+                    ...(session?.role === 'receptionist' ? currentBillingWeekRange() : { date_from: '', date_to: '' }),
+                    page: 1,
+                    per_page: 15,
+                  }
                   setBillingFilters(defaults)
                   setBillingQuery(defaults)
                 }}

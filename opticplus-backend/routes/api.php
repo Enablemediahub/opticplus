@@ -60,6 +60,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/glasses-prescriptions', [PatientRecordController::class, 'glassesPrescriptionIndex']);
         Route::get('/billing/meta', [BillingController::class, 'meta']);
         Route::get('/billing/patient-search', [BillingController::class, 'patientSearch']);
+        Route::get('/billing/search', [BillingController::class, 'search']);
         Route::get('/billing', [BillingController::class, 'index']);
         Route::get('/billing/export', [BillingController::class, 'export']);
         Route::get('/billing/daily-payments', [BillingController::class, 'dailyPayments']);

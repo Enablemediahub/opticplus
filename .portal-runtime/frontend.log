@@ -3,502 +3,84 @@
 > vite --configLoader runner --host 127.0.0.1 --port 5173
 
 
-  VITE v8.0.7  ready in 68 ms
+  VITE v8.0.7  ready in 138 ms
 
   ➜  Local:   http://127.0.0.1:5173/
-12:17:12 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:17:19 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:19:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:19:29 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:00:55 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:00:55 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:04:19 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:04:19 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:51:07 PM [vite] (client) hmr update /src/App.css
-1:51:07 PM [vite] (client) page reload src/App.jsx
-1:51:07 PM [vite] (client) page reload src/components/FinanceSection.jsx
-1:51:07 PM [vite] (client) page reload src/components/InventorySection.jsx
-1:51:07 PM [vite] (client) Pre-transform error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Unexpected token
-     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/App.jsx:753:3 [38;5;246m][0m
-     [38;5;246m│[0m
- [38;5;246m753 │[0m [38;5;249m<[0m[38;5;249m<[0m<<[38;5;249m<[0m[38;5;249m<[0m[38;5;249m<[0m[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
- [38;5;240m    │[0m   ─┬  
- [38;5;240m    │[0m    ╰── 
-[38;5;246m─────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx
-1:51:07 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Unexpected token
-     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/App.jsx:753:3 [38;5;246m][0m
-     [38;5;246m│[0m
- [38;5;246m753 │[0m [38;5;249m<[0m[38;5;249m<[0m<<[38;5;249m<[0m[38;5;249m<[0m[38;5;249m<[0m[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
- [38;5;240m    │[0m   ─┬  
- [38;5;240m    │[0m    ╰── 
-[38;5;246m─────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:51:08 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Unexpected token
-     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/App.jsx:753:3 [38;5;246m][0m
-     [38;5;246m│[0m
- [38;5;246m753 │[0m [38;5;249m<[0m[38;5;249m<[0m<<[38;5;249m<[0m[38;5;249m<[0m[38;5;249m<[0m[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
- [38;5;240m    │[0m   ─┬  
- [38;5;240m    │[0m    ╰── 
-[38;5;246m─────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:51:48 PM [vite] (client) page reload src/App.jsx
-1:51:48 PM [vite] (client) page reload src/components/InventorySection.jsx
-1:51:48 PM [vite] (client) Pre-transform error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Encountered diff marker
-     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:933:1 [38;5;246m][0m
-     [38;5;246m│[0m
- [38;5;246m933 │[0m <<<<<<<[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── between this marker and `=======` is the code that we're merging into
- [38;5;240m    │[0m 
- [38;5;246m940 │[0m =======
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── between this marker and `>>>>>>>` is the incoming code
- [38;5;240m    │[0m 
- [38;5;246m944 │[0m >>>>>>>[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── this marker concludes the conflict region
- [38;5;240m    │[0m 
- [38;5;240m    │[0m [38;5;115mHelp[0m: Conflict markers indicate that a merge was started but could not be completed due to merge conflicts.
- [38;5;240m    │[0m       To resolve a conflict, keep only the code you want and then delete the lines containing conflict markers.
- [38;5;240m    │[0m       If you're having merge conflicts after pulling new code, the top section is the code you already had and the bottom section is the remote code.
- [38;5;240m    │[0m       If you're in the middle of a rebase, the top section is the code being rebased onto and the bottom section is the code coming from the current commit being rebased.
- [38;5;240m    │[0m       If you have nested conflicts, resolve the outermost conflict first.
-[38;5;246m─────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-1:51:48 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Encountered diff marker
-     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:933:1 [38;5;246m][0m
-     [38;5;246m│[0m
- [38;5;246m933 │[0m <<<<<<<[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── between this marker and `=======` is the code that we're merging into
- [38;5;240m    │[0m 
- [38;5;246m940 │[0m =======
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── between this marker and `>>>>>>>` is the incoming code
- [38;5;240m    │[0m 
- [38;5;246m944 │[0m >>>>>>>[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── this marker concludes the conflict region
- [38;5;240m    │[0m 
- [38;5;240m    │[0m [38;5;115mHelp[0m: Conflict markers indicate that a merge was started but could not be completed due to merge conflicts.
- [38;5;240m    │[0m       To resolve a conflict, keep only the code you want and then delete the lines containing conflict markers.
- [38;5;240m    │[0m       If you're having merge conflicts after pulling new code, the top section is the code you already had and the bottom section is the remote code.
- [38;5;240m    │[0m       If you're in the middle of a rebase, the top section is the code being rebased onto and the bottom section is the code coming from the current commit being rebased.
- [38;5;240m    │[0m       If you have nested conflicts, resolve the outermost conflict first.
-[38;5;246m─────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:51:49 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Encountered diff marker
-     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:933:1 [38;5;246m][0m
-     [38;5;246m│[0m
- [38;5;246m933 │[0m <<<<<<<[38;5;249m [0m[38;5;249mH[0m[38;5;249mE[0m[38;5;249mA[0m[38;5;249mD[0m
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── between this marker and `=======` is the code that we're merging into
- [38;5;240m    │[0m 
- [38;5;246m940 │[0m =======
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── between this marker and `>>>>>>>` is the incoming code
- [38;5;240m    │[0m 
- [38;5;246m944 │[0m >>>>>>>[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m
- [38;5;240m    │[0m ───┬───  
- [38;5;240m    │[0m    ╰───── this marker concludes the conflict region
- [38;5;240m    │[0m 
- [38;5;240m    │[0m [38;5;115mHelp[0m: Conflict markers indicate that a merge was started but could not be completed due to merge conflicts.
- [38;5;240m    │[0m       To resolve a conflict, keep only the code you want and then delete the lines containing conflict markers.
- [38;5;240m    │[0m       If you're having merge conflicts after pulling new code, the top section is the code you already had and the bottom section is the remote code.
- [38;5;240m    │[0m       If you're in the middle of a rebase, the top section is the code being rebased onto and the bottom section is the code coming from the current commit being rebased.
- [38;5;240m    │[0m       If you have nested conflicts, resolve the outermost conflict first.
-[38;5;246m─────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:52:23 PM [vite] (client) page reload src/components/InventorySection.jsx
-1:52:23 PM [vite] (client) Pre-transform error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Unexpected token. Did you mean `{'>'}` or `&gt;`?
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1048:1 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1048 │[0m [38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m
- [38;5;240m     │[0m │ 
- [38;5;240m     │[0m ╰─ 
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-1:52:23 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Unexpected token. Did you mean `{'>'}` or `&gt;`?
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1048:1 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1048 │[0m [38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m
- [38;5;240m     │[0m │ 
- [38;5;240m     │[0m ╰─ 
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:52:24 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Unexpected token. Did you mean `{'>'}` or `&gt;`?
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1048:1 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1048 │[0m [38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m>[0m[38;5;249m [0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m/[0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249mr[0m
- [38;5;240m     │[0m │ 
- [38;5;240m     │[0m ╰─ 
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:52:36 PM [vite] (client) page reload src/components/InventorySection.jsx
-1:52:36 PM [vite] (client) Pre-transform error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Expected `,` or `)` but found `{`
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1054:9 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1009 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mT[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m(
- [38;5;240m     │[0m                                      ┬  
- [38;5;240m     │[0m                                      ╰── Opened here
- [38;5;240m     │[0m 
- [38;5;246m1054 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m{[38;5;249mm[0m[38;5;249mi[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m([0m
- [38;5;240m     │[0m         ┬  
- [38;5;240m     │[0m         ╰── `,` or `)` expected
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-1:52:36 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Expected `,` or `)` but found `{`
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1054:9 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1009 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mT[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m(
- [38;5;240m     │[0m                                      ┬  
- [38;5;240m     │[0m                                      ╰── Opened here
- [38;5;240m     │[0m 
- [38;5;246m1054 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m{[38;5;249mm[0m[38;5;249mi[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m([0m
- [38;5;240m     │[0m         ┬  
- [38;5;240m     │[0m         ╰── `,` or `)` expected
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:52:37 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Expected `,` or `)` but found `{`
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1054:9 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1009 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mT[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m(
- [38;5;240m     │[0m                                      ┬  
- [38;5;240m     │[0m                                      ╰── Opened here
- [38;5;240m     │[0m 
- [38;5;246m1054 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m{[38;5;249mm[0m[38;5;249mi[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m([0m
- [38;5;240m     │[0m         ┬  
- [38;5;240m     │[0m         ╰── `,` or `)` expected
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:52:44 PM [vite] (client) page reload src/components/InventorySection.jsx
-1:52:44 PM [vite] (client) Pre-transform error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Expected `,` or `)` but found `{`
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1054:11 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1009 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mT[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m(
- [38;5;240m     │[0m                                      ┬  
- [38;5;240m     │[0m                                      ╰── Opened here
- [38;5;240m     │[0m 
- [38;5;246m1054 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m{[38;5;249mm[0m[38;5;249mi[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m([0m
- [38;5;240m     │[0m           ┬  
- [38;5;240m     │[0m           ╰── `,` or `)` expected
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-1:52:44 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Expected `,` or `)` but found `{`
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1054:11 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1009 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mT[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m(
- [38;5;240m     │[0m                                      ┬  
- [38;5;240m     │[0m                                      ╰── Opened here
- [38;5;240m     │[0m 
- [38;5;246m1054 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m{[38;5;249mm[0m[38;5;249mi[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m([0m
- [38;5;240m     │[0m           ┬  
- [38;5;240m     │[0m           ╰── `,` or `)` expected
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:52:45 PM [vite] Internal server error: Transform failed with 1 error:
-
-[31m[PARSE_ERROR] Error:[0m Expected `,` or `)` but found `{`
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/InventorySection.jsx:1054:11 [38;5;246m][0m
-      [38;5;246m│[0m
- [38;5;246m1009 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m:[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mp[0m[38;5;249ms[0m[38;5;249m.[0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mT[0m[38;5;249mr[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249mD[0m[38;5;249ma[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m(
- [38;5;240m     │[0m                                      ┬  
- [38;5;240m     │[0m                                      ╰── Opened here
- [38;5;240m     │[0m 
- [38;5;246m1054 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m{[38;5;249mm[0m[38;5;249mi[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m [0m[38;5;249m>[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m [0m[38;5;249m?[0m[38;5;249m [0m[38;5;249m([0m
- [38;5;240m     │[0m           ┬  
- [38;5;240m     │[0m           ╰── `,` or `)` expected
-[38;5;246m──────╯[0m
-
-  Plugin: vite:oxc
-  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/InventorySection.jsx
-      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
-      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
-      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
-      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
-      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-1:53:00 PM [vite] (client) page reload src/components/InventorySection.jsx
-1:53:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:53:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:53:49 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:57:35 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:04:46 PM [vite] (client) page reload src/App.jsx
-2:04:46 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:04:47 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:04:59 PM [vite] (client) page reload src/components/MonitorSection.jsx
-2:05:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:05:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:06:06 PM [vite] (client) page reload src/App.jsx
-2:06:06 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:06:07 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:07:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:08:51 PM [vite] (client) page reload src/App.jsx
-2:08:51 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:08:52 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:08:58 PM [vite] (client) page reload src/components/MonitorSection.jsx
-2:08:58 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:08:59 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:09:14 PM [vite] (client) page reload src/App.jsx
-2:09:15 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:09:27 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:17:06 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:20:31 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:31:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:32:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:33:10 PM [vite] (client) page reload src/components/InventorySection.jsx
-2:33:11 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:33:11 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:33:52 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:57:46 PM [vite] (client) page reload src/App.jsx
-2:57:46 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:57:47 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:57:52 PM [vite] (client) page reload src/components/InventorySection.jsx
-2:57:52 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:57:53 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:58:05 PM [vite] (client) page reload src/components/InventorySection.jsx
-2:58:06 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:58:06 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-3:28:26 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-5:17:41 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-5:53:40 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:38:13 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:48:16 AM [vite] (client) page reload src/App.jsx
-7:48:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:48:33 AM [vite] (client) page reload src/App.jsx
-7:48:33 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:48:37 AM [vite] (client) page reload src/components/InventorySection.jsx
-7:48:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:57:21 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:57:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:57:50 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:58:42 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:01:10 AM [vite] (client) page reload src/App.jsx
-8:01:10 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:01:10 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:01:13 AM [vite] (client) page reload src/components/InventorySection.jsx
-8:01:13 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:01:13 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:07:32 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:09:37 AM [vite] (client) page reload src/App.jsx
-8:09:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:09:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:10:15 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:12:54 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:42:49 AM [vite] (client) hmr update /src/App.css
-8:55:00 AM [vite] (client) page reload src/App.jsx
-8:55:00 AM [vite] (client) hmr update /src/App.css
-8:55:00 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:55:00 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-8:55:08 AM [vite] (client) hmr update /src/App.css
-9:14:42 AM [vite] (client) hmr update /src/App.css
-9:31:44 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:32:40 AM [vite] (client) hmr update /src/App.css
-9:32:52 AM [vite] (client) hmr update /src/App.css
-9:34:40 AM [vite] (client) hmr update /src/App.css
-9:35:04 AM [vite] (client) hmr update /src/App.css
-9:37:27 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:54:23 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:54:23 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:54:23 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:45:50 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:54:30 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:28 AM [vite] (client) page reload src/App.jsx
-11:04:28 AM [vite] (client) page reload src/components/BillingSection.jsx
-11:04:28 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:29 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:29 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:42 AM [vite] (client) page reload src/components/FinanceSection.jsx
-11:04:42 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:43 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:43 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:55 AM [vite] (client) page reload src/components/InventorySection.jsx
-11:04:55 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:56 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:56 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:04:59 AM [vite] (client) page reload src/components/BillingSection.jsx
-11:04:59 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:05:00 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:05:00 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:05:24 AM [vite] (client) page reload src/components/BillingSection.jsx
-11:05:24 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:05:25 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:05:25 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:06:27 AM [vite] (client) page reload src/components/FinanceSection.jsx
-11:06:27 AM [vite] (client) page reload src/components/BillingSection.jsx
-11:06:27 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:06:28 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:06:28 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:19:43 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:20:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:20:15 AM [vite] (client) page reload src/App.jsx
-11:20:15 AM [vite] (client) page reload src/components/BillingSection.jsx
-11:20:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:20:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:20:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:20:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:20:33 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:22:27 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:27 AM [vite] (client) page reload src/components/InventorySection.jsx
-11:55:27 AM [vite] (client) page reload src/components/AuditLogSection.jsx
-11:55:27 AM [vite] (client) page reload src/components/PatientsSection.jsx
-11:55:27 AM [vite] (client) page reload src/components/ManagerDashboardSection.jsx
-11:55:27 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:27 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:28 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:28 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:54 AM [vite] (client) page reload src/components/AuditLogSection.jsx
-11:55:54 AM [vite] (client) page reload src/components/ManagerDashboardSection.jsx
-11:55:54 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:54 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:55 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-11:55:55 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:05:21 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:05:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:09:11 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:09:34 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:47:32 PM [vite] (client) page reload src/App.jsx
-12:47:32 PM [vite] (client) page reload src/components/FinanceSection.jsx
-12:47:33 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:47:33 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:47:33 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:48:00 PM [vite] (client) page reload src/components/FinanceSection.jsx
-12:48:00 PM [vite] (client) hmr update /src/App.css
-12:48:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:48:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:48:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:56:52 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-12:56:52 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:03 PM [vite] (client) page reload src/components/FinanceSection.jsx
-1:01:03 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:03 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:03 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:27 PM [vite] (client) page reload src/components/ExecutiveDashboardSection.jsx
-1:01:28 PM [vite] (client) page reload src/App.jsx
-1:01:28 PM [vite] (client) hmr update /src/App.css
-1:01:28 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:28 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:28 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:48 PM [vite] (client) page reload src/components/ExecutiveDashboardSection.jsx
-1:01:48 PM [vite] (client) hmr update /src/App.css
-1:01:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-1:01:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:00:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-2:00:31 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-3:50:44 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-3:50:44 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-4:29:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-4:29:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-6:45:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-6:45:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:45:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-7:45:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:43:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-9:43:00 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:32:21 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:48:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:48:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:48:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
-10:48:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:57:41 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:57:47 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:02:36 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:03:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:09:28 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:13:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:37:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+6:48:01 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+7:44:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+7:50:50 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:58:11 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+3:42:58 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:09:15 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:09:21 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:13:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:16:49 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:20:15 PM [vite] (client) page reload src/App.jsx
+4:20:15 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:20:15 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:20:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:20:24 PM [vite] (client) page reload src/components/BillingSection.jsx
+4:20:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:20:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:20:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:24:42 PM [vite] (client) page reload src/components/BillingSection.jsx
+4:24:42 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:24:42 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:24:42 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:24:56 PM [vite] (client) page reload src/App.jsx
+4:24:56 PM [vite] (client) page reload src/components/BillingSection.jsx
+4:24:56 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:24:56 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:24:56 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:27:38 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:29:19 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:29:27 PM [vite] (client) [console.error] Encountered two children with the same key, `676`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:27 PM [vite] (client) [console.error] Encountered two children with the same key, `612`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:38 PM [vite] (client) [console.error] Encountered two children with the same key, `676`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:38 PM [vite] (client) [console.error] Encountered two children with the same key, `612`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:38 PM [vite] (client) [console.error] Encountered two children with the same key, `676`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:38 PM [vite] (client) [console.error] Encountered two children with the same key, `612`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:38 PM [vite] (client) [console.error] Encountered two children with the same key, `676`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:38 PM [vite] (client) [console.error] Encountered two children with the same key, `612`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+4:29:53 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:33:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:01 PM [vite] (client) [console.error] Encountered two children with the same key, `676`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+5:04:01 PM [vite] (client) [console.error] Encountered two children with the same key, `612`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+5:05:49 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:07:53 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:13:06 PM [vite] (client) page reload src/components/BillingSection.jsx
+5:13:07 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:13:07 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:13:07 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:13:07 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:15:02 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:15:12 PM [vite] (client) [console.error] Encountered two children with the same key, `908`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+5:15:12 PM [vite] (client) [console.error] Encountered two children with the same key, `907`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+5:15:12 PM [vite] (client) [console.error] Encountered two children with the same key, `719`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+5:32:58 PM [vite] (client) page reload src/components/BillingSection.jsx
+5:32:58 PM [vite] (client) page reload src/App.jsx
+5:32:59 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:32:59 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:32:59 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:32:59 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:35:08 PM [vite] (client) page reload src/App.jsx
+5:35:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:35:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:35:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:35:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:50:40 PM [vite] (client) page reload src/App.jsx
+5:50:40 PM [vite] (client) page reload src/components/BillingSection.jsx
+5:50:41 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:50:41 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:50:41 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:50:41 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.

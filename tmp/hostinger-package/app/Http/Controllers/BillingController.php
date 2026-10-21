@@ -133,7 +133,7 @@ class BillingController extends Controller
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
 
-        if (mb_strlen($search) < 2) {
+        if ($search === '') {
             return response()->json([
                 'branch_id' => $branchId,
                 'branch_name' => $this->branchName($branchId),
@@ -215,8 +215,12 @@ class BillingController extends Controller
         $claimTotals = $this->alignedClaimTotalsQuery();
 
         $baseQuery = DB::table('billing as b')
-            ->leftJoin('patient_records as p', 'b.patient_id', '=', 'p.id')
+            ->leftJoin('patient_records as p', function ($join): void {
+                $join->on('b.patient_id', '=', 'p.id')
+                    ->orOn('b.folder_id', '=', 'p.folder_id');
+            })
             ->leftJoin('customers as c', 'b.customer_id', '=', 'c.id')
+            ->leftJoin('users as patient_creator', 'p.created_by', '=', 'patient_creator.id')
             ->leftJoin('users as creator', 'b.created_by', '=', 'creator.id')
             ->leftJoinSub($salesTotals, 'sales_totals', function ($join): void {
                 $join->on('b.id', '=', 'sales_totals.billing_id');
@@ -250,7 +254,7 @@ class BillingController extends Controller
                 'b.discount',
                 'b.health_insurance',
                 'b.receipt_number',
-                'creator.name as entered_by',
+                DB::raw('COALESCE(patient_creator.name, creator.name) as entered_by'),
                 'p.phone as patient_phone',
                 'c.phone as customer_phone',
                 DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
@@ -265,6 +269,9 @@ class BillingController extends Controller
         $filteredOutstandingAmount = (float) ((clone $statsBase)
             ->sum('b.balance') ?? 0);
         $filteredCollectedAmount = max($filteredTotalAmount - $filteredOutstandingAmount, 0);
+        $filteredPendingBills = (int) (clone $statsBase)
+            ->whereIn('b.status', ['pending', 'balance_remaining', 'insurance_pending'])
+            ->count('b.id');
         $insuredBillCount = (int) (clone $statsBase)
             ->whereNotNull('b.health_insurance')
             ->where('b.health_insurance', '!=', '')
@@ -312,6 +319,8 @@ class BillingController extends Controller
             'today_bills' => (int) tap(DB::table('billing'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
                 ->whereDate('date', now()->toDateString())
                 ->count(),
+            'filtered_total_bills' => $total,
+            'filtered_pending_bills' => $filteredPendingBills,
             'filtered_total_amount' => $filteredTotalAmount,
             'filtered_collected_amount' => $filteredCollectedAmount,
             'filtered_outstanding_amount' => $filteredOutstandingAmount,
@@ -326,6 +335,160 @@ class BillingController extends Controller
         $stats['balance_amount'] = (float) $records->sum(
             fn (array $record) => (float) ($record['calculated_balance'] ?? 0)
         );
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'stats' => $stats,
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'total_pages' => (int) ceil($total / $perPage),
+            ],
+            'records' => $records,
+        ]);
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        $perPage = min(max((int) $request->integer('per_page', 15), 5), 50);
+        $page = max((int) $request->integer('page', 1), 1);
+        $offset = ($page - 1) * $perPage;
+        $query = DB::table('billing as b');
+        $this->applyBranchScope($query, 'b.branch_id', $branchId);
+        $this->applyBillingSearchFilters($query, $request);
+
+        $summary = (clone $query)
+            ->selectRaw('COUNT(b.id) as total_bills')
+            ->selectRaw('COALESCE(SUM(b.total_amount), 0) as total_amount')
+            ->selectRaw('COALESCE(SUM(b.balance), 0) as outstanding_amount')
+            ->selectRaw("SUM(CASE WHEN b.status IN ('pending', 'balance_remaining', 'insurance_pending') THEN 1 ELSE 0 END) as pending_bills")
+            ->selectRaw("SUM(CASE WHEN b.status IN ('paid', 'completed') THEN 1 ELSE 0 END) as paid_bills")
+            ->selectRaw("SUM(CASE WHEN b.health_insurance IS NOT NULL AND b.health_insurance != '' AND b.health_insurance != 'NONE' THEN 1 ELSE 0 END) as insured_bill_count")
+            ->selectRaw("COALESCE(SUM(CASE WHEN b.health_insurance IS NOT NULL AND b.health_insurance != '' AND b.health_insurance != 'NONE' THEN b.total_amount ELSE 0 END), 0) as insured_bill_value")
+            ->first();
+        $filteredTotalAmount = (float) $summary->total_amount;
+        $filteredOutstandingAmount = (float) $summary->outstanding_amount;
+        $filteredCollectedAmount = max($filteredTotalAmount - $filteredOutstandingAmount, 0);
+        $overallQuery = DB::table('billing as b');
+        $this->applyBranchScope($overallQuery, 'b.branch_id', $branchId);
+        $overallStats = $overallQuery
+            ->selectRaw('COUNT(b.id) as total_bills')
+            ->selectRaw('COALESCE(SUM(b.total_amount), 0) as total_amount')
+            ->selectRaw("SUM(CASE WHEN b.status IN ('pending', 'balance_remaining', 'insurance_pending') THEN 1 ELSE 0 END) as pending_bills")
+            ->selectRaw("SUM(CASE WHEN b.status IN ('paid', 'completed') THEN 1 ELSE 0 END) as paid_bills")
+            ->selectRaw('SUM(CASE WHEN DATE(b.date) = ? THEN 1 ELSE 0 END) as today_bills', [now()->toDateString()])
+            ->first();
+
+        $breakdown = (clone $query)
+            ->select('b.status', 'b.branch_id', DB::raw('COUNT(b.id) as total'), DB::raw('SUM(b.total_amount) as amount'))
+            ->groupBy('b.status', 'b.branch_id')
+            ->get();
+        $statusBreakdown = $breakdown
+            ->groupBy('status')
+            ->map(fn ($items, $status) => [
+                'label' => $status,
+                'count' => (int) $items->sum('total'),
+                'amount' => (float) $items->sum('amount'),
+            ])
+            ->sortByDesc('count')
+            ->values();
+        $branchBreakdown = $breakdown
+            ->groupBy('branch_id')
+            ->map(fn ($items, $branchId) => [
+                'label' => $this->branchName((int) $branchId),
+                'count' => (int) $items->sum('total'),
+                'amount' => (float) $items->sum('amount'),
+            ])
+            ->sortByDesc('amount')
+            ->values();
+
+        $billingIds = (clone $query)
+            ->orderByDesc('b.date')
+            ->orderByDesc('b.id')
+            ->offset($offset)
+            ->limit($perPage)
+            ->pluck('b.id');
+
+        $records = collect();
+        if ($billingIds->isNotEmpty()) {
+            $salesTotals = $this->alignedSalesTotalsQuery()->whereIn('s.billing_id', $billingIds);
+            $claimTotals = $this->alignedClaimTotalsQuery()->whereIn('ic.billing_id', $billingIds);
+            $pageQuery = DB::table('billing as b')
+                ->leftJoin('patient_records as patient_by_id', function ($join): void {
+                    $join->on('b.patient_id', '=', 'patient_by_id.id')
+                        ->on('b.branch_id', '=', 'patient_by_id.branch_id');
+                })
+                ->leftJoin('patient_records as patient_by_folder', function ($join): void {
+                    $join->on('b.folder_id', '=', 'patient_by_folder.folder_id')
+                        ->on('b.branch_id', '=', 'patient_by_folder.branch_id');
+                })
+                ->leftJoin('customers as c', 'b.customer_id', '=', 'c.id')
+                ->leftJoin('users as patient_creator', function ($join): void {
+                    $join->on('patient_creator.id', '=', DB::raw('COALESCE(patient_by_id.created_by, patient_by_folder.created_by)'));
+                })
+                ->leftJoin('users as creator', 'b.created_by', '=', 'creator.id')
+                ->leftJoinSub($salesTotals, 'sales_totals', function ($join): void {
+                    $join->on('b.id', '=', 'sales_totals.billing_id');
+                })
+                ->leftJoinSub($claimTotals, 'claim_totals', function ($join): void {
+                    $join->on('b.id', '=', 'claim_totals.billing_id');
+                })
+                ->whereIn('b.id', $billingIds)
+                ->orderByDesc('b.date')
+                ->orderByDesc('b.id');
+
+            $records = $pageQuery
+                ->get([
+                    'b.id',
+                    'b.folder_id',
+                    'b.name',
+                    'b.branch_id',
+                    'b.total_amount',
+                    'b.balance',
+                    'b.status',
+                    'b.date',
+                    'b.consultation_price',
+                    'b.frame_price',
+                    'b.lens_price',
+                    'b.lens_item_count',
+                    'b.case_price',
+                    'b.discount',
+                    'b.health_insurance',
+                    'b.receipt_number',
+                    DB::raw('COALESCE(patient_creator.name, creator.name) as entered_by'),
+                    DB::raw('COALESCE(patient_by_id.phone, patient_by_folder.phone) as patient_phone'),
+                    'c.phone as customer_phone',
+                    DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
+                    DB::raw('COALESCE(claim_totals.insurance_claimed, 0) as insurance_claimed'),
+                    DB::raw('COALESCE(sales_totals.total_sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
+                    DB::raw('COALESCE(b.balance, 0) as calculated_balance'),
+                ])
+                ->map(fn ($record) => $this->mapBillingRecord($record));
+        }
+
+        $totalBills = (int) $summary->total_bills;
+        $total = $totalBills;
+        $stats = [
+            'total_bills' => (int) $overallStats->total_bills,
+            'total_amount' => (float) $overallStats->total_amount,
+            'pending_bills' => (int) $overallStats->pending_bills,
+            'paid_bills' => (int) $overallStats->paid_bills,
+            'today_bills' => (int) $overallStats->today_bills,
+            'filtered_total_bills' => $totalBills,
+            'filtered_pending_bills' => (int) $summary->pending_bills,
+            'filtered_total_amount' => $filteredTotalAmount,
+            'filtered_collected_amount' => $filteredCollectedAmount,
+            'filtered_outstanding_amount' => $filteredOutstandingAmount,
+            'insured_bill_count' => (int) $summary->insured_bill_count,
+            'insured_bill_value' => (float) $summary->insured_bill_value,
+            'average_bill_value' => $totalBills > 0 ? round($filteredTotalAmount / $totalBills, 2) : 0,
+            'collection_rate' => $filteredTotalAmount > 0 ? round(($filteredCollectedAmount / $filteredTotalAmount) * 100, 1) : 0,
+            'status_breakdown' => $statusBreakdown,
+            'branch_breakdown' => $branchBreakdown,
+        ];
 
         return response()->json([
             'branch_id' => $branchId,
@@ -798,12 +961,74 @@ class BillingController extends Controller
             $query->where(function ($inner) use ($like): void {
                 $inner->where('b.folder_id', 'like', $like)
                     ->orWhere('b.name', 'like', $like)
+                    ->orWhere('p.name', 'like', $like)
+                    ->orWhere('p.surname', 'like', $like)
+                    ->orWhere('p.firstname', 'like', $like)
+                    ->orWhere('p.othernames', 'like', $like)
                     ->orWhere('b.receipt_number', 'like', $like)
                     ->orWhere('p.phone', 'like', $like)
                     ->orWhere('c.name', 'like', $like)
                     ->orWhere('c.phone', 'like', $like);
             });
         }
+    }
+
+    private function applyBillingSearchFilters($query, Request $request): void
+    {
+        $status = $request->string('status')->toString();
+        $search = trim($request->string('search')->toString());
+
+        if ($status && $status !== 'all') {
+            match ($status) {
+                'pending' => $query->whereIn('b.status', ['pending', 'balance_remaining', 'insurance_pending']),
+                'paid' => $query->whereIn('b.status', ['paid', 'completed']),
+                default => $query->where('b.status', $status),
+            };
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('b.date', '>=', $request->string('date_from')->toString());
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('b.date', '<=', $request->string('date_to')->toString());
+        }
+
+        if ($search === '') {
+            return;
+        }
+
+        $like = '%'.$search.'%';
+        $query->where(function ($matches) use ($like): void {
+            $matches->where('b.folder_id', 'like', $like)
+                ->orWhere('b.name', 'like', $like)
+                ->orWhere('b.receipt_number', 'like', $like)
+                ->orWhereExists(function ($patient) use ($like): void {
+                    $patient->selectRaw('1')
+                        ->from('patient_records as p_search')
+                        ->whereColumn('p_search.branch_id', 'b.branch_id')
+                        ->where(function ($relation): void {
+                            $relation->whereColumn('p_search.id', 'b.patient_id')
+                                ->orWhereColumn('p_search.folder_id', 'b.folder_id');
+                        })
+                        ->where(function ($patientMatches) use ($like): void {
+                            $patientMatches->where('p_search.name', 'like', $like)
+                                ->orWhere('p_search.surname', 'like', $like)
+                                ->orWhere('p_search.firstname', 'like', $like)
+                                ->orWhere('p_search.othernames', 'like', $like)
+                                ->orWhere('p_search.phone', 'like', $like);
+                        });
+                })
+                ->orWhereExists(function ($customer) use ($like): void {
+                    $customer->selectRaw('1')
+                        ->from('customers as c_search')
+                        ->whereColumn('c_search.id', 'b.customer_id')
+                        ->where(function ($customerMatches) use ($like): void {
+                            $customerMatches->where('c_search.name', 'like', $like)
+                                ->orWhere('c_search.phone', 'like', $like);
+                        });
+                });
+        });
     }
 
     private function alignedSalesTotalsQuery()
@@ -921,6 +1146,7 @@ class BillingController extends Controller
             'total_paid' => (float) ($record->total_paid ?? 0),
             'insurance_claimed' => (float) ($record->insurance_claimed ?? 0),
             'calculated_balance' => (float) ($record->calculated_balance ?? 0),
+            'entered_by' => $record->entered_by,
             'patient_phone' => $record->patient_phone,
             'customer_phone' => $record->customer_phone,
         ];
@@ -1029,6 +1255,12 @@ class BillingController extends Controller
 
         if (! Schema::hasColumn('billing', 'created_by')) {
             Schema::table('billing', function (Blueprint $table): void {
+                $table->unsignedBigInteger('created_by')->nullable()->index();
+            });
+        }
+
+        if (Schema::hasTable('patient_records') && ! Schema::hasColumn('patient_records', 'created_by')) {
+            Schema::table('patient_records', function (Blueprint $table): void {
                 $table->unsignedBigInteger('created_by')->nullable()->index();
             });
         }
