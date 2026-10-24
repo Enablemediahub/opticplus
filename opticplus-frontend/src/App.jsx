@@ -4720,9 +4720,47 @@ function App() {
         token,
       })
       await refreshInsuranceConnectedData({ suppressErrors: true })
-      setInsuranceSuccess('Insurance claim reverted to pending.')
+      setInsuranceSuccess('Insurance billing marked as not submitted.')
     } catch (error) {
       setInsuranceError(error.message)
+    } finally {
+      setClaimBusyId(null)
+    }
+  }
+
+  async function markClaimSubmittedExternally(claimId, claimBranchId = null) {
+    setClaimBusyId(claimId)
+    setInsuranceError('')
+    setInsuranceSuccess('')
+
+    try {
+      const branchId = claimBranchId ?? (session.is_admin ? selectedBranchId : session.branch_id)
+      await apiFetch(`/insurance/claims/${claimId}/mark-submitted-externally?branch_id=${branchId}`, { method: 'PATCH', token })
+      await refreshInsuranceConnectedData({ suppressErrors: true })
+      setInsuranceSuccess('Marked as submitted through the external insurer platform.')
+    } catch (error) {
+      setInsuranceError(error.message)
+    } finally {
+      setClaimBusyId(null)
+    }
+  }
+
+  async function bulkUpdateInsuranceSubmission(claimIds, submissionStatus) {
+    setClaimBusyId('bulk-insurance-submission')
+    setInsuranceError('')
+    setInsuranceSuccess('')
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      const result = await apiFetch(`/insurance/claims/bulk-submission-status?branch_id=${branchId}`, {
+        method: 'PATCH', token,
+        body: { claim_ids: claimIds, submission_status: submissionStatus },
+      })
+      await refreshInsuranceConnectedData({ suppressErrors: true })
+      setInsuranceSuccess(result.message || 'Selected insurance billing records updated.')
+      return true
+    } catch (error) {
+      setInsuranceError(error.message)
+      return false
     } finally {
       setClaimBusyId(null)
     }
@@ -4848,7 +4886,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell app-shell-login">
       {!session ? (
         <LoginScreen
           theme={theme}
@@ -5585,6 +5623,8 @@ function App() {
                 isLoadingInsuranceData={isLoadingInsuranceData}
                 markClaimPaid={markClaimPaid}
                 markClaimPending={markClaimPending}
+                markClaimSubmittedExternally={markClaimSubmittedExternally}
+                bulkUpdateInsuranceSubmission={bulkUpdateInsuranceSubmission}
                 updateInsuranceClaim={updateInsuranceClaim}
                 deleteInsuranceClaim={deleteInsuranceClaim}
                 printFinanceReceipt={printFinanceReceipt}
@@ -5595,6 +5635,10 @@ function App() {
                 isSavingInsuranceProvider={isSavingInsuranceProvider}
                 saveInsuranceRemittance={saveInsuranceRemittance}
                 isSavingInsuranceRemittance={isSavingInsuranceRemittance}
+                apiFetch={apiFetch}
+                token={token}
+                selectedBranchId={selectedBranchId}
+                onPaymentsError={setInsuranceError}
                 session={session}
                 readOnly={isExecutive}
               />
@@ -5620,6 +5664,8 @@ function App() {
                 isLoadingInsuranceData={isLoadingInsuranceData}
                 markClaimPaid={markClaimPaid}
                 markClaimPending={markClaimPending}
+                markClaimSubmittedExternally={markClaimSubmittedExternally}
+                bulkUpdateInsuranceSubmission={bulkUpdateInsuranceSubmission}
                 updateInsuranceClaim={updateInsuranceClaim}
                 deleteInsuranceClaim={deleteInsuranceClaim}
                 printFinanceReceipt={printFinanceReceipt}
@@ -5630,6 +5676,10 @@ function App() {
                 isSavingInsuranceProvider={isSavingInsuranceProvider}
                 saveInsuranceRemittance={saveInsuranceRemittance}
                 isSavingInsuranceRemittance={isSavingInsuranceRemittance}
+                apiFetch={apiFetch}
+                token={token}
+                selectedBranchId={selectedBranchId}
+                onPaymentsError={setInsuranceError}
                 session={session}
                 readOnly={isExecutive}
               />

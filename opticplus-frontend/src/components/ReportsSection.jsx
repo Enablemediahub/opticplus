@@ -41,7 +41,7 @@ const COMPARISON_METRICS = [
   { key: 'collections', label: 'Receipts / Collections', group: 'Receipts', aggregation: 'sum' },
   { key: 'payments', label: 'Payments / Expenses', group: 'Payments', aggregation: 'sum' },
   { key: 'insurance_received', label: 'Insurance Received', group: 'Insurance', aggregation: 'sum' },
-  { key: 'insurance_claimed', label: 'Insurance Claimed', group: 'Insurance', aggregation: 'sum' },
+  { key: 'insurance_claimed', label: 'Total Insurance Billing', group: 'Insurance', aggregation: 'sum' },
   { key: 'consultation', label: 'Consultation Revenue', group: 'Receipts', aggregation: 'sum' },
   { key: 'frames', label: 'Frame Revenue', group: 'Receipts', aggregation: 'sum' },
   { key: 'lenses', label: 'Lens Revenue', group: 'Receipts', aggregation: 'sum' },

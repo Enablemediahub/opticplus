@@ -135,7 +135,7 @@ export default function FinanceSection(props) {
     debt: [
       ['Collected', props.financePayments?.stats.total_collected, 'Payments received for the active search window', 'seen', 'money'],
       ['Outstanding', props.financePayments?.stats.outstanding_balance, 'Balances still open for recovery', 'pending', 'finance'],
-      ['Insurance Pending', props.financePayments?.stats.insurance_pending, 'Claims still awaiting insurer settlement', 'today', 'shield'],
+      ['Not Submitted Externally', props.financePayments?.stats.insurance_pending, 'Insurance billing not yet marked as submitted', 'today', 'shield'],
       ['Transactions', props.financePayments?.stats.transaction_count, 'Payment movements in the selected period', 'total', 'receipt', true],
     ],
   }
@@ -867,7 +867,7 @@ function PaymentsTab(props) {
           <Metric label="Collected" value={props.financePayments?.stats.total_collected} />
           <Metric label="Transactions" value={props.financePayments?.stats.transaction_count} raw />
           <Metric label="Outstanding" value={props.financePayments?.stats.outstanding_balance} />
-          <Metric label="Insurance Pending" value={props.financePayments?.stats.insurance_pending} />
+          <Metric label="Not Submitted Externally" value={props.financePayments?.stats.insurance_pending} />
         </div>
 
         <form
@@ -1384,7 +1384,7 @@ function PaymentWorkspace(props) {
           <Metric label="Cash" value={props.paymentDetail.billing.cash_paid} />
           <Metric label="MoMo" value={props.paymentDetail.billing.mobile_paid} />
           <Metric label="Paystack" value={props.paymentDetail.billing.paystack_paid} />
-          <Metric label="Insurance" value={props.paymentDetail.billing.insurance_claimed} />
+          <Metric label="Total Insurance Billing" value={props.paymentDetail.billing.insurance_claimed} />
         </div>
       </div>
 
@@ -1693,7 +1693,7 @@ function SalesTab(props) {
 function ExpensesTab(props) {
   const canManageExpenses = (['manager', 'accountant'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
   const canCreateExpenses = (['manager', 'accountant', 'receptionist'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
-  const canDeleteLinkedLensExpense = (['manager', 'ceo'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
+  const canDeleteLinkedLensExpense = props.session?.role === 'manager' && !props.readOnly
   const isCategoryManager = canManageExpenses
   const isAccountantExpenseView = props.session?.role === 'accountant' && !props.readOnly
   const isReceptionistExpenseView = props.session?.role === 'receptionist' && !props.readOnly
@@ -1721,7 +1721,7 @@ function ExpensesTab(props) {
   const canEditSelectedExpenseDetails = canEditSelectedExpense && !isSelectedFrameReserved
   const canDeleteSelectedExpense = isSelectedLensLinked
     ? canDeleteLinkedLensExpense
-    : !isSelectedFrameReserved && canManageExpenses
+    : props.session?.role === 'manager' && !props.readOnly
   const categoryOptions = props.financeExpenses?.categories ?? []
   const managementExpenseDefaults = {
     filter: 'all',
@@ -2158,6 +2158,8 @@ function ExpensesTab(props) {
                     onClick={async () => {
                       const confirmMessage = selectedExpense.is_lens_linked
                         ? 'Delete this Lens Tracker expense row? Use this for clearing duplicates. If the lens cost still exists in Lens Tracker, one expense entry may be recreated automatically.'
+                        : selectedExpense.is_frame_reserved
+                          ? 'Delete this frame reservation expense and its linked reservation? This will remove the reserved amount from the Monitor frame set-aside total.'
                         : 'Delete this expense record?'
                       if (!window.confirm(confirmMessage)) return
                       try {

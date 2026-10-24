@@ -155,6 +155,14 @@
     var(--bg-base);
 }
 
+.app-shell.app-shell-login {
+  zoom: 1;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: auto;
+}
+
 :root[data-theme='light'] .app-shell {
   background:
     radial-gradient(circle at top left, rgba(0, 119, 182, 0.16), transparent 26%),
@@ -184,9 +192,11 @@
 }
 
 .login-shell-modern {
-  min-height: 125vh;
+  min-height: 100vh;
   align-items: stretch;
   box-sizing: border-box;
+  overflow: visible;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 580px);
   background:
     linear-gradient(102deg, rgba(2, 8, 18, 0.48), rgba(2, 8, 18, 0.2)),
     var(--login-wallpaper, radial-gradient(circle at top right, rgba(14, 165, 233, 0.24), transparent 24%), linear-gradient(135deg, #031525, #0f172a 54%, #164e63));
@@ -339,9 +349,9 @@
 }
 
 .login-shell-modern .login-panel {
-  width: min(100%, 480px);
+  width: min(100%, 580px);
   min-height: auto;
-  padding: 24px;
+  padding: clamp(28px, 3vw, 44px);
   align-self: center;
   justify-self: end;
   margin: 0;
@@ -386,9 +396,10 @@
   background: transparent;
   color: #eff6ff;
   padding: 20px 20px 20px 28px;
-  min-height: min(720px, calc(125vh - 70px));
-  justify-content: center;
+  min-height: 0;
+  justify-content: flex-start;
   align-items: flex-start;
+  padding-top: clamp(24px, 5vh, 56px);
 }
 
 .brand-panel-modern .login-hero-credit {
@@ -430,13 +441,13 @@
 
 .login-hero-copy {
   display: grid;
-  gap: 18px;
+  gap: clamp(12px, 1.5vh, 18px);
   max-width: min(1100px, 100%);
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .login-hero-logo-wrap {
-  width: clamp(140px, 16vw, 190px);
+  width: clamp(200px, 18vw, 250px);
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -454,21 +465,40 @@
 .login-hero-copy h1 {
   margin: 0;
   color: #ffffff;
-  font-size: clamp(3.25rem, 8vw, 7rem);
-  line-height: 0.88;
-  font-weight: 800;
-  letter-spacing: -0.07em;
+  width: 100%;
+  font-size: clamp(3.25rem, min(9vw, 13vh), 9rem);
+  line-height: 0.96;
+  font-weight: 900;
+  letter-spacing: -0.045em;
   text-transform: uppercase;
-  text-wrap: balance;
   text-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
 }
 
+.login-hero-copy h1 span {
+  display: block;
+  white-space: nowrap;
+}
+
 .login-hero-credit {
-  margin: 12px 0 0;
+  margin: 0;
   color: rgba(255, 255, 255, 0.92);
   font-size: clamp(0.92rem, 1.2vw, 1rem);
   font-weight: 500;
   text-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  padding-bottom: 18px;
+}
+
+.login-panel .panel-top h2 {
+  font-size: clamp(1.7rem, 2.4vw, 2.25rem);
+}
+
+.login-form label {
+  font-size: 1rem;
+}
+
+.login-form input {
+  min-height: 52px;
+  font-size: 1rem;
 }
 
 .panel-top,
@@ -7386,6 +7416,188 @@
   vertical-align: top;
 }
 
+.insurance-bulk-submission-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid #d8e4f0;
+  border-radius: 12px;
+  background: linear-gradient(105deg, #f5f9ff 0%, #fff 70%);
+}
+
+.insurance-bulk-submission-bar > div {
+  display: grid;
+  gap: 3px;
+  margin-right: auto;
+}
+
+.insurance-bulk-submission-bar strong {
+  color: #173f6d;
+}
+
+.insurance-bulk-submission-bar span {
+  color: #728196;
+  font-size: 12px;
+}
+
+.insurance-select-column {
+  width: 42px;
+  text-align: center!important;
+}
+
+.insurance-select-column input {
+  width: 16px;
+  height: 16px;
+  accent-color: #1d5fa7;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .insurance-bulk-submission-bar {
+    align-items: stretch;
+  }
+
+  .insurance-bulk-submission-bar > div {
+    flex-basis: 100%;
+  }
+}
+
+.insurance-view-tabs {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid #dbe4ef;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef3f9 100%);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.07);
+}
+
+.insurance-view-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  min-width: 190px;
+  padding: 0 17px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #526176;
+  font-weight: 750;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.insurance-view-tab:hover {
+  color: #173a67;
+  background: rgba(255, 255, 255, 0.82);
+  transform: translateY(-1px);
+}
+
+.insurance-view-tab.active {
+  border-color: #cbdcf3;
+  background: #fff;
+  color: #124a8a;
+  box-shadow: 0 3px 9px rgba(26, 74, 132, 0.12);
+}
+
+.insurance-view-tab__icon {
+  display: inline-grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 8px;
+  background: #eaf0f7;
+  color: #56708f;
+  font-size: 15px;
+}
+
+.insurance-view-tab.active .insurance-view-tab__icon {
+  background: #e6f0ff;
+  color: #1559a3;
+}
+
+.insurance-view-tab__count {
+  display: inline-grid;
+  min-width: 25px;
+  height: 23px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 999px;
+  background: #edf1f6;
+  color: #5c6a7c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.insurance-view-tab.active .insurance-view-tab__count {
+  background: #e8f1fd;
+  color: #1559a3;
+}
+
+.insurance-reconciliation-table-wrap {
+  border-radius: 12px;
+}
+
+.insurance-reconciliation-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.insurance-reconciliation-table .insurance-reconciliation-month th,
+.insurance-reconciliation-table .insurance-reconciliation-month td {
+  border-top: 1px solid #cad9e9;
+  border-bottom: 1px solid #cad9e9;
+  background: #eaf1f8;
+  color: #1e3c5f;
+  font-weight: 800;
+}
+
+.insurance-reconciliation-table .insurance-reconciliation-month th {
+  border-left: 3px solid #3b72ad;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.insurance-reconciliation-table .insurance-reconciliation-month th span {
+  display: block;
+  margin-top: 3px;
+  color: #657890;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.insurance-reconciliation-table .insurance-reconciliation-company td:first-child {
+  padding-left: 24px;
+  font-weight: 700;
+}
+
+.insurance-reconciliation-table .insurance-reconciliation-company:nth-child(odd) td {
+  background: #fafcff;
+}
+
+.insurance-reconciliation-table .insurance-difference-overpaid {
+  color: #a23b34;
+  font-weight: 750;
+}
+
+@media (max-width: 600px) {
+  .insurance-view-tabs {
+    width: 100%;
+  }
+
+  .insurance-view-tab {
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+}
+
 .insurance-empty-state {
   padding: 20px;
 }
@@ -9709,6 +9921,18 @@ td.billing-balance-due,
     overflow: visible;
   }
 
+  .app-shell.app-shell-login {
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .login-shell-modern {
+    min-height: 100vh;
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     position: fixed;
     top: 16px;
@@ -9781,7 +10005,7 @@ td.billing-balance-due,
   }
 
   .login-shell-modern .login-panel {
-    width: min(100%, 480px);
+    width: min(100%, 580px);
     min-height: auto;
     align-self: center;
     justify-self: center;
@@ -9801,11 +10025,11 @@ td.billing-balance-due,
   }
 
   .login-hero-logo-wrap {
-    width: min(100%, 210px);
+    width: min(100%, 250px);
   }
 
   .login-hero-copy h1 {
-    font-size: clamp(2.5rem, 9vw, 4.25rem);
+    font-size: clamp(2.75rem, 12vw, 6rem);
   }
 
   .portal-main {
@@ -10101,23 +10325,34 @@ td.billing-balance-due,
 }
 /* The Monitor: annual workbook */
 .monitor-workspace { gap: 22px; margin-top: 24px; }
+.monitor-page-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:22px; }
+.monitor-page-heading h3 { margin:7px 0 0; }
+.monitor-page-heading .header-copy { margin-top:8px; }
+.monitor-dashboard-widgets { margin-top:0; }
+.monitor-breakdown-grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); gap:18px; }
+.monitor-breakdown-panel { min-width:0; margin:0; padding:0; overflow:hidden; }
+.monitor-breakdown-panel .panel-heading { padding:22px; margin:0; }
+.monitor-breakdown-panel .panel-heading h3 { margin:5px 0; }
+.monitor-breakdown-panel .table-shell { margin:0; }
+.monitor-breakdown-panel .portal-table tfoot td { font-weight:800; background:#eef8f6; }
+.monitor-breakdown-note { margin:0; padding:13px 18px; color:var(--text-muted); background:var(--surface-soft); font-size:12px; line-height:1.5; }
 .monitor-hero { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; padding:30px; border-radius:18px; color:#153b40; background:#fff; border:1px solid #dbe9e8; box-shadow:0 3px 14px rgba(32,85,84,.05); }
 .monitor-hero h3 { margin:6px 0; font-size:26px; color:#153b40; }.monitor-hero p:not(.eyebrow) { max-width:680px; margin:0; color:#526b6d; }.monitor-hero .eyebrow { color:#0b6671; }
 .monitor-hero-actions { display:flex; gap:10px; flex-wrap:wrap; }.monitor-hero .ghost-button { color:#153b40; border-color:#c9d9d9; background:#fff; font-weight:800; }.monitor-hero .ghost-button:hover:not(:disabled),.monitor-hero .ghost-button:focus-visible { color:#fff; border-color:#063f49; background:#063f49; }.monitor-hero .primary-button { background:#0b6671; color:#fff; }
 .monitor-controls { display:flex; align-items:end; gap:16px; padding:18px 22px; background:#fff; border:1px solid #dbe9e8; border-radius:14px; }.monitor-controls label { display:grid; gap:6px; min-width:180px; color:#4d6264; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; }.monitor-controls select,.monitor-controls input { min-height:40px; border:1px solid #c9d9d9; border-radius:8px; padding:0 10px; color:#153b40; background:#fff; }.monitor-controls span { margin-left:auto; padding-bottom:10px; color:#71878a; font-size:13px; }
-.monitor-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }.monitor-kpis>div { padding:20px; border-radius:12px; background:#fff; border:1px solid #dce8e8; }.monitor-kpis span,.monitor-kpis small { display:block; color:#708587; font-size:12px; }.monitor-kpis span { font-weight:800; text-transform:uppercase; letter-spacing:.06em; }.monitor-kpis strong { display:block; margin:7px 0; color:#0a4e59; font-size:24px; }
 .monitor-tabs { display:flex; gap:6px; overflow:auto; padding:5px; border-bottom:1px solid #dce8e8; }.monitor-tabs button { white-space:nowrap; border:0; border-radius:8px; background:transparent; padding:10px 15px; color:#657c7f; font:inherit; font-weight:700; cursor:pointer; }.monitor-tabs button.is-active { background:#0b6671; color:#fff; box-shadow:0 3px 8px rgba(9,90,100,.2); }
 .monitor-sheet-stack { display:grid; gap:18px; }.monitor-sheet { overflow:hidden; background:#fff; border:1px solid #dbe8e7; border-radius:14px; box-shadow:0 3px 14px rgba(32,85,84,.05); }.monitor-sheet-heading { display:flex; justify-content:space-between; align-items:center; padding:20px 22px; border-bottom:1px solid #e4eeee; }.monitor-sheet-heading span:first-child { color:#739092; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; }.monitor-sheet-heading h3 { margin:5px 0 0; color:#164f56; font-size:19px; }.monitor-live-dot { color:#1b8177; font-size:12px; font-weight:800; }.monitor-live-dot:before { content:''; display:inline-block; width:7px; height:7px; margin-right:6px; border-radius:50%; background:#25b79b; }
 .monitor-table-scroll { overflow:auto; }.monitor-table { width:100%; min-width:980px; border-collapse:collapse; font-size:13px; }.monitor-table th { padding:12px 14px; text-align:right; background:#f1f7f6; color:#537477; font-size:11px; letter-spacing:.05em; text-transform:uppercase; }.monitor-table th:first-child,.monitor-table td:first-child { position:sticky; left:0; z-index:1; text-align:left; }.monitor-table th:first-child { z-index:2; }.monitor-table td { padding:12px 14px; text-align:right; border-top:1px solid #edf2f2; color:#3f595d; white-space:nowrap; }.monitor-table td:first-child { min-width:230px; font-weight:700; background:#fff; color:#1d4f55; }.monitor-table tbody tr:hover td { background:#f9fcfc; }.monitor-table .monitor-total { color:#075d68; font-weight:800; background:#f4faf9; }.daily-sales { min-width:480px; }.daily-sales th,.daily-sales td { text-align:left; }.daily-sales-workbook { min-width:1600px; }.daily-sales-workbook th { min-width:105px; text-align:center; }.daily-sales-workbook th:nth-child(odd),.daily-sales-workbook td:nth-child(odd) { border-right:1px solid #cfe0df; }.daily-sales-workbook td { min-width:105px; text-align:right; }.daily-sales-workbook td:nth-child(odd) { min-width:110px; text-align:left; color:#315e63; }.daily-sales-workbook th:first-child,.daily-sales-workbook td:first-child { position:static; font-weight:inherit; background:inherit; }.monitor-disclaimer { margin:0; padding:13px 16px; border-radius:9px; color:#6a6544; background:#fff9e7; font-size:13px; }
 .monitor-summary-row td { background:#eef8f6; font-weight:800; color:#075d68; }.monitor-summary-label { text-transform:uppercase; letter-spacing:.04em; }.monitor-summary-total { background:#eef8f6; }
 .monitor-budget-input { width:112px; min-height:34px; border:1px solid #b8d1cf; border-radius:6px; padding:4px 7px; color:#075b65; background:#f7fbfa; font:inherit; text-align:right; }.monitor-budget-input:focus { outline:2px solid #8bcac4; border-color:#0b6671; background:#fff; }
-.monitor-kpis.monitor-extraction-kpis { grid-template-columns:repeat(4,1fr); }.monitor-extraction-note { margin:0; padding:14px 20px; color:#6a6544; background:#fff9e7; font-size:13px; }.daily-extraction-table { min-width:1500px; }.daily-extraction-table tfoot td { padding:12px 14px; border-top:2px solid #66a7a2; color:#075d68; background:#e9f5f3; font-weight:800; text-align:right; white-space:nowrap; }.daily-extraction-table tfoot td:first-child { text-align:left; }
+.monitor-extraction-note { margin:0; padding:14px 20px; color:#6a6544; background:#fff9e7; font-size:13px; }.daily-extraction-table { min-width:1500px; }.daily-extraction-table tfoot td { padding:12px 14px; border-top:2px solid #66a7a2; color:#075d68; background:#e9f5f3; font-weight:800; text-align:right; white-space:nowrap; }.daily-extraction-table tfoot td:first-child { text-align:left; }
 .daily-sales-ledgers { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding:20px; background:#f5f9f9; }.daily-sales-month { overflow:hidden; min-width:0; border:1px solid #d8e6e5; border-radius:10px; background:#fff; }.daily-sales-month header { padding:10px 13px; color:#fff; background:#0b6671; font-size:12px; font-weight:800; letter-spacing:.08em; text-align:center; }.daily-sales-month table { width:100%; border-collapse:collapse; font-size:12px; }.daily-sales-month th { padding:9px 11px; color:#607c7e; background:#edf5f4; font-size:10px; letter-spacing:.06em; text-align:left; text-transform:uppercase; }.daily-sales-month th:last-child,.daily-sales-month td:last-child { text-align:right; }.daily-sales-month td { padding:9px 11px; border-top:1px solid #edf1f1; color:#315459; white-space:nowrap; }.daily-sales-month tbody tr:hover { background:#f6fbfa; }.daily-sales-empty { color:#97a8aa!important; font-style:italic; text-align:center!important; }
 @media (max-width:1050px) { .daily-sales-ledgers { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:600px) { .daily-sales-ledgers { grid-template-columns:1fr; padding:12px; } }
 .daily-sales-scroll { max-width:100%; background:#f5f9f9; }.daily-sales-horizontal { min-width:2000px; width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }.daily-sales-horizontal th,.daily-sales-horizontal td { min-width:100px; padding:10px 12px; border-right:1px solid #dce9e8; border-bottom:1px solid #eaf0ef; white-space:nowrap; }.daily-sales-horizontal thead tr:first-child th { color:#fff; background:#0b6671; border-color:#438e95; text-align:center; font-size:11px; letter-spacing:.08em; }.daily-sales-horizontal thead tr:nth-child(2) th { color:#547477; background:#edf5f4; text-align:left; font-size:10px; letter-spacing:.06em; text-transform:uppercase; }.daily-sales-horizontal thead tr:nth-child(2) th:nth-child(even),.daily-sales-horizontal td:nth-child(even) { text-align:right; }.daily-sales-horizontal td { color:#315459; background:#fff; }.daily-sales-horizontal tbody tr:hover td { background:#f4fbfa; }.daily-sales-horizontal th:nth-child(odd),.daily-sales-horizontal td:nth-child(odd) { border-left:1px solid #c5dcda; }.daily-sales-horizontal .daily-sales-empty { color:#8a9d9e; font-style:italic; text-align:center!important; }
 .daily-sales-horizontal tfoot td { color:#075b65; background:#e2f1ef; border-top:2px solid #66a7a2; font-weight:800; text-transform:uppercase; }.daily-sales-horizontal tfoot td:nth-child(even) { font-size:13px; text-transform:none; }
-@media (max-width:760px) { .monitor-hero,.monitor-controls { align-items:stretch; flex-direction:column; }.monitor-hero-actions { width:100%; }.monitor-hero-actions button { flex:1; }.monitor-controls label { width:100%; }.monitor-controls span { margin-left:0; padding:0; }.monitor-kpis,.monitor-kpis.monitor-extraction-kpis { grid-template-columns:1fr; } }
+@media (max-width:900px) { .monitor-breakdown-grid { grid-template-columns:1fr; } }
+@media (max-width:760px) { .monitor-page-heading,.monitor-hero,.monitor-controls { align-items:stretch; flex-direction:column; }.monitor-page-heading .header-actions { align-items:stretch; }.monitor-page-heading .header-actions button { flex:1; }.monitor-hero-actions { width:100%; }.monitor-hero-actions button { flex:1; }.monitor-controls label { width:100%; }.monitor-controls span { margin-left:0; padding:0; } }
 .monitor-print-daily-ledgers { display:none; }
 @media print {
   @page { size:A3 landscape; margin:9mm; }
@@ -10129,9 +10364,6 @@ td.billing-balance-due,
   .monitor-hero { display:block; margin:0 0 6mm; padding:0 0 4mm; color:#111!important; background:#fff!important; border:0; border-bottom:2px solid #0b6671; border-radius:0; box-shadow:none; }
   .monitor-hero h3,.monitor-hero p,.monitor-hero .eyebrow { color:#111!important; }
   .monitor-hero h3 { font-size:18pt; }
-  .monitor-kpis { gap:4mm; margin:0 0 6mm; }
-  .monitor-kpis>div { padding:3mm; border:1px solid #9baead; border-radius:0; }
-  .monitor-kpis strong { font-size:14pt; color:#111; }
   .monitor-sheet { overflow:visible!important; break-inside:avoid; box-shadow:none; margin:0 0 6mm; border:1px solid #9baead; border-radius:0; }
   .monitor-sheet-heading { padding:3mm 4mm; }
   .monitor-sheet-heading h3 { font-size:14pt; color:#111; }

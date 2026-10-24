@@ -213,10 +213,10 @@ class FinanceController extends Controller
             $collections[$bucket] = ($collections[$bucket] ?? 0) + round((float) $amount, 2);
         }
 
-        $insurancePaid = (float) (clone $insuranceBase)->where('status', 'paid')->sum('amount_paid');
+        $insurancePaid = (float) array_sum($this->insuranceReceivedByReceiptMonth($branchId, $startDate, $endDate));
         $insuranceClaimed = (float) (clone $insuranceBase)->where('status', 'claimed')->sum('amount_paid');
         $insurancePending = (float) (clone $insuranceBase)->where('status', 'pending')->sum('amount_paid');
-        $insuranceExpected = round($insuranceClaimed + $insurancePending, 2);
+        $insuranceExpected = round((float) (clone $insuranceBase)->sum('amount_paid'), 2);
         $collectedRevenue = round(array_sum($collections) + $insurancePaid, 2);
         $lensRevenue = (float) ($billing->lens_total ?? 0);
         $lensProfit = round($lensRevenue - $lensExpenseTotal, 2);
@@ -241,14 +241,15 @@ class FinanceController extends Controller
             ->get()
             ->keyBy('date');
         $insuranceDaily = (clone $insuranceBase)
-            ->selectRaw("
-                date,
-                SUM(CASE WHEN status = 'paid' THEN amount_paid ELSE 0 END) as insurance_paid,
-                SUM(CASE WHEN status IN ('pending', 'claimed') THEN amount_paid ELSE 0 END) as insurance_expected
-            ")
+            ->selectRaw('date, SUM(amount_paid) as insurance_expected')
             ->groupBy('date')
             ->get()
             ->keyBy('date');
+        $remittanceDaily = collect();
+        if (Schema::hasTable('insurance_remittances')) {
+            $remittanceDaily = tap(DB::table('insurance_remittances')->whereBetween('date', [$startDate, $endDate]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+                ->selectRaw('date, SUM(amount_paid) as insurance_paid')->groupBy('date')->get()->keyBy('date');
+        }
         $expenseDaily = (clone $expenseBase)
             ->selectRaw('date, SUM(amount) as expense_total')
             ->groupBy('date')
@@ -259,17 +260,19 @@ class FinanceController extends Controller
             ->merge($billingDaily->keys())
             ->merge($salesDaily->keys())
             ->merge($insuranceDaily->keys())
+            ->merge($remittanceDaily->keys())
             ->merge($expenseDaily->keys())
             ->filter()
             ->unique()
             ->sortDesc()
             ->take(31)
-            ->map(function ($date) use ($billingDaily, $salesDaily, $insuranceDaily, $expenseDaily) {
+            ->map(function ($date) use ($billingDaily, $salesDaily, $insuranceDaily, $remittanceDaily, $expenseDaily) {
                 $billingRow = $billingDaily->get($date);
                 $salesRow = $salesDaily->get($date);
                 $insuranceRow = $insuranceDaily->get($date);
+                $remittanceRow = $remittanceDaily->get($date);
                 $expenseRow = $expenseDaily->get($date);
-                $collectedTotal = round((float) ($salesRow->collected_total ?? 0) + (float) ($insuranceRow->insurance_paid ?? 0), 2);
+                $collectedTotal = round((float) ($salesRow->collected_total ?? 0) + (float) ($remittanceRow->insurance_paid ?? 0), 2);
                 $expenseTotal = round((float) ($expenseRow->expense_total ?? 0), 2);
 
                 return [
@@ -279,6 +282,7 @@ class FinanceController extends Controller
                     'lens_total' => round((float) ($billingRow->lens_total ?? 0), 2),
                     'collected_total' => $collectedTotal,
                     'insurance_expected' => round((float) ($insuranceRow->insurance_expected ?? 0), 2),
+                    'insurance_received' => round((float) ($remittanceRow->insurance_paid ?? 0), 2),
                     'expense_total' => $expenseTotal,
                     'net_position' => round($collectedTotal - $expenseTotal, 2),
                 ];
@@ -447,8 +451,9 @@ class FinanceController extends Controller
             }
         }
         $insurance = tap(DB::table('insurance_claims')->whereBetween('date', [$start, $end]), $scope)
-            ->selectRaw("MONTH(date) as month, SUM(CASE WHEN status IN ('pending', 'claimed') THEN amount_paid ELSE 0 END) claimed, SUM(CASE WHEN status = 'paid' THEN amount_paid ELSE 0 END) received")
+            ->selectRaw('MONTH(date) as month, SUM(amount_paid) claimed, 0 as received')
             ->groupByRaw('MONTH(date)')->get()->keyBy('month');
+        $insuranceReceivedByMonth = $this->insuranceReceivedByReceiptMonth($branchId, $start, $end);
         $expenses = tap(DB::table('expenses')->whereBetween('date', [$start, $end]), $scope)
             ->selectRaw('MONTH(date) as month, category, SUM(amount) total')->groupByRaw('MONTH(date), category')->get();
 
@@ -652,7 +657,8 @@ class FinanceController extends Controller
             $claim = $insurance->get($month);
             $expenseTotal = array_sum(array_map(fn ($values) => (float) $values[$month - 1], $categoryRows));
             $salesAllocation = $salesBreakdown[$month] ?? ['consultation' => 0.0, 'lens' => 0.0, 'frame' => 0.0, 'case' => 0.0, 'other' => 0.0];
-            $collected = (float) ($sales[$month] ?? 0) + (float) ($claim->received ?? 0) + (float) ($loanCollections[$month - 1] ?? 0);
+            $receivedInsurance = (float) ($insuranceReceivedByMonth[$month] ?? 0);
+            $collected = (float) ($sales[$month] ?? 0) + $receivedInsurance + (float) ($loanCollections[$month - 1] ?? 0);
             $allocatedKnownTotal = $salesAllocation['consultation'] + $salesAllocation['lens'] + $salesAllocation['frame'] + $salesAllocation['case'];
             $salesAllocation['other'] = max(0.0, (float) ($sales[$month] ?? 0) - $allocatedKnownTotal);
             $salesReconciliation = 0.0;
@@ -668,7 +674,7 @@ class FinanceController extends Controller
                 'sales_reconciliation' => round($salesReconciliation, 2),
                 'collected' => round($collected, 2),
                 'insurance_claimed' => round((float) ($claim->claimed ?? 0), 2),
-                'insurance_received' => round((float) ($claim->received ?? 0), 2),
+                'insurance_received' => round($receivedInsurance, 2),
                 'expenses' => round($expenseTotal, 2),
                 'debtors' => round((float) ($bill->debtors ?? 0), 2),
                 'inventory_value' => $inventoryValueByMonth[$month] ?? 0.0,
@@ -785,6 +791,39 @@ class FinanceController extends Controller
                 'gross_profit_to_bank' => round($day['lens_profit'] + $day['frame_profit'], 2),
             ]);
 
+        $frameReserveBreakdown = collect();
+        if (Schema::hasTable('frame_cost_reservations') && Schema::hasTable('billing_frames') && Schema::hasTable('products')) {
+            $frameReserveQuery = DB::table('frame_cost_reservations as fcr')
+                ->leftJoin('billing_frames as bf', function ($join): void {
+                    $join->on('bf.id', '=', 'fcr.frame_sale_id')
+                        ->on('bf.branch_id', '=', 'fcr.branch_id');
+                })
+                ->leftJoin('products as p', function ($join): void {
+                    $join->on('p.id', '=', 'fcr.product_id')
+                        ->on('p.branch_id', '=', 'fcr.branch_id');
+                });
+            $scope($frameReserveQuery, 'fcr.branch_id');
+
+            $frameReserveBreakdown = $frameReserveQuery
+                ->selectRaw("
+                    COALESCE(NULLIF(p.name, ''), NULLIF(bf.frame_code_id, ''), CONCAT('Frame ', fcr.product_id)) as frame_name,
+                    COALESCE(bf.frame_code_id, '') as frame_code,
+                    COUNT(fcr.id) as reserved_count,
+                    COALESCE(SUM(fcr.reserved_cost), 0) as reserved_amount
+                ")
+                ->groupBy('fcr.product_id', 'p.name', 'bf.frame_code_id')
+                ->orderByDesc('reserved_amount')
+                ->orderBy('frame_name')
+                ->get()
+                ->map(fn ($row) => [
+                    'frame_name' => $row->frame_name,
+                    'frame_code' => $row->frame_code,
+                    'reserved_count' => (int) $row->reserved_count,
+                    'reserved_amount' => round((float) $row->reserved_amount, 2),
+                ])
+                ->values();
+        }
+
         return response()->json([
             'year' => $year,
             'branch_id' => $branchId,
@@ -792,6 +831,8 @@ class FinanceController extends Controller
             'generated_at' => now()->toIso8601String(),
             'months' => $months,
             'expense_categories' => collect($categoryRows)->map(fn ($values, $label) => ['label' => $label, 'months' => array_map(fn ($value) => round($value, 2), $values)])->values(),
+            'frame_reserve_total' => round((float) $frameReserveBreakdown->sum('reserved_amount'), 2),
+            'frame_reserve_breakdown' => $frameReserveBreakdown,
             'salary_rows' => collect($salaryRows)->map(fn ($row) => [
                 'employee_id' => $row['employee_id'],
                 'name' => $row['name'],
@@ -1586,6 +1627,14 @@ class FinanceController extends Controller
 
     public function deleteExpense(Request $request, int $expenseId): JsonResponse
     {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if ($role !== 'manager') {
+            return response()->json([
+                'message' => 'Only the General Manager can delete expenses.',
+            ], 403);
+        }
+
         $branchId = $this->resolveBranchId($request);
         $current = tap(
             DB::table('expenses')->where('expense_id', $expenseId),
@@ -1598,23 +1647,17 @@ class FinanceController extends Controller
             ], 404);
         }
 
-        if ($this->isLinkedLensCostExpense($current)) {
-            if (! $this->canDeleteLinkedLensCostExpense($request->user())) {
-                return response()->json([
-                    'message' => 'Lens cost expenses are controlled by Lens Tracker. Only the General Manager can remove duplicate lens expense rows here.',
-                ], 422);
+        DB::transaction(function () use ($current, $expenseId, $branchId): void {
+            if ($this->isLinkedFrameReservationExpense($current)
+                && Schema::hasTable('frame_cost_reservations')) {
+                DB::table('frame_cost_reservations')
+                    ->where('branch_id', $branchId)
+                    ->where('frame_sale_id', (int) ($current->source_id ?? 0))
+                    ->delete();
             }
-        } elseif ($this->isLinkedFrameReservationExpense($current)) {
-            return response()->json([
-                'message' => 'Frame reservation expenses are controlled by Frames Tracker.',
-            ], 422);
-        } elseif ($response = $this->ensureExpenseWriteAccess($request)) {
-            return $response;
-        }
 
-        DB::table('expenses')
-            ->where('expense_id', $expenseId)
-            ->delete();
+            DB::table('expenses')->where('expense_id', $expenseId)->delete();
+        });
 
         return response()->json([
             'message' => 'Expense deleted successfully.',
@@ -2929,37 +2972,10 @@ class FinanceController extends Controller
 
     private function resolveBillingStatus(int $branchId, int $billingId, float $balance, float $totalAmount): string
     {
-        $hasOpenInsuranceClaims = tap(
-            DB::table('insurance_claims')
-                ->where('billing_id', $billingId)
-                ->whereIn('status', ['pending', 'claimed']),
-            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )->exists();
-
-        if ($hasOpenInsuranceClaims) {
-            return 'insurance_pending';
-        }
-
-        if ($balance <= 0.5) {
+        if ($balance <= 0.005) {
             return 'paid';
         }
-
-        $hasRecoveries = tap(
-            DB::table('sales')
-                ->where('billing_id', $billingId)
-                ->where('payment_method', '!=', 'Insurance'),
-            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-        )->exists()
-            || tap(
-                DB::table('insurance_claims')->where('billing_id', $billingId),
-                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
-            )->exists();
-
-        if (! $hasRecoveries && abs($balance - $totalAmount) <= 0.5) {
-            return 'balance_remaining';
-        }
-
-        return 'pending';
+        return $balance < ($totalAmount - 0.005) ? 'partially_paid' : 'pending';
     }
 
     private function ensureInsuranceProviderSchema(): void
@@ -3535,6 +3551,19 @@ class FinanceController extends Controller
         ], 422);
     }
 
+    private function insuranceReceivedByReceiptMonth(int $branchId, string $startDate, string $endDate): array
+    {
+        $totals = [];
+        if (Schema::hasTable('insurance_remittances')) {
+            $receipts = tap(DB::table('insurance_remittances')->whereBetween('date', [$startDate, $endDate]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+                ->selectRaw('MONTH(date) as month, SUM(amount_paid) as total')->groupByRaw('MONTH(date)')->get();
+            foreach ($receipts as $receipt) $totals[(int) $receipt->month] = (float) $receipt->total;
+        }
+
+        // Claim status records external submission workflow only; cash received is recorded as remittances.
+        return array_map(fn ($value) => round($value, 2), $totals);
+    }
+
     private function buildMonthlyReportDataset(int $branchId, string $month): array
     {
         [$startDate, $endDate, $label] = $this->reportMonthRange($month);
@@ -3627,8 +3656,9 @@ class FinanceController extends Controller
             };
         }
 
-        $insurancePaid = round((float) ($insuranceByStatus['paid'] ?? 0), 2);
-        $insuranceClaimed = round((float) ($insuranceByStatus['claimed'] ?? 0), 2);
+        [$receiptStart, $receiptEnd] = [$startDate, $endDate];
+        $insurancePaid = round((float) ($this->insuranceReceivedByReceiptMonth($branchId, $receiptStart, $receiptEnd)[(int) substr($month, 5, 2)] ?? 0), 2);
+        $insuranceClaimed = round((float) (clone $insuranceQuery)->sum('amount_paid'), 2);
         $insurancePending = round((float) ($insuranceByStatus['pending'] ?? 0), 2);
         $grossBilled = round((float) ($billing->billed_total ?? 0), 2);
         $discountTotal = round((float) ($billing->discount_total ?? 0), 2);
@@ -3682,8 +3712,8 @@ class FinanceController extends Controller
                         ['key' => 'bank_transfer_collections', 'description' => 'Bank Transfer Collections', 'amount' => round($bankTransferTotal, 2), 'note' => 'Payments collected through bank transfer'],
                         ['key' => 'other_collections', 'description' => 'Other Collections', 'amount' => round($otherCollectionsTotal, 2), 'note' => 'Other payment methods posted in sales'],
                         ['key' => 'insurance_paid', 'description' => 'Insurance Claims Paid', 'amount' => $insurancePaid, 'note' => 'Claims settled by insurers within the month'],
-                        ['key' => 'insurance_claimed', 'description' => 'Insurance Claims Claimed', 'amount' => $insuranceClaimed, 'note' => 'Claims moved to claimed status within the month'],
-                        ['key' => 'insurance_pending', 'description' => 'Insurance Claims Pending', 'amount' => $insurancePending, 'note' => 'Pending insurance claims raised within the month'],
+                        ['key' => 'insurance_claimed', 'description' => 'Total Insurance Billing', 'amount' => $insuranceClaimed, 'note' => 'Insurance portions recorded against billing within the month'],
+                        ['key' => 'insurance_pending', 'description' => 'Not Submitted Externally', 'amount' => $insurancePending, 'note' => 'Insurance billing not yet marked as externally submitted'],
                         ['key' => 'outstanding_balance', 'description' => 'Outstanding Customer Balance', 'amount' => round((float) ($billing->outstanding_balance ?? 0), 2), 'note' => 'Open balance remaining on bills created within the month'],
                         ['key' => 'total_collections', 'description' => 'Total Collected Revenue', 'amount' => $totalCollections, 'note' => 'Cash and insurance receipts recognized for the month'],
                     ],

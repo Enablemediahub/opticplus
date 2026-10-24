@@ -9,14 +9,22 @@ const currency = new Intl.NumberFormat('en-GH', {
 })
 
 function hasBalanceDue(amount) {
-  return Number(amount ?? 0) > 0.0005
+  return Number(amount ?? 0) > 0.005
 }
 
 function billingStatusLabel(record) {
+  const storedStatus = String(record?.status ?? '').toLowerCase()
+  const canonicalLabels = {
+    pending: 'Pending',
+    partially_paid: 'Partially Paid',
+    paid: 'Paid',
+  }
+  if (canonicalLabels[storedStatus]) return canonicalLabels[storedStatus]
+
   const balance = Number(record?.calculated_balance ?? record?.balance ?? 0)
   const paid = Number(record?.total_paid ?? 0)
-  if (balance <= 0.0005) return 'Paid'
-  if (paid > 0.0005) return 'Partially Paid'
+  if (balance <= 0.005) return 'Paid'
+  if (paid > 0.005) return 'Partially Paid'
   return 'Pending'
 }
 
@@ -162,7 +170,7 @@ export default function BillingSection({
           <>
             <StatWidget label="Bills in Date Range" value={billingData?.stats.filtered_total_bills ?? '...'} note="Bills matching the selected filters" icon="receipt" className="total" />
             <StatWidget label="Total Amount" value={currency.format(Number(billingData?.stats.filtered_total_amount ?? 0))} note="Gross billed value for the selected date range" icon="money" className="seen" />
-            <StatWidget label="Pending Bills" value={billingData?.stats.filtered_pending_bills ?? '...'} note="Pending bills for the selected date range" icon="clock" className="pending" />
+            <StatWidget label="Open Bills" value={billingData?.stats.filtered_pending_bills ?? '...'} note="Bills with an outstanding balance in the selected date range" icon="clock" className="pending" />
             <StatWidget
               label="Calculated Balance"
               value={currency.format(Number(billingData?.stats.filtered_outstanding_amount ?? 0))}
@@ -263,8 +271,8 @@ export default function BillingSection({
               >
                 <option value="all">All</option>
                 <option value="pending">Pending</option>
+                <option value="partially_paid">Partially Paid</option>
                 <option value="paid">Paid</option>
-                <option value="balance_remaining">Balance remaining</option>
               </select>
             </label>
             <label>
@@ -323,7 +331,7 @@ export default function BillingSection({
                       <th>Total</th>
                       <th>Discount</th>
                       <th>Paid</th>
-                      <th>Insurance Claimed</th>
+                      <th>Total Insurance Billing</th>
                       <th>Balance</th>
                       <th>Actions</th>
                     </tr>
@@ -871,7 +879,7 @@ export default function BillingSection({
                   <SummaryMetric label="Cash paid" value={paymentDetail.billing.cash_paid} />
                   <SummaryMetric label="MoMo paid" value={paymentDetail.billing.mobile_paid} />
                   <SummaryMetric label="Paystack paid" value={paymentDetail.billing.paystack_paid} />
-                  <SummaryMetric label="Insurance claimed" value={paymentDetail.billing.insurance_claimed} />
+                  <SummaryMetric label="Total Insurance Billing" value={paymentDetail.billing.insurance_claimed} />
                   <SummaryMetric label="Outstanding" value={paymentDetail.billing.calculated_balance} balanceHighlight />
                 </div>
 
@@ -1036,68 +1044,6 @@ function ManagerBillingWorkspace({
           </div>
         </div>
 
-        <form
-          className="patient-filter-grid"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setBillingQuery((current) => ({
-              ...current,
-              ...billingFilters,
-              page: 1,
-            }))
-          }}
-        >
-          <label>
-            Search
-            <input
-              value={billingFilters.search}
-              onChange={(event) => setBillingFilters((current) => ({ ...current, search: event.target.value }))}
-              placeholder="Patient, folder, receipt, phone"
-            />
-          </label>
-          <label>
-            Status
-            <select
-              value={billingFilters.status}
-              onChange={(event) => setBillingFilters((current) => ({ ...current, status: event.target.value }))}
-            >
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-              <option value="balance_remaining">Balance remaining</option>
-              <option value="insurance_pending">Insurance pending</option>
-            </select>
-          </label>
-          <label>
-            Date from
-            <input type="date" value={billingFilters.date_from} onChange={(event) => setBillingFilters((current) => ({ ...current, date_from: event.target.value }))} />
-          </label>
-          <label>
-            Date to
-            <input type="date" value={billingFilters.date_to} onChange={(event) => setBillingFilters((current) => ({ ...current, date_to: event.target.value }))} />
-          </label>
-          <label>
-            Rows per page
-            <select value={billingFilters.per_page} onChange={(event) => setBillingFilters((current) => ({ ...current, per_page: Number(event.target.value) }))}>
-              {[15, 25, 50].map((size) => <option key={size} value={size}>{size} rows</option>)}
-            </select>
-          </label>
-          <div className="filter-actions-row full-span">
-            <button type="submit" className="primary-button">Apply manager filters</button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                const defaults = { status: 'all', search: '', date_from: '', date_to: '', page: 1, per_page: 15 }
-                setBillingFilters(defaults)
-                setBillingQuery(defaults)
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </form>
-
         <div className="finance-chip-row patient-manager-chip-row">
           <div className="finance-chip">
             <span>Average Bill</span>
@@ -1194,6 +1140,54 @@ function ManagerBillingWorkspace({
           </div>
           <span className="panel-tag">{billingData?.pagination?.total ?? 0} rows in view</span>
         </div>
+
+        <form
+          className="patient-filter-grid"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setBillingQuery((current) => ({ ...current, ...billingFilters, page: 1 }))
+          }}
+        >
+          <label>
+            Search
+            <input
+              value={billingFilters.search}
+              onChange={(event) => setBillingFilters((current) => ({ ...current, search: event.target.value }))}
+              placeholder="Patient, folder, receipt, phone"
+            />
+          </label>
+          <label>
+            Status
+            <select value={billingFilters.status} onChange={(event) => setBillingFilters((current) => ({ ...current, status: event.target.value }))}>
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="partially_paid">Partially Paid</option>
+              <option value="paid">Paid</option>
+            </select>
+          </label>
+          <label>
+            Date from
+            <input type="date" value={billingFilters.date_from} onChange={(event) => setBillingFilters((current) => ({ ...current, date_from: event.target.value }))} />
+          </label>
+          <label>
+            Date to
+            <input type="date" value={billingFilters.date_to} onChange={(event) => setBillingFilters((current) => ({ ...current, date_to: event.target.value }))} />
+          </label>
+          <label>
+            Rows per page
+            <select value={billingFilters.per_page} onChange={(event) => setBillingFilters((current) => ({ ...current, per_page: Number(event.target.value) }))}>
+              {[15, 25, 50].map((size) => <option key={size} value={size}>{size} rows</option>)}
+            </select>
+          </label>
+          <div className="filter-actions-row full-span">
+            <button type="submit" className="primary-button">Apply ledger filters</button>
+            <button type="button" className="ghost-button" onClick={() => {
+              const defaults = { status: 'all', search: '', date_from: '', date_to: '', page: 1, per_page: 15 }
+              setBillingFilters(defaults)
+              setBillingQuery(defaults)
+            }}>Reset</button>
+          </div>
+        </form>
 
         {isLoadingBilling && !billingData ? <p className="muted-copy">Loading manager billing ledger...</p> : null}
 

@@ -22,6 +22,13 @@ export default function InsuranceSection(props) {
   const [isLoadingReport, setIsLoadingReport] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [providerName, setProviderName] = useState('')
+  const [claimsTab, setClaimsTab] = useState('ledger')
+  const [paymentsYear, setPaymentsYear] = useState(new Date().getFullYear())
+  const [paymentsData, setPaymentsData] = useState(null)
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [paymentsSaving, setPaymentsSaving] = useState(false)
+  const [paymentForm, setPaymentForm] = useState({ insurance_provider: '', amount_paid: '', date: '', reference: '', notes: '', allocations: [{ claim_month: `${new Date().getFullYear()}-01-01`, amount_paid: '' }] })
+  const [selectedClaimIds, setSelectedClaimIds] = useState([])
   const [reportSections, setReportSections] = useState(defaultReportSections)
   const [remittanceForm, setRemittanceForm] = useState({
     insurance_provider: '',
@@ -53,6 +60,55 @@ export default function InsuranceSection(props) {
     : (props.insuranceMeta?.providers ?? []).map((provider, index) => ({ id: `${provider}-${index}`, name: provider }))
   const filteredStats = props.insuranceData?.filtered_stats
   const showClaimCreationPanel = eyebrow !== 'Insurance Claims'
+  const selectableClaims = (props.insuranceData?.claims ?? []).filter((claim) => ['pending', 'claimed'].includes(String(claim.status).toLowerCase()))
+  const selectedCurrentClaims = selectedClaimIds.filter((id) => selectableClaims.some((claim) => Number(claim.id) === Number(id)))
+
+  useEffect(() => {
+    setSelectedClaimIds([])
+  }, [props.insuranceData?.pagination?.page, props.insuranceFilters?.provider, props.insuranceFilters?.status, props.insuranceFilters?.date_from, props.insuranceFilters?.date_to, props.insuranceFilters?.search])
+
+  async function updateSelectedSubmissionStatus(submissionStatus) {
+    if (!selectedCurrentClaims.length || !props.bulkUpdateInsuranceSubmission) return
+    const didUpdate = await props.bulkUpdateInsuranceSubmission(selectedCurrentClaims, submissionStatus)
+    if (didUpdate) setSelectedClaimIds([])
+  }
+  const paymentMonthGroups = Object.values((paymentsData?.rows ?? []).reduce((groups, row) => {
+    const monthKey = row.claim_month?.slice(0, 7) ?? 'unknown'
+    groups[monthKey] ??= { monthKey, rows: [], claimed: 0, allocated: 0, difference: 0 }
+    groups[monthKey].rows.push(row)
+    groups[monthKey].claimed += Number(row.claimed ?? 0)
+    groups[monthKey].allocated += Number(row.allocated ?? 0)
+    groups[monthKey].difference += Number(row.difference ?? 0)
+    return groups
+  }, {})).sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+
+  function monthLabel(value) {
+    if (!value || value === 'unknown') return 'Unknown month'
+    return new Intl.DateTimeFormat('en-GH', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}-01T00:00:00Z`))
+  }
+
+  useEffect(() => {
+    if (eyebrow !== 'Insurance Claims' || !canRecordRemittances || !props.apiFetch) return
+    let cancelled = false
+    setPaymentsLoading(true)
+    props.apiFetch(`/insurance/payments?branch_id=${encodeURIComponent(props.selectedBranchId ?? 0)}&year=${paymentsYear}`, { token: props.token })
+      .then((data) => { if (!cancelled) setPaymentsData(data) })
+      .catch((error) => { if (!cancelled) props.onPaymentsError?.(error.message) })
+      .finally(() => { if (!cancelled) setPaymentsLoading(false) })
+    return () => { cancelled = true }
+  }, [eyebrow, canRecordRemittances, props.apiFetch, props.selectedBranchId, props.token, paymentsYear, paymentsSaving])
+
+  async function saveInsurancePayment(event) {
+    event.preventDefault()
+    setPaymentsSaving(true)
+    try {
+      await props.apiFetch(`/insurance/payments?branch_id=${encodeURIComponent(props.selectedBranchId ?? 0)}`, { method: 'POST', token: props.token, body: paymentForm })
+      setPaymentForm((current) => ({ ...current, amount_paid: '', reference: '', notes: '', allocations: [{ claim_month: current.allocations[0]?.claim_month ?? `${paymentsYear}-01-01`, amount_paid: '' }] }))
+      setPaymentsYear(Number(paymentForm.date.slice(0, 4)) || paymentsYear)
+    } catch (error) {
+      props.onPaymentsError?.(error.message)
+    } finally { setPaymentsSaving(false) }
+  }
 
   useEffect(() => {
     if (!activeClaim) return
@@ -199,30 +255,30 @@ export default function InsuranceSection(props) {
 
       <section className="stats-grid patient-stats-grid">
         <StatWidget
-          label="Total Claimed"
+          label="Total Insurance Billing"
           value={currency.format(Number(filteredStats?.total_amount ?? props.insuranceData?.stats.total_claimed ?? 0))}
-          note="Total claim value in the current filter window"
+          note="Insurance portions recorded against patient billing"
           icon="shield"
           className="total"
         />
         <StatWidget
-          label="Claimed"
+          label="Submitted Externally"
           value={currency.format(Number(filteredStats?.claimed_amount ?? props.insuranceData?.stats.claimed_not_paid ?? 0))}
-          note="Submitted claims in the current filter window awaiting settlement"
+          note="Marked after submission through your external insurer platform"
           icon="receipt"
           className="pending"
         />
         <StatWidget
-          label="Pending"
+          label="Not Submitted"
           value={currency.format(Number(filteredStats?.pending_amount ?? props.insuranceData?.stats.pending_claims ?? 0))}
-          note="Claims still pending in the current filter window"
+          note="Insurance billing not yet marked as externally submitted"
           icon="clock"
           className="today"
         />
         <StatWidget
-          label="Paid Claims"
-          value={currency.format(Number(filteredStats?.paid_amount ?? props.insuranceData?.stats.paid_claims ?? 0))}
-          note="Claims already settled in the current filter window"
+          label="Insurance Received"
+          value={currency.format(Number(props.insuranceData?.remittance_summary?.total_amount ?? 0))}
+          note="Insurer receipts recorded for the current filters"
           icon="check-badge"
           className="seen"
         />
@@ -472,7 +528,7 @@ export default function InsuranceSection(props) {
               />
             </label>
             <label>
-              Claim amount
+              Insurance billing amount
               <input
                 type="number"
                 min="0"
@@ -513,7 +569,55 @@ export default function InsuranceSection(props) {
         </article>
         ) : null}
 
-        <article className="panel patient-list-panel">
+        {eyebrow === 'Insurance Claims' && canRecordRemittances ? (
+          <div className="finance-tabs insurance-view-tabs" role="tablist" aria-label="Insurance claims views">
+            <button type="button" role="tab" aria-selected={claimsTab === 'ledger'} className={`finance-tab insurance-view-tab ${claimsTab === 'ledger' ? 'active' : ''}`} onClick={() => setClaimsTab('ledger')}>
+              <span className="insurance-view-tab__icon" aria-hidden="true">▤</span><span>Claims Ledger</span>
+              <span className="insurance-view-tab__count">{props.insuranceData?.pagination?.total ?? 0}</span>
+            </button>
+            <button type="button" role="tab" aria-selected={claimsTab === 'payments'} className={`finance-tab insurance-view-tab ${claimsTab === 'payments' ? 'active' : ''}`} onClick={() => setClaimsTab('payments')}>
+              <span className="insurance-view-tab__icon" aria-hidden="true">◉</span><span>Insurance Payments</span>
+              <span className="insurance-view-tab__count">{paymentsData?.receipts?.length ?? 0}</span>
+            </button>
+          </div>
+        ) : null}
+
+        {claimsTab === 'payments' && eyebrow === 'Insurance Claims' && canRecordRemittances ? (
+          <>
+            <article className="panel">
+              <div className="panel-heading"><div><p className="eyebrow">Insurer reconciliation</p><h3>Record a receipt and match it to claim months</h3></div></div>
+              <p className="muted-copy">Enter the total received, then split it across the months the insurer paid for. The receipt date feeds Insurance Received in financial reports; allocations show which claim months it settles.</p>
+              <form className="patient-filter-grid" onSubmit={saveInsurancePayment}>
+                <label>Insurance company<select required value={paymentForm.insurance_provider} onChange={(e) => setPaymentForm((v) => ({ ...v, insurance_provider: e.target.value }))}><option value="">Select provider</option>{(props.insuranceMeta?.providers ?? []).map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+                <label>Receipt date<input required type="date" value={paymentForm.date} onChange={(e) => setPaymentForm((v) => ({ ...v, date: e.target.value }))} /></label>
+                <label>Total received (GHS)<input required min="0.01" step="0.01" type="number" value={paymentForm.amount_paid} onChange={(e) => setPaymentForm((v) => ({ ...v, amount_paid: e.target.value }))} /></label>
+                <label>Bank/payment reference<input value={paymentForm.reference} onChange={(e) => setPaymentForm((v) => ({ ...v, reference: e.target.value }))} /></label>
+                <label className="full-span">Notes<input value={paymentForm.notes} onChange={(e) => setPaymentForm((v) => ({ ...v, notes: e.target.value }))} /></label>
+                <div className="full-span">
+                  <strong>Allocate receipt across claim months</strong>
+                  {paymentForm.allocations.map((allocation, index) => <div className="patient-filter-grid" key={index}>
+                    <label>Claim month<input type="month" required value={allocation.claim_month.slice(0, 7)} onChange={(e) => setPaymentForm((v) => ({ ...v, allocations: v.allocations.map((a, i) => i === index ? { ...a, claim_month: `${e.target.value}-01` } : a) }))} /></label>
+                    <label>Amount allocated (GHS)<input type="number" min="0.01" step="0.01" required value={allocation.amount_paid} onChange={(e) => setPaymentForm((v) => ({ ...v, allocations: v.allocations.map((a, i) => i === index ? { ...a, amount_paid: e.target.value } : a) }))} /></label>
+                    {paymentForm.allocations.length > 1 ? <button type="button" className="mini-action" onClick={() => setPaymentForm((v) => ({ ...v, allocations: v.allocations.filter((_, i) => i !== index) }))}>Remove month</button> : null}
+                  </div>)}
+                  <button type="button" className="mini-action" onClick={() => setPaymentForm((v) => ({ ...v, allocations: [...v.allocations, { claim_month: `${paymentsYear}-01-01`, amount_paid: '' }] }))}>Add claim month</button>
+                </div>
+                <button className="primary-button full-span" disabled={paymentsSaving}>{paymentsSaving ? 'Saving receipt...' : 'Save receipt and allocations'}</button>
+              </form>
+            </article>
+            <article className="panel patient-list-panel">
+              <div className="panel-heading"><div><p className="eyebrow">Monthly reconciliation</p><h3>Claims, payments, and remaining difference</h3></div><label>Year<select value={paymentsYear} onChange={(e) => setPaymentsYear(Number(e.target.value))}>{[paymentsYear + 1, paymentsYear, paymentsYear - 1, paymentsYear - 2].map((year) => <option key={year}>{year}</option>)}</select></label></div>
+              <p className="muted-copy">Difference = Total Insurance Billing for the month minus insurer receipts allocated to that month. A negative amount means allocated payments exceeded billing.</p>
+              {paymentsLoading ? <p className="muted-copy">Loading insurance reconciliation…</p> : <div className="table-shell insurance-reconciliation-table-wrap"><table className="portal-table insurance-reconciliation-table"><thead><tr><th>Insurance company</th><th>Records</th><th>Total Insurance Billing</th><th>Received allocated</th><th>Remaining difference</th></tr></thead><tbody>{paymentMonthGroups.flatMap((group) => [
+                <tr className="insurance-reconciliation-month" key={`month-${group.monthKey}`}><th>{monthLabel(group.monthKey)} <span>{group.rows.length} {group.rows.length === 1 ? 'insurance company' : 'insurance companies'}</span></th><td>{group.rows.reduce((total, row) => total + Number(row.claim_count ?? 0), 0)}</td><td>{currency.format(group.claimed)}</td><td>{currency.format(group.allocated)}</td><td>{currency.format(group.difference)}</td></tr>,
+                ...group.rows.map((row) => <tr className="insurance-reconciliation-company" key={`${row.insurance_provider}-${row.claim_month}`}><td>{row.insurance_provider}</td><td>{row.claim_count}</td><td>{currency.format(Number(row.claimed))}</td><td>{currency.format(Number(row.allocated))}</td><td className={Number(row.difference) < 0 ? 'insurance-difference-overpaid' : ''}>{currency.format(Number(row.difference))}</td></tr>),
+              ])}{!paymentMonthGroups.length ? <tr><td colSpan="5">No claims or allocations in this year.</td></tr> : null}</tbody></table></div>}
+            </article>
+            <article className="panel patient-list-panel"><div className="panel-heading"><div><p className="eyebrow">Cash receipts</p><h3>Insurance payments received in {paymentsYear}</h3></div></div><div className="table-shell"><table className="portal-table"><thead><tr><th>Receipt date</th><th>Insurance company</th><th>Amount received</th><th>Reference</th><th>Applied to claim months</th></tr></thead><tbody>{(paymentsData?.receipts ?? []).map((receipt) => <tr key={receipt.id}><td>{receipt.date}</td><td>{receipt.insurance_provider}</td><td>{currency.format(Number(receipt.amount_paid))}</td><td>{receipt.reference || '—'}</td><td>{(receipt.allocations ?? []).map((a) => `${a.claim_month.slice(0, 7)}: ${currency.format(Number(a.amount_paid))}`).join(' · ') || 'Unallocated legacy receipt'}</td></tr>)}{!paymentsData?.receipts?.length ? <tr><td colSpan="5">No receipts recorded for this year.</td></tr> : null}</tbody></table></div></article>
+          </>
+        ) : null}
+
+        {claimsTab === 'ledger' ? <article className="panel patient-list-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Claims Ledger</p>
@@ -589,9 +693,9 @@ export default function InsuranceSection(props) {
                 }
               >
                 <option value="all">All</option>
-                <option value="claimed">Claimed</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
+                <option value="claimed">Submitted externally</option>
+                <option value="pending">Not submitted</option>
+                <option value="paid">Legacy paid status</option>
               </select>
             </label>
             <label>
@@ -649,11 +753,29 @@ export default function InsuranceSection(props) {
             </div>
           </form>
 
+          {canEditClaims ? (
+            <div className="insurance-bulk-submission-bar">
+              <div>
+                <strong>{selectedCurrentClaims.length} selected</strong>
+                <span>Choose insurance billing rows on this page</span>
+              </div>
+              <button type="button" className="primary-button" disabled={!selectedCurrentClaims.length || props.claimBusyId === 'bulk-insurance-submission'} onClick={() => updateSelectedSubmissionStatus('submitted')}>
+                Mark selected submitted externally
+              </button>
+              <button type="button" className="ghost-button" disabled={!selectedCurrentClaims.length || props.claimBusyId === 'bulk-insurance-submission'} onClick={() => updateSelectedSubmissionStatus('not_submitted')}>
+                Revert selected to not submitted
+              </button>
+            </div>
+          ) : null}
+
           {props.insuranceData?.claims?.length ? (
             <div className="table-shell">
               <table className="portal-table insurance-claims-table">
                 <thead>
                   <tr>
+                    <th className="insurance-select-column">
+                      {canEditClaims ? <input type="checkbox" aria-label="Select all eligible insurance billing rows on this page" checked={selectableClaims.length > 0 && selectableClaims.every((claim) => selectedCurrentClaims.includes(Number(claim.id)))} onChange={(event) => setSelectedClaimIds(event.target.checked ? selectableClaims.map((claim) => Number(claim.id)) : [])} /> : null}
+                    </th>
                     <th>Patient</th>
                     <th>Folder ID</th>
                     <th>Provider</th>
@@ -673,6 +795,9 @@ export default function InsuranceSection(props) {
 
                     return (
                       <tr key={claim.id}>
+                        <td className="insurance-select-column">
+                          {canEditClaims && ['pending', 'claimed'].includes(claimStatus) ? <input type="checkbox" aria-label={`Select ${claim.patient_name || claim.folder_id || 'insurance billing record'}`} checked={selectedCurrentClaims.includes(Number(claim.id))} onChange={(event) => setSelectedClaimIds((current) => event.target.checked ? [...new Set([...current, Number(claim.id)])] : current.filter((id) => Number(id) !== Number(claim.id)))} /> : null}
+                        </td>
                         <td>
                           <div className="patient-table-primary">
                             <strong>{claim.patient_name || claim.name || 'Unknown patient'}</strong>
@@ -689,7 +814,7 @@ export default function InsuranceSection(props) {
                         <td>{claim.date || 'N/A'}</td>
                         <td>
                           <span className={`status-pill status-${claimStatus.replaceAll(' ', '-')}`}>
-                            {claim.status}
+                            {claimStatus === 'claimed' ? 'Submitted externally' : claimStatus === 'pending' ? 'Not submitted' : claimStatus === 'paid' ? 'Legacy paid status' : claim.status}
                           </span>
                         </td>
                         <td>
@@ -711,24 +836,24 @@ export default function InsuranceSection(props) {
                               >
                                 Reprint receipt
                               </button>
-                              {!isReadOnly && ['claimed', 'paid'].includes(claimStatus) ? (
+                              {canEditClaims && claimStatus === 'claimed' ? (
                                 <button
                                   type="button"
                                   className="mini-action"
                                   disabled={props.claimBusyId === claim.id}
                                   onClick={() => props.markClaimPending(claim.id, claim.branch_id)}
                                 >
-                                  {props.claimBusyId === claim.id ? 'Updating...' : 'Revert to pending'}
+                                  {props.claimBusyId === claim.id ? 'Updating...' : 'Mark as not submitted'}
                                 </button>
                               ) : null}
-                              {!isReadOnly && claimStatus !== 'paid' ? (
+                              {canEditClaims && claimStatus === 'pending' ? (
                                 <button
                                   type="button"
                                   className="mini-action success"
                                   disabled={props.claimBusyId === claim.id}
-                                  onClick={() => props.markClaimPaid(claim.id, claim.branch_id)}
+                                  onClick={() => props.markClaimSubmittedExternally(claim.id, claim.branch_id)}
                                 >
-                                  {props.claimBusyId === claim.id ? 'Updating...' : 'Mark as paid'}
+                                  {props.claimBusyId === claim.id ? 'Updating...' : 'Mark submitted externally'}
                                 </button>
                               ) : null}
                               {canEditClaims ? (
@@ -791,7 +916,7 @@ export default function InsuranceSection(props) {
               </div>
             </div>
           ) : null}
-        </article>
+        </article> : null}
       </section>
 
       {activeClaim ? (
@@ -881,7 +1006,7 @@ export default function InsuranceSection(props) {
                 />
               </label>
               <label>
-                Claim amount
+                Insurance billing amount
                 <input
                   type="number"
                   min="0"
@@ -960,24 +1085,24 @@ export default function InsuranceSection(props) {
 
               <div className="report-summary-grid">
                 <div className="report-summary-card">
-                  <span>Total claim value</span>
-                  <strong>{currency.format(Number(insuranceReport.summary?.total_amount ?? 0))}</strong>
-                  <small>Combined value of every filtered claim</small>
+                  <span>Total Insurance Billing</span>
+                  <strong>{currency.format(Number(insuranceReport.simple_summary?.total_claimed ?? 0))}</strong>
+                  <small>Insurance portions recorded against patient billing</small>
                 </div>
                 <div className="report-summary-card">
-                  <span>Open exposure</span>
-                  <strong>{currency.format(Number(insuranceReport.summary?.open_amount ?? 0))}</strong>
-                  <small>Still pending or claimed but not yet settled</small>
+                  <span>Submitted Externally</span>
+                  <strong>{currency.format(Number(insuranceReport.simple_summary?.claimed_not_paid ?? 0))}</strong>
+                  <small>Marked after submission through the external platform</small>
                 </div>
                 <div className="report-summary-card">
-                  <span>Paid claims</span>
-                  <strong>{currency.format(Number(insuranceReport.summary?.paid_amount ?? 0))}</strong>
-                  <small>Recovered from insurers inside this filter set</small>
+                  <span>Insurance Received</span>
+                  <strong>{currency.format(Number(insuranceReport.simple_summary?.total_paid_received ?? 0))}</strong>
+                  <small>Insurer receipts entered in Insurance Payments</small>
                 </div>
                 <div className="report-summary-card">
-                  <span>Settlement rate</span>
-                  <strong>{Number(insuranceReport.summary?.settlement_rate ?? 0).toFixed(2)}%</strong>
-                  <small>Paid value as a share of filtered claim value</small>
+                  <span>Not Submitted Externally</span>
+                  <strong>{currency.format(Number(insuranceReport.simple_summary?.pending_amount ?? 0))}</strong>
+                  <small>Insurance billing not yet marked as submitted</small>
                 </div>
                 <div className="report-summary-card">
                   <span>Claims matched</span>
@@ -1118,34 +1243,24 @@ function InsuranceSimpleSummarySection({ summary = {} }) {
 
       <div className="report-summary-grid">
         <div className="report-summary-card">
-          <span>Total claimed</span>
+          <span>Total Insurance Billing</span>
           <strong>{currency.format(Number(summary.total_claimed ?? 0))}</strong>
-          <small>All claim value raised in this filtered report</small>
+          <small>Insurance portions recorded against patient billing</small>
         </div>
         <div className="report-summary-card">
-          <span>Claimed but unpaid</span>
+          <span>Submitted Externally</span>
           <strong>{currency.format(Number(summary.claimed_not_paid ?? 0))}</strong>
-          <small>Already claimed but not yet marked paid</small>
+          <small>Marked after external platform submission</small>
         </div>
         <div className="report-summary-card">
-          <span>Paid against claims</span>
-          <strong>{currency.format(Number(summary.paid_against_claims ?? 0))}</strong>
-          <small>Insurer money tied to identified patient claims</small>
-        </div>
-        <div className="report-summary-card">
-          <span>Manual paid receipts</span>
-          <strong>{currency.format(Number(summary.manual_paid_amount ?? 0))}</strong>
-          <small>Insurer payments received but not yet matched to patients</small>
-        </div>
-        <div className="report-summary-card">
-          <span>Total paid received</span>
+          <span>Insurance Received</span>
           <strong>{currency.format(Number(summary.total_paid_received ?? 0))}</strong>
-          <small>Paid against claims plus manual insurer receipts</small>
+          <small>Receipts recorded in Insurance Payments</small>
         </div>
         <div className="report-summary-card">
-          <span>Still pending</span>
+          <span>Not Submitted Externally</span>
           <strong>{currency.format(Number(summary.pending_amount ?? 0))}</strong>
-          <small>Rows still in pending status</small>
+          <small>Insurance billing not yet marked as submitted</small>
         </div>
       </div>
     </article>
@@ -1213,9 +1328,9 @@ function InsuranceReportBreakdownTable({ eyebrow, title, rows = [] }) {
               <th>Category</th>
               <th>Claim Count</th>
               <th>Total Value</th>
-              <th>Pending Value</th>
-              <th>Claimed Value</th>
-              <th>Paid Value</th>
+              <th>Not Submitted</th>
+              <th>Submitted Externally</th>
+              <th>Legacy Paid Status</th>
             </tr>
           </thead>
           <tbody>
@@ -1308,10 +1423,10 @@ function createInsuranceReportHtml(report, sections = defaultReportSections()) {
     .join('')
 
   const summaryCards = [
-    ['Total claim value', currency.format(Number(report.summary?.total_amount ?? 0)), 'Combined value of every filtered claim'],
-    ['Open exposure', currency.format(Number(report.summary?.open_amount ?? 0)), 'Pending plus claimed but not yet paid'],
-    ['Paid claims', currency.format(Number(report.summary?.paid_amount ?? 0)), 'Recovered from insurers inside this scope'],
-    ['Settlement rate', `${Number(report.summary?.settlement_rate ?? 0).toFixed(2)}%`, 'Paid value as a share of filtered claim value'],
+    ['Total Insurance Billing', currency.format(Number(report.simple_summary?.total_claimed ?? 0)), 'Insurance portions recorded against patient billing'],
+    ['Submitted Externally', currency.format(Number(report.simple_summary?.claimed_not_paid ?? 0)), 'Marked after submission through the external insurer platform'],
+    ['Insurance Received', currency.format(Number(report.simple_summary?.total_paid_received ?? 0)), 'Insurer receipts entered in Insurance Payments'],
+    ['Not Submitted Externally', currency.format(Number(report.simple_summary?.pending_amount ?? 0)), 'Insurance billing not yet marked as submitted'],
     ['Claims matched', String(report.summary?.claim_count ?? 0), 'Detailed rows included below'],
     ['Average claim', currency.format(Number(report.summary?.average_claim_amount ?? 0)), 'Mean value across the filtered claims'],
   ]
@@ -1333,9 +1448,9 @@ function createInsuranceReportHtml(report, sections = defaultReportSections()) {
             <th>Category</th>
             <th>Claim Count</th>
             <th>Total Value</th>
-            <th>Pending Value</th>
-            <th>Claimed Value</th>
-            <th>Paid Value</th>
+            <th>Not Submitted</th>
+            <th>Submitted Externally</th>
+            <th>Legacy Paid Status</th>
           </tr>
         </thead>
         <tbody>
@@ -1367,12 +1482,10 @@ function createInsuranceReportHtml(report, sections = defaultReportSections()) {
   `).join('') : '<tr><td colspan="5">No manual insurer receipts were recorded for this filter set.</td></tr>'
 
   const simpleSummaryCards = [
-    ['Total claimed', currency.format(Number(report.simple_summary?.total_claimed ?? 0)), 'All claim value raised in this filtered report'],
-    ['Claimed but unpaid', currency.format(Number(report.simple_summary?.claimed_not_paid ?? 0)), 'Already claimed but not yet marked paid'],
-    ['Paid against claims', currency.format(Number(report.simple_summary?.paid_against_claims ?? 0)), 'Insurer money tied to identified patient claims'],
-    ['Manual paid receipts', currency.format(Number(report.simple_summary?.manual_paid_amount ?? 0)), 'Insurer payments received but not yet matched to patients'],
-    ['Total paid received', currency.format(Number(report.simple_summary?.total_paid_received ?? 0)), 'Paid against claims plus manual insurer receipts'],
-    ['Still pending', currency.format(Number(report.simple_summary?.pending_amount ?? 0)), 'Rows still in pending status'],
+    ['Total Insurance Billing', currency.format(Number(report.simple_summary?.total_claimed ?? 0)), 'Insurance portions recorded against patient billing'],
+    ['Submitted Externally', currency.format(Number(report.simple_summary?.claimed_not_paid ?? 0)), 'Marked after submission through the external insurer platform'],
+    ['Insurance Received', currency.format(Number(report.simple_summary?.total_paid_received ?? 0)), 'Insurer receipts recorded in Insurance Payments'],
+    ['Not Submitted Externally', currency.format(Number(report.simple_summary?.pending_amount ?? 0)), 'Insurance billing not yet marked as submitted'],
   ].map(([label, value, note]) => `
       <div class="summary-card">
         <span>${escapeHtml(label)}</span>

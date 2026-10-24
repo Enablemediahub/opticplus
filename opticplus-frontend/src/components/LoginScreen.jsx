@@ -23,7 +23,11 @@ export default function LoginScreen({
           <div className="login-hero-logo-wrap">
             <img src="/opticplus-login-logo.png" alt="Opticplus logo" className="login-hero-logo" />
           </div>
-          <h1>BEALET BUSINESS PORTAL</h1>
+          <h1 aria-label="BEALET BUSINESS PORTAL">
+            <span>BEALET</span>
+            <span>BUSINESS</span>
+            <span>PORTAL</span>
+          </h1>
           <p className="login-hero-credit">
             Developed and Designed by DALE QUIST [Enable Technologies]
           </p>

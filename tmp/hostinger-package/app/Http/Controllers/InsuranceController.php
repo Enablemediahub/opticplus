@@ -58,7 +58,9 @@ class InsuranceController extends Controller
 
         $total = (clone $query)->count('ic.id');
 
-        $claims = $query
+        $summary = $this->buildClaimsSummary(clone $query);
+
+        $claims = (clone $query)
             ->orderByDesc('ic.date')
             ->orderByDesc('ic.id')
             ->limit($perPage)
@@ -82,7 +84,6 @@ class InsuranceController extends Controller
                 'b.total_amount',
             ]);
 
-        $summary = $this->buildClaimsSummary(clone $query);
         $remittanceQuery = $this->buildFilteredRemittanceQuery($request, $branchId);
 
         $billingCandidates = tap(DB::table('billing as b'), fn ($query) => $this->applyBranchScope($query, 'b.branch_id', $branchId))
@@ -261,6 +262,87 @@ class InsuranceController extends Controller
         ], 201);
     }
 
+    public function paymentsOverview(Request $request): JsonResponse
+    {
+        $this->ensureInsuranceRemittanceSchema();
+        $this->ensureInsurancePaymentAllocationSchema();
+        $branchId = $this->resolveBranchId($request);
+        $year = max(2000, min(2100, (int) $request->integer('year', now()->year)));
+        $start = sprintf('%04d-01-01', $year);
+        $end = sprintf('%04d-12-31', $year);
+
+        $claims = tap(DB::table('insurance_claims')->whereBetween('date', [$start, $end]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+            ->selectRaw("insurance_provider, DATE_FORMAT(date, '%Y-%m-01') as claim_month, COUNT(*) as claim_count, SUM(amount_paid) as claimed")
+            ->groupBy('insurance_provider', DB::raw("DATE_FORMAT(date, '%Y-%m-01')"))->get();
+        $allocations = tap(DB::table('insurance_remittance_allocations')->whereBetween('claim_month', [$start, $end]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+            ->selectRaw("insurance_provider, claim_month, SUM(amount_paid) as allocated")
+            ->groupBy('insurance_provider', 'claim_month')->get();
+        $receipts = tap(DB::table('insurance_remittances')->whereBetween('date', [$start, $end]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
+            ->orderByDesc('date')->orderByDesc('id')->get(['id', 'insurance_provider', 'amount_paid', 'date', 'reference', 'notes']);
+        $receiptAllocations = DB::table('insurance_remittance_allocations as a')
+            ->join('insurance_remittances as r', 'r.id', '=', 'a.remittance_id')
+            ->whereIn('a.remittance_id', $receipts->pluck('id')->all())
+            ->orderBy('a.claim_month')->get(['a.remittance_id', 'a.claim_month', 'a.amount_paid']);
+        $byKey = [];
+        foreach ($claims as $row) {
+            $key = $row->insurance_provider.'|'.$row->claim_month;
+            $byKey[$key] = ['insurance_provider' => $row->insurance_provider, 'claim_month' => $row->claim_month, 'claim_count' => (int) $row->claim_count, 'claimed' => round((float) $row->claimed, 2), 'allocated' => 0.0];
+        }
+        foreach ($allocations as $row) {
+            $key = $row->insurance_provider.'|'.$row->claim_month;
+            $byKey[$key] ??= ['insurance_provider' => $row->insurance_provider, 'claim_month' => $row->claim_month, 'claim_count' => 0, 'claimed' => 0.0, 'allocated' => 0.0];
+            $byKey[$key]['allocated'] = round((float) $row->allocated, 2);
+        }
+        $rows = array_values(array_map(fn ($row) => $row + ['difference' => round($row['claimed'] - $row['allocated'], 2)], $byKey));
+        usort($rows, fn ($a, $b) => strcmp($b['claim_month'], $a['claim_month']) ?: strcmp($a['insurance_provider'], $b['insurance_provider']));
+
+        return response()->json([
+            'branch_id' => $branchId, 'year' => $year, 'rows' => $rows,
+            'receipts' => $receipts->map(function ($receipt) use ($receiptAllocations) {
+                $receipt->allocations = $receiptAllocations->where('remittance_id', $receipt->id)->values();
+                return $receipt;
+            })->values(),
+        ]);
+    }
+
+    public function storePayment(Request $request): JsonResponse
+    {
+        $this->ensureInsuranceRemittanceSchema();
+        $this->ensureInsurancePaymentAllocationSchema();
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) return $response;
+        if ($response = $this->ensureRemittanceWriteAccess($request)) return $response;
+        $validated = $request->validate([
+            'insurance_provider' => ['required', Rule::in($this->providerOptions())],
+            'amount_paid' => ['required', 'numeric', 'min:0.01'], 'date' => ['required', 'date'],
+            'reference' => ['nullable', 'string', 'max:255'], 'notes' => ['nullable', 'string', 'max:1000'],
+            'allocations' => ['required', 'array', 'min:1'],
+            'allocations.*.claim_month' => ['required', 'date_format:Y-m-d'],
+            'allocations.*.amount_paid' => ['required', 'numeric', 'min:0.01'],
+        ]);
+        $amount = round((float) $validated['amount_paid'], 2);
+        $allocated = round(array_sum(array_map(fn ($item) => (float) $item['amount_paid'], $validated['allocations'])), 2);
+        if (abs($amount - $allocated) > 0.01) return response()->json(['message' => 'Allocated amounts must equal the receipt amount.'], 422);
+
+        $remittanceId = DB::transaction(function () use ($request, $validated, $branchId, $amount) {
+            $id = DB::table('insurance_remittances')->insertGetId([
+                'insurance_provider' => $validated['insurance_provider'], 'amount_paid' => $amount,
+                'date' => $validated['date'], 'reference' => trim((string) ($validated['reference'] ?? '')),
+                'notes' => trim((string) ($validated['notes'] ?? '')), 'branch_id' => $branchId,
+                'created_by' => $request->user()?->id, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            foreach ($validated['allocations'] as $allocation) {
+                DB::table('insurance_remittance_allocations')->insert([
+                    'remittance_id' => $id, 'insurance_provider' => $validated['insurance_provider'],
+                    'claim_month' => substr($allocation['claim_month'], 0, 7).'-01', 'amount_paid' => round((float) $allocation['amount_paid'], 2),
+                    'branch_id' => $branchId, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            return $id;
+        });
+        return response()->json(['message' => 'Insurance receipt and monthly allocations recorded.', 'remittance_id' => $remittanceId], 201);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $this->ensureInsuranceProvidersSchema();
@@ -307,7 +389,7 @@ class InsuranceController extends Controller
                 'patient_organization' => $validated['patient_organization'] ?? '',
                 'amount_paid' => $amount,
                 'date' => $validated['date'],
-                'status' => 'claimed',
+                'status' => 'pending',
                 'billing_id' => $validated['billing_id'],
                 'branch_id' => $branchId,
             ]);
@@ -398,8 +480,44 @@ class InsuranceController extends Controller
         ]);
     }
 
+    public function markSubmittedExternally(Request $request, int $claimId): JsonResponse
+    {
+        if ($response = $this->ensureClaimWriteAccess($request)) return $response;
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) return $response;
+        $claim = DB::table('insurance_claims')->where('branch_id', $branchId)->where('id', $claimId)->first();
+        if (! $claim) return response()->json(['message' => 'Insurance billing record not found for this branch.'], 404);
+        if ($claim->status === 'paid') return response()->json(['message' => 'A received payment is recorded separately in Insurance Payments; this billing row cannot be marked externally submitted.'], 422);
+        if ($claim->status !== 'claimed') DB::table('insurance_claims')->where('id', $claimId)->update(['status' => 'claimed']);
+        return response()->json(['message' => 'Marked as submitted through the external insurer platform.']);
+    }
+
+    public function bulkSetSubmissionStatus(Request $request): JsonResponse
+    {
+        if ($response = $this->ensureClaimWriteAccess($request)) return $response;
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) return $response;
+        $validated = $request->validate([
+            'claim_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'claim_ids.*' => ['required', 'integer', 'distinct'],
+            'submission_status' => ['required', Rule::in(['submitted', 'not_submitted'])],
+        ]);
+        $ids = array_map('intval', $validated['claim_ids']);
+        $status = $validated['submission_status'] === 'submitted' ? 'claimed' : 'pending';
+        $eligible = DB::table('insurance_claims')->where('branch_id', $branchId)->whereIn('id', $ids)->whereIn('status', ['pending', 'claimed'])->count();
+        $updated = DB::table('insurance_claims')->where('branch_id', $branchId)->whereIn('id', $ids)->whereIn('status', ['pending', 'claimed'])->update(['status' => $status]);
+        return response()->json([
+            'message' => $updated.' insurance billing record(s) updated.',
+            'updated_count' => $updated,
+            'skipped_count' => max(count($ids) - $eligible, 0),
+        ]);
+    }
+
     public function markPending(Request $request, int $claimId): JsonResponse
     {
+        if ($response = $this->ensureClaimWriteAccess($request)) {
+            return $response;
+        }
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
@@ -972,7 +1090,8 @@ class InsuranceController extends Controller
         $claimSummary = $this->buildClaimsSummary(clone $claimsQuery);
         $remittanceSummary = $this->buildRemittanceSummary(clone $remittanceQuery);
         $totalClaimed = round((float) $claimSummary['total_amount'], 2);
-        $paidAgainstClaims = round((float) $claimSummary['paid_amount'], 2);
+        // Receipts are captured separately; claim status must never be treated as insurer cash received.
+        $paidAgainstClaims = 0.0;
         $unallocatedPaid = round((float) $remittanceSummary['total_amount'], 2);
 
         return [
@@ -1055,6 +1174,23 @@ class InsuranceController extends Controller
                 $table->unsignedBigInteger('branch_id');
                 $table->unsignedBigInteger('created_by')->nullable();
                 $table->timestamps();
+            });
+        }
+    }
+
+    private function ensureInsurancePaymentAllocationSchema(): void
+    {
+        if (! Schema::hasTable('insurance_remittance_allocations')) {
+            Schema::create('insurance_remittance_allocations', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('remittance_id');
+                $table->string('insurance_provider', 80);
+                $table->date('claim_month');
+                $table->decimal('amount_paid', 12, 2);
+                $table->unsignedBigInteger('branch_id');
+                $table->timestamps();
+                $table->index(['branch_id', 'claim_month', 'insurance_provider'], 'insurance_alloc_month_provider_idx');
+                $table->index('remittance_id', 'insurance_alloc_remittance_idx');
             });
         }
     }
@@ -1148,35 +1284,10 @@ class InsuranceController extends Controller
 
     private function resolveBillingStatus(int $branchId, int $billingId, float $balance, float $totalAmount): string
     {
-        $hasOpenClaims = DB::table('insurance_claims')
-            ->where('branch_id', $branchId)
-            ->where('billing_id', $billingId)
-            ->whereIn('status', ['pending', 'claimed'])
-            ->exists();
-
-        if ($hasOpenClaims) {
-            return 'insurance_pending';
-        }
-
-        if ($balance <= 0.5) {
+        if ($balance <= 0.005) {
             return 'paid';
         }
-
-        $hasRecoveries = DB::table('sales')
-            ->where('branch_id', $branchId)
-            ->where('billing_id', $billingId)
-            ->where('payment_method', '!=', 'Insurance')
-            ->exists()
-            || DB::table('insurance_claims')
-                ->where('branch_id', $branchId)
-                ->where('billing_id', $billingId)
-                ->exists();
-
-        if (! $hasRecoveries && abs($balance - $totalAmount) <= 0.5) {
-            return 'balance_remaining';
-        }
-
-        return 'pending';
+        return $balance < ($totalAmount - 0.005) ? 'partially_paid' : 'pending';
     }
 
     private function normalizeRole(?string $role): string

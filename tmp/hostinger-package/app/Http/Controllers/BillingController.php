@@ -213,14 +213,28 @@ class BillingController extends Controller
 
         $salesTotals = $this->alignedSalesTotalsQuery();
         $claimTotals = $this->alignedClaimTotalsQuery();
+        $latestPatientByFolder = DB::table('patient_records')
+            ->select('branch_id', 'folder_id', DB::raw('MAX(id) as patient_id'))
+            ->groupBy('branch_id', 'folder_id');
 
         $baseQuery = DB::table('billing as b')
-            ->leftJoin('patient_records as p', function ($join): void {
-                $join->on('b.patient_id', '=', 'p.id')
-                    ->orOn('b.folder_id', '=', 'p.folder_id');
+            ->leftJoin('patient_records as patient_by_id', function ($join): void {
+                $join->on('b.patient_id', '=', 'patient_by_id.id')
+                    ->on('b.branch_id', '=', 'patient_by_id.branch_id');
+            })
+            ->leftJoinSub($latestPatientByFolder, 'latest_patient_folder', function ($join): void {
+                $join->on('b.folder_id', '=', 'latest_patient_folder.folder_id')
+                    ->on('b.branch_id', '=', 'latest_patient_folder.branch_id')
+                    ->whereNull('patient_by_id.id');
+            })
+            ->leftJoin('patient_records as patient_by_folder', function ($join): void {
+                $join->on('latest_patient_folder.patient_id', '=', 'patient_by_folder.id')
+                    ->on('latest_patient_folder.branch_id', '=', 'patient_by_folder.branch_id');
             })
             ->leftJoin('customers as c', 'b.customer_id', '=', 'c.id')
-            ->leftJoin('users as patient_creator', 'p.created_by', '=', 'patient_creator.id')
+            ->leftJoin('users as patient_creator', function ($join): void {
+                $join->on('patient_creator.id', '=', DB::raw('COALESCE(patient_by_id.created_by, patient_by_folder.created_by)'));
+            })
             ->leftJoin('users as creator', 'b.created_by', '=', 'creator.id')
             ->leftJoinSub($salesTotals, 'sales_totals', function ($join): void {
                 $join->on('b.id', '=', 'sales_totals.billing_id');
@@ -255,7 +269,7 @@ class BillingController extends Controller
                 'b.health_insurance',
                 'b.receipt_number',
                 DB::raw('COALESCE(patient_creator.name, creator.name) as entered_by'),
-                'p.phone as patient_phone',
+                DB::raw('COALESCE(patient_by_id.phone, patient_by_folder.phone) as patient_phone'),
                 'c.phone as customer_phone',
                 DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
                 DB::raw('COALESCE(claim_totals.insurance_claimed, 0) as insurance_claimed'),
@@ -270,7 +284,7 @@ class BillingController extends Controller
             ->sum('b.balance') ?? 0);
         $filteredCollectedAmount = max($filteredTotalAmount - $filteredOutstandingAmount, 0);
         $filteredPendingBills = (int) (clone $statsBase)
-            ->whereIn('b.status', ['pending', 'balance_remaining', 'insurance_pending'])
+            ->whereIn('b.status', ['pending', 'partially_paid'])
             ->count('b.id');
         $insuredBillCount = (int) (clone $statsBase)
             ->whereNotNull('b.health_insurance')
@@ -311,10 +325,10 @@ class BillingController extends Controller
             'total_bills' => (int) tap(DB::table('billing'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count(),
             'total_amount' => (float) tap(DB::table('billing'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('total_amount'),
             'pending_bills' => (int) tap(DB::table('billing'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
-                ->whereIn('status', ['pending', 'balance_remaining', 'insurance_pending'])
+                ->whereIn('status', ['pending', 'partially_paid'])
                 ->count(),
             'paid_bills' => (int) tap(DB::table('billing'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
-                ->whereIn('status', ['paid', 'completed'])
+                ->where('status', 'paid')
                 ->count(),
             'today_bills' => (int) tap(DB::table('billing'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
                 ->whereDate('date', now()->toDateString())
@@ -364,8 +378,8 @@ class BillingController extends Controller
             ->selectRaw('COUNT(b.id) as total_bills')
             ->selectRaw('COALESCE(SUM(b.total_amount), 0) as total_amount')
             ->selectRaw('COALESCE(SUM(b.balance), 0) as outstanding_amount')
-            ->selectRaw("SUM(CASE WHEN b.status IN ('pending', 'balance_remaining', 'insurance_pending') THEN 1 ELSE 0 END) as pending_bills")
-            ->selectRaw("SUM(CASE WHEN b.status IN ('paid', 'completed') THEN 1 ELSE 0 END) as paid_bills")
+            ->selectRaw("SUM(CASE WHEN b.status IN ('pending', 'partially_paid') THEN 1 ELSE 0 END) as pending_bills")
+            ->selectRaw("SUM(CASE WHEN b.status = 'paid' THEN 1 ELSE 0 END) as paid_bills")
             ->selectRaw("SUM(CASE WHEN b.health_insurance IS NOT NULL AND b.health_insurance != '' AND b.health_insurance != 'NONE' THEN 1 ELSE 0 END) as insured_bill_count")
             ->selectRaw("COALESCE(SUM(CASE WHEN b.health_insurance IS NOT NULL AND b.health_insurance != '' AND b.health_insurance != 'NONE' THEN b.total_amount ELSE 0 END), 0) as insured_bill_value")
             ->first();
@@ -377,8 +391,8 @@ class BillingController extends Controller
         $overallStats = $overallQuery
             ->selectRaw('COUNT(b.id) as total_bills')
             ->selectRaw('COALESCE(SUM(b.total_amount), 0) as total_amount')
-            ->selectRaw("SUM(CASE WHEN b.status IN ('pending', 'balance_remaining', 'insurance_pending') THEN 1 ELSE 0 END) as pending_bills")
-            ->selectRaw("SUM(CASE WHEN b.status IN ('paid', 'completed') THEN 1 ELSE 0 END) as paid_bills")
+            ->selectRaw("SUM(CASE WHEN b.status IN ('pending', 'partially_paid') THEN 1 ELSE 0 END) as pending_bills")
+            ->selectRaw("SUM(CASE WHEN b.status = 'paid' THEN 1 ELSE 0 END) as paid_bills")
             ->selectRaw('SUM(CASE WHEN DATE(b.date) = ? THEN 1 ELSE 0 END) as today_bills', [now()->toDateString()])
             ->first();
 
@@ -872,7 +886,7 @@ class BillingController extends Controller
                 'vat' => 0,
                 'total_amount' => $totalAmount,
                 'health_insurance' => $validated['health_insurance'],
-                'status' => 'balance_remaining',
+                'status' => 'pending',
                 'balance' => $totalAmount,
                 'prescription_id' => $validated['prescription_id'] ?? null,
                 'branch_id' => $branchId,
@@ -942,8 +956,9 @@ class BillingController extends Controller
 
         if ($status && $status !== 'all') {
             match ($status) {
-                'pending' => $query->whereIn('b.status', ['pending', 'balance_remaining', 'insurance_pending']),
-                'paid' => $query->whereIn('b.status', ['paid', 'completed']),
+                'pending' => $query->where('b.status', 'pending'),
+                'partially_paid' => $query->where('b.status', 'partially_paid'),
+                'paid' => $query->where('b.status', 'paid'),
                 default => $query->where('b.status', $status),
             };
         }
@@ -980,8 +995,9 @@ class BillingController extends Controller
 
         if ($status && $status !== 'all') {
             match ($status) {
-                'pending' => $query->whereIn('b.status', ['pending', 'balance_remaining', 'insurance_pending']),
-                'paid' => $query->whereIn('b.status', ['paid', 'completed']),
+                'pending' => $query->where('b.status', 'pending'),
+                'partially_paid' => $query->where('b.status', 'partially_paid'),
+                'paid' => $query->where('b.status', 'paid'),
                 default => $query->where('b.status', $status),
             };
         }

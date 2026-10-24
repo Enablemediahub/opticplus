@@ -1027,7 +1027,7 @@ class InventoryController extends Controller
                     })
                     ->orWhere(function ($cash): void {
                         $cash->where('b.health_insurance', 'NONE')
-                            ->whereIn('b.status', ['paid', 'balance_remaining', 'pending']);
+                            ->whereIn('b.status', ['paid', 'partially_paid', 'pending']);
                     });
             });
         $this->applyBranchScope($query, 'b.branch_id', $branchId);

@@ -1061,6 +1061,13 @@ class DatabaseAdminController extends Controller
     {
         $effectiveBranchId = (int) ($record->branch_id ?? $branchId);
 
+        $deleteFrameLinks = in_array('billing_frames', $selectedLinkedTables, true)
+            || in_array('frame_cost_reservations', $selectedLinkedTables, true)
+            || in_array('expenses', $selectedLinkedTables, true);
+        if ($deleteFrameLinks) {
+            $this->deleteBillingFrameReservationLinks($effectiveBranchId, (int) $record->id, $selectedLinkedTables);
+        }
+
         if (in_array('billing_frames', $selectedLinkedTables, true) && $this->tableExists('billing_frames')) {
             $frameRows = DB::table('billing_frames')
                 ->where('branch_id', $effectiveBranchId)
@@ -1294,6 +1301,8 @@ class DatabaseAdminController extends Controller
 
         $effectiveBranchId = (int) ($record->branch_id ?? $branchId);
 
+        $this->deleteBillingFrameReservationLinks($effectiveBranchId, (int) $record->id, ['billing_frames', 'frame_cost_reservations', 'expenses']);
+
         $frameRows = $this->tableExists('billing_frames')
             ? DB::table('billing_frames')
                 ->where('branch_id', $effectiveBranchId)
@@ -1364,6 +1373,36 @@ class DatabaseAdminController extends Controller
                     ->where('prescription_id', $record->prescription_id)
                     ->update(['status' => 'pending']);
             }
+        }
+    }
+
+    private function deleteBillingFrameReservationLinks(int $branchId, int $billingId, array $selectedTables): void
+    {
+        if (! $this->tableExists('billing_frames')) {
+            return;
+        }
+
+        $frameSaleIds = DB::table('billing_frames')
+            ->where('branch_id', $branchId)
+            ->where('billing_id', $billingId)
+            ->pluck('id');
+        if ($frameSaleIds->isEmpty()) {
+            return;
+        }
+
+        $deletingFrameLinks = in_array('billing_frames', $selectedTables, true)
+            || in_array('frame_cost_reservations', $selectedTables, true)
+            || in_array('expenses', $selectedTables, true);
+        if ($deletingFrameLinks && $this->tableExists('expenses')
+            && DB::getSchemaBuilder()->hasColumn('expenses', 'source_type')
+            && DB::getSchemaBuilder()->hasColumn('expenses', 'source_id')) {
+            DB::table('expenses')->where('branch_id', $branchId)
+                ->where('source_type', 'frame_reservation')->whereIn('source_id', $frameSaleIds)->delete();
+        }
+
+        if ($deletingFrameLinks && $this->tableExists('frame_cost_reservations')) {
+            DB::table('frame_cost_reservations')->where('branch_id', $branchId)
+                ->whereIn('frame_sale_id', $frameSaleIds)->delete();
         }
     }
 
@@ -1442,13 +1481,26 @@ class DatabaseAdminController extends Controller
 
     private function billingLinkedCounts(int $branchId, object $record): array
     {
-        return [
+        $counts = [
             'sales' => $this->tableExists('sales') ? (int) DB::table('sales')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->where('billing_id', $record->id)->count() : 0,
             'insurance_claims' => $this->tableExists('insurance_claims') ? (int) DB::table('insurance_claims')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->where('billing_id', $record->id)->count() : 0,
             'billing_frames' => $this->tableExists('billing_frames') ? (int) DB::table('billing_frames')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->where('billing_id', $record->id)->count() : 0,
             'lens_costs' => $this->tableExists('lens_costs') ? (int) DB::table('lens_costs')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->where('billing_id', $record->id)->count() : 0,
             'inventory_movements' => $this->tableExists('inventory_movements') ? (int) DB::table('inventory_movements')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->where('reference_table', 'billing')->where('reference_id', $record->id)->count() : 0,
         ];
+
+        $frameSaleIds = $this->tableExists('billing_frames')
+            ? DB::table('billing_frames')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->where('billing_id', $record->id)->pluck('id')
+            : collect();
+        $counts['frame_cost_reservations'] = $this->tableExists('frame_cost_reservations') && $frameSaleIds->isNotEmpty()
+            ? (int) DB::table('frame_cost_reservations')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))->whereIn('frame_sale_id', $frameSaleIds)->count()
+            : 0;
+        $counts['expenses'] = $this->tableExists('expenses') && DB::getSchemaBuilder()->hasColumn('expenses', 'source_type') && DB::getSchemaBuilder()->hasColumn('expenses', 'source_id') && $frameSaleIds->isNotEmpty()
+            ? (int) DB::table('expenses')->when($branchId !== 0, fn ($query) => $query->where('branch_id', $branchId))
+                ->where('source_type', 'frame_reservation')->whereIn('source_id', $frameSaleIds)->count()
+            : 0;
+
+        return $counts;
     }
 
     private function patientLinkedCounts(int $branchId, object $record): array

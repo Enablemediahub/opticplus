@@ -113,9 +113,9 @@ export default function AccountantDashboardSection({ token, selectedBranchId, ap
               tone="info"
             />
             <MetricCard
-              label="Claims Pending"
+              label="Not Submitted Externally"
               value={currency.format(Number(data?.summary?.stats.insurance_pending ?? 0))}
-              subtext="Awaiting insurer settlement"
+              subtext="Insurance billing not yet marked as submitted"
               tone="warning"
             />
             <MetricCard

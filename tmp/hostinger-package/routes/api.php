@@ -113,12 +113,16 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::delete('/insurance/providers/{providerId}', [InsuranceController::class, 'deleteProvider']);
         Route::get('/insurance/remittances', [InsuranceController::class, 'remittances']);
         Route::post('/insurance/remittances', [InsuranceController::class, 'storeRemittance']);
+        Route::get('/insurance/payments', [InsuranceController::class, 'paymentsOverview']);
+        Route::post('/insurance/payments', [InsuranceController::class, 'storePayment']);
         Route::get('/insurance/claims', [InsuranceController::class, 'index']);
         Route::get('/insurance/claims/report', [InsuranceController::class, 'report']);
+        Route::patch('/insurance/claims/bulk-submission-status', [InsuranceController::class, 'bulkSetSubmissionStatus']);
         Route::post('/insurance/claims', [InsuranceController::class, 'store']);
         Route::put('/insurance/claims/{claimId}', [InsuranceController::class, 'updateClaim']);
         Route::delete('/insurance/claims/{claimId}', [InsuranceController::class, 'deleteClaim']);
         Route::patch('/insurance/claims/{claimId}/mark-paid', [InsuranceController::class, 'markPaid']);
+        Route::patch('/insurance/claims/{claimId}/mark-submitted-externally', [InsuranceController::class, 'markSubmittedExternally']);
         Route::patch('/insurance/claims/{claimId}/mark-pending', [InsuranceController::class, 'markPending']);
         Route::get('/inventory', [InventoryController::class, 'overview']);
         Route::get('/inventory/stocktake-products', [InventoryController::class, 'stocktakeProducts']);

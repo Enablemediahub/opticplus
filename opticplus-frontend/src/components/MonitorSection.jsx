@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import StatWidget from './StatWidget.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 2 })
 const branchOptions = [{ id: 0, name: 'Merged company' }, { id: 1, name: 'Labadi' }, { id: 2, name: 'Madina' }]
@@ -131,14 +132,55 @@ function formatDailyDate(date) {
 function DailyExtractionSheet({ report, loading, periodLabel }) {
   const rows = report?.daily_extraction || []
   const summed = (key) => total(rows.map((row) => row[key]))
+  const frameReserveRows = report?.frame_reserve_breakdown ?? []
+  const rentCategory = report?.expense_categories?.find((item) => String(item.label ?? '').trim().toLowerCase() === 'rent')
+  const rentMonths = Array.from({ length: 12 }, (_, index) => value(rentCategory?.months?.[index]))
+  const rentTotal = total(rentMonths)
+  const monthLabels = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
   return <div className="monitor-sheet-stack">
-    <section className="monitor-kpis monitor-extraction-kpis">
-      <div><span>Cost to set aside</span><strong>{money(summed('total_cost_to_set_aside'))}</strong><small>Known lens and frame cost • {periodLabel}</small></div>
-      <div><span>Gross profit to bank</span><strong>{money(summed('gross_profit_to_bank'))}</strong><small>Sales less entered cost prices • {periodLabel}</small></div>
-      <div><span>Lens costs missing</span><strong>{summed('lens_missing_cost_count')}</strong><small>Lens bills without a cost entry • {periodLabel}</small></div>
-      <div><span>Frame costs missing</span><strong>{summed('frame_missing_cost_count')}</strong><small>Sold frames without a code cost • {periodLabel}</small></div>
+    <section className="stats-grid dashboard-stats-grid monitor-dashboard-widgets">
+      <StatWidget label="Frame reserve recorded" value={money(report?.frame_reserve_total)} note="All recorded Frame Tracker reservations" icon="inventory" className="seen" />
+      <StatWidget label="Frame costs to set aside" value={money(summed('frame_cost'))} note={`Known cost of frames sold • ${periodLabel}`} icon="money" className="total" />
+      <StatWidget label="Frame profit to bank" value={money(summed('frame_profit'))} note={`Frame sales less known costs • ${periodLabel}`} icon="finance" className="today" />
+      <StatWidget label="Rent recorded this year" value={money(rentTotal)} note={`Expense category RENT • ${report?.year ?? new Date().getFullYear()}`} icon="receipt" className="pending" />
+      <StatWidget label="Lens costs to set aside" value={money(summed('lens_cost'))} note={`Known lens costs • ${periodLabel}`} icon="glasses" className="total" />
+      <StatWidget label="Gross profit to bank" value={money(summed('gross_profit_to_bank'))} note={`Lens and frame sales less known costs • ${periodLabel}`} icon="finance" className="seen" />
+      <StatWidget label="Lens costs missing" value={summed('lens_missing_cost_count')} note={`Lens bills without a cost entry • ${periodLabel}`} icon="alert" className="pending" />
+      <StatWidget label="Frame costs missing" value={summed('frame_missing_cost_count')} note={`Sold frames without a product cost • ${periodLabel}`} icon="alert" className="pending" />
     </section>
+    <div className="monitor-breakdown-grid">
+      <article className="panel monitor-breakdown-panel">
+        <div className="panel-heading">
+          <div><p className="eyebrow">Frame Restocking</p><h3>Recorded frame reserve</h3><p className="muted-copy">Cumulative amounts explicitly set aside in Frame Tracker across recorded dates.</p></div>
+          <span className="panel-tag">{money(report?.frame_reserve_total)}</span>
+        </div>
+        <div className="table-shell">
+          <table className="portal-table">
+            <thead><tr><th>Frame</th><th>Code</th><th>Units reserved</th><th>Amount set aside</th></tr></thead>
+            <tbody>
+              {frameReserveRows.map((row) => <tr key={`${row.frame_code}-${row.frame_name}`}><td>{row.frame_name}</td><td>{row.frame_code || '—'}</td><td>{row.reserved_count}</td><td>{money(row.reserved_amount)}</td></tr>)}
+              {!frameReserveRows.length ? <tr><td colSpan="4" className="daily-sales-empty">{loading ? 'Loading frame reserves...' : 'No frame cost reservations have been recorded.'}</td></tr> : null}
+            </tbody>
+            {frameReserveRows.length ? <tfoot><tr><td colSpan="2">Total</td><td>{total(frameReserveRows.map((row) => row.reserved_count))}</td><td>{money(report?.frame_reserve_total)}</td></tr></tfoot> : null}
+          </table>
+        </div>
+        <p className="monitor-breakdown-note">Frame reserve recorded is based on explicit Frame Tracker reservations. “Frame costs to set aside” above is the estimated replacement cost of frames sold in the selected period.</p>
+      </article>
+      <article className="panel monitor-breakdown-panel">
+        <div className="panel-heading">
+          <div><p className="eyebrow">Expense Tracking</p><h3>Rent recorded by month</h3><p className="muted-copy">Expenses categorized as RENT for {report?.year ?? new Date().getFullYear()}.</p></div>
+          <span className="panel-tag">{money(rentTotal)}</span>
+        </div>
+        <div className="table-shell">
+          <table className="portal-table">
+            <thead><tr><th>Month</th><th>Rent recorded</th></tr></thead>
+            <tbody>{rentMonths.map((amount, index) => <tr key={monthLabels[index]}><td>{monthLabels[index]}</td><td>{money(amount)}</td></tr>)}</tbody>
+            <tfoot><tr><td>Total for {report?.year ?? new Date().getFullYear()}</td><td>{money(rentTotal)}</td></tr></tfoot>
+          </table>
+        </div>
+      </article>
+    </div>
     <article className="monitor-sheet">
       <div className="monitor-sheet-heading">
         <div><span>{report?.branch_name || 'Branch'} • {periodLabel}</span><h3>Lens and frame extraction</h3></div>
@@ -217,6 +259,7 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [extractionPeriod, setExtractionPeriod] = useState('daily')
   const [extractionFrom, setExtractionFrom] = useState(() => localDateIso())
   const [extractionTo, setExtractionTo] = useState(() => localDateIso())
@@ -249,17 +292,17 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
       }
     })
     return () => { cancelled = true }
-  }, [apiFetch, appliedExtractionRange, branchId, canViewMonitor, session?.role, token, year])
+  }, [apiFetch, appliedExtractionRange, branchId, canViewMonitor, refreshVersion, session?.role, token, year])
   if (!canViewMonitor) return <section className="finance-section"><div className="message-banner error">The Monitor is not available for this account.</div></section>
 
   function printReport() { window.print() }
   function exportExcel() { saveFile(workbookXml(report), `bealet-daily-extraction-${report?.branch_name?.toLowerCase().replace(/\s+/g, '-') || 'branch'}.xls`, 'application/vnd.ms-excel') }
 
   return <section className="finance-section monitor-workspace">
-    <header className="monitor-hero">
-      <div><p className="eyebrow">The Monitor</p><h3>Daily restocking reserve</h3><p>Track lens and frame costs to set aside from sales, then bank the remaining tracked gross profit.</p></div>
-      <div className="monitor-hero-actions"><button type="button" className="ghost-button" onClick={printReport} disabled={!report}>Print / Save PDF</button><button type="button" className="primary-button" onClick={exportExcel} disabled={!report}>Export Excel workbook</button></div>
-    </header>
+    <div className="monitor-page-heading">
+      <div><p className="eyebrow">The Monitor</p><h3>Restocking reserve and operating expenses</h3><p className="header-copy">Track frame reserves, replacement costs, Rent expenses, and the gross profit remaining after known costs.</p></div>
+      <div className="header-actions"><button type="button" className="ghost-button" onClick={() => setRefreshVersion((current) => current + 1)} disabled={loading}>Refresh data</button><button type="button" className="ghost-button" onClick={printReport} disabled={!report}>Print / Save PDF</button><button type="button" className="primary-button" onClick={exportExcel} disabled={!report}>Export Excel workbook</button></div>
+    </div>
     {error ? <div className="message-banner error">{error}</div> : null}
     <div className="monitor-controls extraction-filter-controls">
       <label>Reporting branch<select value={branchId} onChange={(event) => setBranchSelection({ source: selectedBranchId, value: event.target.value })}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
