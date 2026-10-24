@@ -11,6 +11,133 @@ use Illuminate\Support\Str;
 
 class MemoController extends Controller
 {
+    public function signature(Request $request): JsonResponse
+    {
+        $this->ensureMemoTables();
+        $user = $request->user();
+        if (! $this->canManageMemoSignature($user)) {
+            return response()->json(['message' => 'Only Accountants and General Managers can manage memo signatures.'], 403);
+        }
+
+        $signature = DB::table('memo_user_signatures')->where('user_id', $user->id)->first();
+
+        return response()->json([
+            'signature_url' => $this->buildPublicAssetUrl($signature?->signature_path),
+            'signature_path' => $signature?->signature_path,
+            'updated_at' => $signature?->updated_at,
+            'signer_name' => $user->name,
+            'signer_role' => $user->normalized_role,
+        ]);
+    }
+
+    public function signatureImage(Request $request)
+    {
+        $this->ensureMemoTables();
+        $user = $request->user();
+        if (! $this->canManageMemoSignature($user)) {
+            return response()->json(['message' => 'Only Accountants and General Managers can view reusable memo signatures.'], 403);
+        }
+
+        $relativePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+        if (! is_string($relativePath) || ! str_starts_with($relativePath, 'uploads/memo-signatures/')) {
+            return response()->json(['message' => 'No reusable signature image is saved for this account.'], 404);
+        }
+
+        $imagePath = public_path($relativePath);
+        if (! is_file($imagePath) || ! is_readable($imagePath)) {
+            return response()->json(['message' => 'The saved signature file is missing from server uploads. Upload the signature again.'], 404);
+        }
+
+        return response()->file($imagePath, [
+            'Cache-Control' => 'private, max-age=300',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function memoSignatureImage(Request $request, int $memoId, string $role)
+    {
+        $this->ensureMemoTables();
+        if (! in_array($role, ['accountant', 'gm'], true)) {
+            return response()->json(['message' => 'Unknown memo signature role.'], 422);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $user = $request->user();
+        $memo = $this->memoQuery($branchId)
+            ->where('m.id', $memoId)
+            ->first($this->memoSelectColumns());
+
+        if (! $memo) {
+            return response()->json(['message' => 'Memo not found for this branch.'], 404);
+        }
+        if (! $this->canViewMemo($memo, $user)) {
+            return response()->json(['message' => 'You do not have access to this memo signature.'], 403);
+        }
+
+        $storedPath = $role === 'accountant' ? $memo->digital_signature : $memo->gm_signature;
+        if (! is_string($storedPath) || trim($storedPath) === '') {
+            return response()->json(['message' => 'No signature image was saved for this memo and signer.'], 404);
+        }
+
+        $imagePath = $this->resolveMemoSignatureFilePath($storedPath);
+        if (! $imagePath) {
+            $expectedPath = $this->memoSignatureRelativePath($storedPath);
+            return response()->json([
+                'message' => 'The memo contains a signature path, but that image file is not present or readable in the server public uploads folder.',
+                'signature_path' => $expectedPath ?: $storedPath,
+                'expected_location' => $expectedPath ? 'public/'.$expectedPath : 'public/uploads/memo-signatures or public/uploads/signatures',
+            ], 404);
+        }
+
+        return response()->file($imagePath, [
+            'Cache-Control' => 'private, max-age=300',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function saveSignature(Request $request): JsonResponse
+    {
+        $this->ensureMemoTables();
+        $user = $request->user();
+        if (! $this->canManageMemoSignature($user)) {
+            return response()->json(['message' => 'Only Accountants and General Managers can manage memo signatures.'], 403);
+        }
+
+        $validated = $request->validate([
+            'signature' => ['required', 'image', 'max:4096'],
+        ]);
+        $path = $this->storeUpload($validated['signature'], 'memo-signatures', 'user_'.$user->id);
+        $this->saveUserSignaturePath((int) $user->id, $path);
+        $now = now();
+
+        return response()->json([
+            'message' => 'Reusable memo signature saved successfully.',
+            'signature_url' => $this->buildPublicAssetUrl($path),
+            'signature_path' => $path,
+            'updated_at' => $now->toDateTimeString(),
+            'signer_name' => $user->name,
+            'signer_role' => $user->normalized_role,
+        ]);
+    }
+
+    public function deleteSignature(Request $request): JsonResponse
+    {
+        $this->ensureMemoTables();
+        $user = $request->user();
+        if (! $this->canManageMemoSignature($user)) {
+            return response()->json(['message' => 'Only Accountants and General Managers can manage memo signatures.'], 403);
+        }
+
+        DB::table('memo_user_signatures')->where('user_id', $user->id)->delete();
+
+        return response()->json([
+            'message' => 'Reusable signature removed. Signatures already attached to memos remain on those memo records.',
+            'signature_url' => null,
+            'signer_name' => $user->name,
+            'signer_role' => $user->normalized_role,
+        ]);
+    }
+
     public function meta(Request $request): JsonResponse
     {
         $this->ensureMemoTables();
@@ -113,6 +240,33 @@ class MemoController extends Controller
             ->get($this->memoSelectColumns())
             ->map(fn ($memo) => $this->serializeMemo($memo));
 
+        $expenseMemos = collect();
+        if (Schema::hasTable('expense_approval_requests')) {
+            $expenseMemoQuery = DB::table('expense_approval_requests as ear')
+                ->leftJoin('users as submitter', 'submitter.id', '=', 'ear.submitted_by')
+                ->leftJoin('users as reviewer', 'reviewer.id', '=', 'ear.reviewed_by')
+                ->where('ear.document_type', 'expense_memo');
+            $this->applyBranchScope($expenseMemoQuery, 'ear.branch_id', $branchId);
+            if (! $user->isAdmin() && $user->normalized_role !== 'manager') {
+                $expenseMemoQuery->where('ear.submitted_by', $user->id);
+            }
+            $expenseMemos = $expenseMemoQuery
+                ->orderByDesc('ear.submitted_at')
+                ->limit(100)
+                ->get([
+                    'ear.id', 'ear.branch_id', 'ear.description', 'ear.amount', 'ear.date', 'ear.category',
+                    'ear.supporting_document_json', 'ear.status', 'ear.submitted_by', 'ear.submitted_role',
+                    'ear.submitted_at', 'ear.reviewed_at', 'ear.decision_note', 'ear.resulting_expense_id',
+                    'submitter.name as submitted_by_name', 'reviewer.name as reviewed_by_name',
+                ])
+                ->map(function ($record): array {
+                    $record->supporting_document = json_decode((string) $record->supporting_document_json, true) ?: [];
+                    unset($record->supporting_document_json);
+
+                    return (array) $record;
+                });
+        }
+
         return response()->json([
             'branch_id' => $branchId,
             'branch_name' => $this->branchName($branchId),
@@ -131,6 +285,7 @@ class MemoController extends Controller
             'memos' => $records,
             'pending_approvals' => $pendingApprovals,
             'my_drafts' => $myDrafts,
+            'expense_memos' => $expenseMemos,
         ]);
     }
 
@@ -216,17 +371,16 @@ class MemoController extends Controller
         $user = $request->user();
         $requiresApproval = (bool) ($validated['requires_approval'] ?? true);
         $saveAsDraft = (bool) ($validated['save_as_draft'] ?? false);
-        $signaturePath = null;
+        $signaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+        if ($request->hasFile('accountant_signature')) {
+            $signaturePath = $this->storeUpload($request->file('accountant_signature'), 'memo-signatures', 'user_'.$user->id);
+            $this->saveUserSignaturePath((int) $user->id, $signaturePath);
+        }
         $memoDate = $validated['memo_date'];
         $reference = $this->generateMemoReference($branchId, $memoDate, $validated['reference'] ?? null);
 
-        if (! $saveAsDraft) {
-            $request->validate([
-                'accountant_signature' => ['required', 'image', 'max:4096'],
-            ]);
-            $signaturePath = $this->storeUpload($request->file('accountant_signature'), 'memo-signatures', 'accountant_'.$user->id);
-        } elseif ($request->hasFile('accountant_signature')) {
-            $signaturePath = $this->storeUpload($request->file('accountant_signature'), 'memo-signatures', 'accountant_'.$user->id);
+        if (! $saveAsDraft && ! $signaturePath) {
+            return response()->json(['message' => 'Upload your reusable accountant signature in the Signature Library before sending this memo.'], 422);
         }
 
         $status = $saveAsDraft ? 'draft' : ($requiresApproval ? 'pending_approval' : 'sent');
@@ -338,18 +492,20 @@ class MemoController extends Controller
 
         $requiresApproval = (bool) ($validated['requires_approval'] ?? true);
         $saveAsDraft = (bool) ($validated['save_as_draft'] ?? false);
-        $signaturePath = $memo->digital_signature;
+        $signaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
         $memoDate = $validated['memo_date'];
         $reference = $this->generateMemoReference($branchId, $memoDate, $validated['reference'] ?? $memo->reference);
 
         if ($request->hasFile('accountant_signature')) {
-            $signaturePath = $this->storeUpload($request->file('accountant_signature'), 'memo-signatures', 'accountant_'.$user->id);
+            $signaturePath = $this->storeUpload($request->file('accountant_signature'), 'memo-signatures', 'user_'.$user->id);
+            $this->saveUserSignaturePath((int) $user->id, $signaturePath);
+        } elseif (! $signaturePath && $memo->digital_signature) {
+            $signaturePath = $memo->digital_signature;
+            $this->saveUserSignaturePath((int) $user->id, $signaturePath);
         }
 
         if (! $saveAsDraft && ! $signaturePath) {
-            return response()->json([
-                'message' => 'Upload the accountant signature before sending this draft.',
-            ], 422);
+            return response()->json(['message' => 'Upload your reusable accountant signature in the Signature Library before sending this draft.'], 422);
         }
 
         $status = $saveAsDraft ? 'draft' : ($requiresApproval ? 'pending_approval' : 'sent');
@@ -445,9 +601,14 @@ class MemoController extends Controller
             return response()->json(['message' => 'Memo not found for this branch.'], 404);
         }
 
-        $signaturePath = $request->hasFile('gm_signature')
-            ? $this->storeUpload($request->file('gm_signature'), 'memo-signatures', 'gm_'.$user->id)
-            : ($memo->gm_signature ?? null);
+        $signaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+        if ($request->hasFile('gm_signature')) {
+            $signaturePath = $this->storeUpload($request->file('gm_signature'), 'memo-signatures', 'user_'.$user->id);
+            $this->saveUserSignaturePath((int) $user->id, $signaturePath);
+        }
+        if (! $signaturePath) {
+            return response()->json(['message' => 'Upload your reusable General Manager signature in the Signature Library before deciding this memo.'], 422);
+        }
         $decision = $validated['decision'];
 
         DB::table('memos')
@@ -603,6 +764,21 @@ class MemoController extends Controller
         return 'uploads/'.$folder.'/'.$filename;
     }
 
+    private function canManageMemoSignature(?object $user): bool
+    {
+        return $user && ($user->isAdmin() || in_array($user->normalized_role, ['accountant', 'manager', 'ceo'], true));
+    }
+
+    private function saveUserSignaturePath(int $userId, string $path): void
+    {
+        $now = now();
+        $values = ['signature_path' => $path, 'updated_at' => $now];
+        if (! DB::table('memo_user_signatures')->where('user_id', $userId)->exists()) {
+            $values['created_at'] = $now;
+        }
+        DB::table('memo_user_signatures')->updateOrInsert(['user_id' => $userId], $values);
+    }
+
     private function applyRoleVisibility($query, object $user): void
     {
         if ($user->isAdmin() || in_array($user->normalized_role, ['manager', 'ceo'], true)) {
@@ -629,6 +805,15 @@ class MemoController extends Controller
 
     private function ensureMemoTables(): void
     {
+        if (! Schema::hasTable('memo_user_signatures')) {
+            Schema::create('memo_user_signatures', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('user_id')->unique();
+                $table->string('signature_path', 500);
+                $table->timestamps();
+            });
+        }
+
         if (! Schema::hasTable('memos')) {
             Schema::create('memos', function (Blueprint $table): void {
                 $table->id();
@@ -814,6 +999,55 @@ class MemoController extends Controller
             return $path;
         }
 
+        // Older memo approvals stored signatures under uploads/signatures/{role}.
+        // If the same named file was moved into the reusable signature directory,
+        // prefer the file's current location while retaining the historical DB value.
+        $legacySignaturePrefix = 'uploads/signatures/';
+        if (Str::startsWith($path, $legacySignaturePrefix)) {
+            $currentSignaturePath = 'uploads/memo-signatures/'.basename($path);
+            if (is_file(public_path($currentSignaturePath))) {
+                $path = $currentSignaturePath;
+            }
+        }
+
         return rtrim(config('app.url'), '/').'/'.ltrim($path, '/');
+    }
+
+    private function resolveMemoSignatureFilePath(string $storedPath): ?string
+    {
+        $relativePath = $this->memoSignatureRelativePath($storedPath);
+        if (! $relativePath) {
+            return null;
+        }
+
+        $candidates = [$relativePath];
+        if (Str::startsWith($relativePath, 'uploads/signatures/')) {
+            $candidates[] = 'uploads/memo-signatures/'.basename($relativePath);
+        }
+
+        foreach (array_unique($candidates) as $candidate) {
+            $absolutePath = public_path($candidate);
+            if (is_file($absolutePath) && is_readable($absolutePath)) {
+                return $absolutePath;
+            }
+        }
+
+        return null;
+    }
+
+    private function memoSignatureRelativePath(string $storedPath): ?string
+    {
+        $path = trim($storedPath);
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            $path = (string) parse_url($path, PHP_URL_PATH);
+        }
+        $path = ltrim($path, '/');
+        if (str_contains($path, '..')) {
+            return null;
+        }
+
+        return Str::startsWith($path, ['uploads/memo-signatures/', 'uploads/signatures/'])
+            ? $path
+            : null;
     }
 }

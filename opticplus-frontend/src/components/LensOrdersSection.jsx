@@ -336,7 +336,7 @@ export default function LensOrdersSection(props) {
             </button>
           </div>
 
-          <div className="lens-orders-filter-grid">
+          <div className="lens-orders-filter-grid table-attached-filter">
             <label>
               Date from
               <input

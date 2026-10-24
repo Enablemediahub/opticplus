@@ -232,46 +232,42 @@ export default function PlaceLensOrderSection({ fetchGlassesPrescriptions, place
           <span className="panel-tag">{records.length} records</span>
         </div>
 
-        <div className="filter-actions-row" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <div className="lens-orders-preset-row" style={{ flexWrap: 'wrap', marginRight: 'auto' }}>
-            <button type="button" className={`lens-preset-pill${dateFrom === todayIso && dateTo === todayIso ? ' is-active' : ''}`} onClick={() => applyPreset('today')}>
-              Today
-            </button>
-            <button type="button" className={`lens-preset-pill${dateFrom && dateTo && dateFrom === lastSevenDaysRange().start && dateTo === lastSevenDaysRange().end ? ' is-active' : ''}`} onClick={() => applyPreset('week')}>
-              Last 7 Days
-            </button>
-            <button type="button" className={`lens-preset-pill${dateFrom && dateTo && dateFrom === monthRange().start && dateTo === monthRange().end ? ' is-active' : ''}`} onClick={() => applyPreset('month')}>
-              This Month
-            </button>
-            <button type="button" className={`lens-preset-pill${!dateFrom && !dateTo ? ' is-active' : ''}`} onClick={() => applyPreset('all')}>
-              All Dates
-            </button>
-          </div>
-
-          <button type="button" className="ghost-button" onClick={resetFilters}>
-            Reset
-          </button>
-        </div>
-
-        <div className="filter-actions-row" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <label className="compact-field">
-            <span>From</span>
+        <div className="patient-filter-grid table-attached-filter lens-order-queue-filters">
+          <label>
+            Search
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by patient, folder ID, or lens type"
+            />
+          </label>
+          <label>
+            Date from
             <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
           </label>
-          <label className="compact-field">
-            <span>To</span>
+          <label>
+            Date to
             <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           </label>
-        </div>
 
-        <label className="patient-search-shell" style={{ marginBottom: '1rem' }}>
-          <span className="patient-search-icon" aria-hidden="true">⌕</span>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by patient, folder ID, or lens type"
-          />
-        </label>
+          <div className="lens-order-queue-actions full-span">
+            <div className="lens-orders-preset-row">
+              <button type="button" className={`lens-preset-pill${dateFrom === todayIso && dateTo === todayIso ? ' is-active' : ''}`} onClick={() => applyPreset('today')}>
+                Today
+              </button>
+              <button type="button" className={`lens-preset-pill${dateFrom && dateTo && dateFrom === lastSevenDaysRange().start && dateTo === lastSevenDaysRange().end ? ' is-active' : ''}`} onClick={() => applyPreset('week')}>
+                Last 7 Days
+              </button>
+              <button type="button" className={`lens-preset-pill${dateFrom && dateTo && dateFrom === monthRange().start && dateTo === monthRange().end ? ' is-active' : ''}`} onClick={() => applyPreset('month')}>
+                This Month
+              </button>
+              <button type="button" className={`lens-preset-pill${!dateFrom && !dateTo ? ' is-active' : ''}`} onClick={() => applyPreset('all')}>
+                All Dates
+              </button>
+            </div>
+            <button type="button" className="ghost-button" onClick={resetFilters}>Reset</button>
+          </div>
+        </div>
 
         {error ? <p className="muted-copy" style={{ color: '#b91c1c' }}>{error}</p> : null}
 

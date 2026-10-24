@@ -1,11 +1,136 @@
 import { useEffect, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import { escapePrintHtml, openPrintDocumentWindow, writePrintDocumentWindow } from '../utils/printDocuments.js'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
   currency: 'GHS',
   maximumFractionDigits: 2,
 })
+
+function buildExpenseMemoBody(form) {
+  const amount = form.amount ? currency.format(Number(form.amount)) : 'GH₵ [amount]'
+  const purpose = form.memo_purpose || form.description || form.category || '[purpose/reason]'
+  const period = form.memo_period || form.date || '[period/description]'
+  const method = form.memo_payment_method || 'bank'
+  return `Seeking approval for the disbursement of funds. The amount in total to be disbursed is ${amount}. This payment is to settle the ${purpose} for the ${period}. The payment will be made through ${method}.\n\nThank you for your cooperation.`
+}
+
+function buildExpenseMemoSubject(form) {
+  return `Expense approval: ${form.description || form.category || 'New expense'}`
+}
+
+function updateExpenseMemoFields(current, changes) {
+  const previousGeneratedBody = buildExpenseMemoBody(current)
+  const previousGeneratedSubject = buildExpenseMemoSubject(current)
+  const bodyWasGenerated = !current.memo_justification || current.memo_justification === previousGeneratedBody
+  const subjectWasGenerated = !current.memo_subject || current.memo_subject === previousGeneratedSubject
+  const next = { ...current, ...changes }
+  if (bodyWasGenerated) next.memo_justification = buildExpenseMemoBody(next)
+  if (subjectWasGenerated) next.memo_subject = buildExpenseMemoSubject(next)
+  return next
+}
+
+function ExpenseApprovalMemoSignature({ request, token, signerRole = 'accountant' }) {
+  const [imageUrl, setImageUrl] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!request?.id || !token) return undefined
+    let cancelled = false
+    let objectUrl = ''
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api/v1`).replace(/\/+$/, '')
+    const signatureEndpoint = signerRole === 'gm' ? 'gm-signature' : 'memo-signature'
+    const imageEndpoint = `${apiBase}/finance/expense-approvals/${request.id}/${signatureEndpoint}?branch_id=${request.branch_id}`
+
+    fetch(imageEndpoint, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        if (!response.ok) {
+          let message = `Signature image request failed (HTTP ${response.status}).`
+          try {
+            message = (await response.json()).message || message
+          } catch {
+          }
+          throw new Error(message)
+        }
+        return response.blob()
+      })
+      .then((blob) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setImageUrl(objectUrl)
+        setError('')
+      })
+      .catch((loadError) => {
+        if (!cancelled) setError(loadError.message)
+      })
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [request?.branch_id, request?.id, signerRole, token])
+
+  return (
+    <div className="expense-approval-memo-signature">
+      <strong>{signerRole === 'gm' ? 'General Manager signature' : 'Accountant signature'} · {signerRole === 'gm' ? request.supporting_document?.gm_signature_name || request.reviewed_by_name || 'General Manager' : request.supporting_document?.memo_signature_name || request.submitted_by_name || 'Accountant'}</strong>
+      {imageUrl ? <img src={imageUrl} alt={signerRole === 'gm' ? 'GM signature on approved Certificate of Honour' : 'Accountant signature on expense memo'} /> : <small>{error || 'Loading saved signature...'}</small>}
+    </div>
+  )
+}
+
+function buildCertificateOfHonourPage(request) {
+  const document = request.supporting_document ?? {}
+  const amount = currency.format(Number(request.amount ?? 0))
+  const gmSignature = document.gm_signature_data_url
+    ? `<img src="${escapePrintHtml(document.gm_signature_data_url)}" alt="General Manager signature" />`
+    : '<em>GM signature was not captured when this request was approved.</em>'
+  const details = [
+    ['Certificate No.', `COH-${request.branch_id}-${request.id}`],
+    ['Submitted by', request.submitted_by_name || 'Staff'],
+    ['Branch', document.branch || (request.branch_id === 1 ? 'Labadi' : request.branch_id === 2 ? 'Madina' : `Branch ${request.branch_id}`)],
+    ['Category', request.category || 'Expense'],
+    ['Expense date', request.date || 'Not provided'],
+    ['Approved', request.reviewed_at || 'Approved'],
+  ]
+  return `<div class="certificate-of-honour-print">
+    <div class="doc-topline"><div><p class="doc-kicker">Expense clearance record</p><h1>Certificate of Honour</h1></div><p class="doc-reference">No. ${escapePrintHtml(`COH-${request.branch_id}-${request.id}`)}</p></div>
+    <div class="details-grid">${details.map(([label, value]) => `<div class="detail-line"><b>${escapePrintHtml(label)}:</b><span>${escapePrintHtml(value)}</span></div>`).join('')}</div>
+    <table class="record-table"><thead><tr><th>Description</th><th class="amount">Amount</th></tr></thead><tbody><tr><td>${escapePrintHtml(request.description || 'Expense')}</td><td class="amount">${escapePrintHtml(amount)}</td></tr></tbody></table>
+    <div class="declaration"><strong>Declaration</strong><br />${escapePrintHtml(document.declaration || 'I certify that this expense was incurred for official business and that the details and amount above are accurate.')}</div>
+    <div class="totals"><div class="grand"><span>Approved total</span><span>${escapePrintHtml(amount)}</span></div></div>
+    ${request.decision_note ? `<div class="approval-note"><strong>General Manager note</strong><br />${escapePrintHtml(request.decision_note)}</div>` : ''}
+    <div class="signature-row"><div class="signature"><strong>${escapePrintHtml(request.submitted_by_name || 'Staff')}</strong><span>Submitted by - ${escapePrintHtml(request.submitted_role || 'Staff')}</span></div><div class="signature">${gmSignature}<strong>${escapePrintHtml(document.gm_signature_name || request.reviewed_by_name || 'General Manager')}</strong><span>Approved by - ${escapePrintHtml(request.reviewed_at || '')}</span></div></div>
+  </div>`
+}
+
+function isManualExpenseEligibleForCertificate(expense) {
+  if (!expense.receipt_unavailable && !expense.gm_approved) return false
+  if (expense.source_type) return false
+  if (/^(frames?|lenses?|payroll|salary)/i.test(String(expense.category ?? '').trim())) return false
+  return !/salary advance|payroll/i.test(String(expense.description ?? ''))
+}
+
+function buildManualExpenseCertificatePage(expense, branchName) {
+  const amount = currency.format(Number(expense.amount ?? 0))
+  const reference = `EXP-COH-${expense.branch_id}-${expense.expense_id}`
+  const fields = [
+    ['Certificate No.', reference],
+    ['Expense ID', expense.expense_id],
+    ['Entered by', expense.entered_by || 'Staff'],
+    ['Branch', branchName || 'Active branch'],
+    ['Category', expense.category || 'Expense'],
+    ['Expense date', expense.date || 'Not provided'],
+  ]
+  return `
+    <div class="doc-topline"><div><p class="doc-kicker">Internal backup record - no receipt available</p><h1>Certificate of Honour</h1></div><p class="doc-reference">No. ${escapePrintHtml(reference)}</p></div>
+    <div class="details-grid">${fields.map(([label, value]) => `<div class="detail-line"><b>${escapePrintHtml(label)}:</b><span>${escapePrintHtml(value)}</span></div>`).join('')}</div>
+    <table class="record-table"><thead><tr><th>Description</th><th class="amount">Amount</th></tr></thead><tbody><tr><td>${escapePrintHtml(expense.description || 'Expense')}</td><td class="amount">${escapePrintHtml(amount)}</td></tr></tbody></table>
+    <div class="declaration"><strong>Declaration</strong><br />I certify that this expense was incurred for official business, and that the recorded description, category, date, and amount are accurate.${expense.receipt_unavailable ? ' A supplier receipt was not available when this expense was recorded.' : ''}</div>
+    <div class="approval-note"><strong>Supporting document notice</strong><br />This Certificate of Honour is an internal backup record generated from the expense ledger${expense.gm_approved ? ' for an expense approved by the General Manager' : ''}. It does not replace a supplier receipt or tax invoice.</div>
+    <div class="totals"><div class="grand"><span>Recorded amount</span><span>${escapePrintHtml(amount)}</span></div></div>
+    <div class="signature-row"><div class="signature"><strong>${escapePrintHtml(expense.entered_by || 'Expense recorder')}</strong><span>Entered by - ${escapePrintHtml(expense.date || '')}</span></div><div class="signature"><strong>&nbsp;</strong><span>General Manager review (if required)</span></div></div>`
+}
 
 const tabsByMode = {
   default: ['Payments', 'Sales', 'Expenses'],
@@ -56,7 +181,32 @@ function formatExpenseRangeLabel(filters) {
 export default function FinanceSection(props) {
   const pageMode = props.pageMode ?? 'default'
   const financeTabs = useMemo(() => tabsByMode[pageMode] ?? tabsByMode.default, [pageMode])
+  const expenseWorkspaceStorageKey = `opticplus:expense-workspace:${props.session?.id ?? props.session?.role ?? 'user'}:${pageMode}:${props.selectedBranchId ?? props.session?.branch_id ?? 'default'}`
   const [activeTab, setActiveTab] = useState(defaultTabByMode[pageMode] ?? 'Payments')
+  const [activeExpenseWorkspace, setActiveExpenseWorkspace] = useState(() => {
+    try {
+      const storedWorkspace = window.sessionStorage.getItem(expenseWorkspaceStorageKey)
+      return storedWorkspace === 'approvals' || (storedWorkspace === 'settings' && props.session?.role === 'manager') ? storedWorkspace : 'ledger'
+    } catch {
+      return 'ledger'
+    }
+  })
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(expenseWorkspaceStorageKey, activeExpenseWorkspace)
+    } catch {
+      // Keep tab switching available if browser storage is disabled.
+    }
+  }, [activeExpenseWorkspace, expenseWorkspaceStorageKey])
+
+  function selectExpenseWorkspace(nextWorkspace) {
+    setActiveExpenseWorkspace(nextWorkspace)
+    try {
+      window.sessionStorage.setItem(expenseWorkspaceStorageKey, nextWorkspace)
+    } catch {
+      // Keep tab switching available if browser storage is disabled.
+    }
+  }
 
   useEffect(() => {
     const nextDefault = defaultTabByMode[pageMode] ?? 'Payments'
@@ -140,6 +290,24 @@ export default function FinanceSection(props) {
     ],
   }
   const summaryCards = summaryCardsByMode[pageMode] ?? summaryCardsByMode.default
+  const approvalRequests = props.financeExpenses?.approval_requests ?? []
+  const requestSummaryCards = [
+    ['Pending', approvalRequests.filter((request) => request.status === 'pending').length, 'Awaiting GM review', 'pending', 'alert', 'count'],
+    ['Approved', approvalRequests.filter((request) => request.status === 'approved').length, 'Added to the expense ledger', 'seen', 'shield', 'count'],
+    ['Rejected', approvalRequests.filter((request) => request.status === 'rejected').length, 'Not added to the ledger', 'today', 'alert', 'count'],
+    ['Total Requests', approvalRequests.length, 'Pending and reviewed requests', 'total', 'receipt', 'count'],
+  ]
+  const showingExpenseRequests = activeTab === 'Expenses' && activeExpenseWorkspace === 'approvals'
+  const displayedSummaryCards = showingExpenseRequests ? requestSummaryCards : summaryCards
+  const displayedPageHeader = showingExpenseRequests
+    ? {
+        eyebrow: props.session?.role === 'manager' ? 'General Manager Review' : 'Expense Requests',
+        title: props.session?.role === 'manager' ? 'Review expense requests' : 'My expense requests',
+        copy: props.session?.role === 'manager'
+          ? 'Review supporting documents and decide which staff expenses may be recorded.'
+          : 'Track approval decisions for expenses you submitted.',
+      }
+    : pageHeader
 
   if (pageMode === 'revenue') {
     return <RevenueTrackingView {...props} pageHeader={pageHeader} summaryCards={summaryCards} />
@@ -155,50 +323,57 @@ export default function FinanceSection(props) {
 
   return (
     <section className="finance-section">
-      <div className="patients-header">
-        <div>
-          <p className="eyebrow">{pageHeader.eyebrow}</p>
-          <h3>{pageHeader.title}</h3>
-          <p className="header-copy">{pageHeader.copy}</p>
+      <div className={showingExpenseRequests ? 'finance-request-overview' : undefined}>
+        <div className="patients-header">
+          <div>
+            <p className="eyebrow">{displayedPageHeader.eyebrow}</p>
+            <h3>{displayedPageHeader.title}</h3>
+            <p className="header-copy">{displayedPageHeader.copy}</p>
+          </div>
         </div>
+        <section className={`stats-grid patient-stats-grid${showingExpenseRequests ? ' expense-request-stats' : ''}`}>
+          {displayedSummaryCards.map(([label, value, note, className, icon, valueType]) => (
+            <StatWidget
+              key={label}
+              label={label}
+              value={valueType === 'count' || label === 'Transactions'
+                ? String(Number(value ?? 0))
+                : props.isLoadingFinanceSummary && !props.financeSummary
+                  ? '...'
+                  : currency.format(Number(value ?? 0))}
+              note={note}
+              icon={icon}
+              className={className}
+            />
+          ))}
+        </section>
       </div>
 
       {props.financeError ? <div className="message-banner error">{props.financeError}</div> : null}
       {props.financeSuccess ? <div className="message-banner success">{props.financeSuccess}</div> : null}
 
-      <section className="stats-grid patient-stats-grid">
-        {summaryCards.map(([label, value, note, className, icon, valueType]) => (
-          <StatWidget
-            key={label}
-            label={label}
-            value={valueType === 'count' || label === 'Transactions'
-              ? String(Number(value ?? 0))
-              : props.isLoadingFinanceSummary && !props.financeSummary
-                ? '...'
-                : currency.format(Number(value ?? 0))}
-            note={note}
-            icon={icon}
-            className={className}
-          />
-        ))}
-      </section>
-
-      <div className="finance-tabs">
-        {financeTabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={tab === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      {financeTabs.length > 1 ? (
+        <div className="finance-tabs">
+          {financeTabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={tab === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {activeTab === 'Payments' ? <PaymentsTab {...props} /> : null}
       {activeTab === 'Sales' ? <SalesTab {...props} /> : null}
-      {activeTab === 'Expenses' ? <ExpensesTab {...props} /> : null}
+      {activeTab === 'Expenses' ? (
+        <div className="finance-tab-content">
+          <ExpensesTab {...props} activeExpenseWorkspace={activeExpenseWorkspace} setActiveExpenseWorkspace={selectExpenseWorkspace} />
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -339,7 +514,7 @@ function RevenueTrackingView(props) {
             <span className="panel-tag">{props.financeSales?.branch_name ?? props.financeSummary?.branch_name ?? 'Revenue Tracking'}</span>
           </div>
 
-          <form className="patient-filter-grid" onSubmit={applyRevenueFilters}>
+          <form className="patient-filter-grid table-attached-filter" onSubmit={applyRevenueFilters}>
             <label>
               Search sales
               <input
@@ -703,7 +878,7 @@ function AccountantSalesView(props) {
       </section>
 
       <section className="finance-layout sales-daily-layout">
-        <article className="panel">
+        <article className="panel sales-daily-ledger-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Sales Filters</p>
@@ -712,7 +887,7 @@ function AccountantSalesView(props) {
             <span className="panel-tag">{props.financeSales?.branch_name ?? props.financeSummary?.branch_name ?? 'Sales'}</span>
           </div>
 
-          <form className="patient-filter-grid" onSubmit={applySalesFilters}>
+          <form className="patient-filter-grid table-attached-filter" onSubmit={applySalesFilters}>
             <label>
               Search sales
               <input
@@ -781,9 +956,6 @@ function AccountantSalesView(props) {
           <p className="muted-copy sales-summary-note">
             Total Sales is the realized collection total. Payments are allocated in priority order; any amount without a remaining known item balance appears as Other Allocated, while unpaid balances remain in Billing as outstanding.
           </p>
-        </article>
-
-        <article className="panel panel-wide">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Daily Sales Table</p>
@@ -871,7 +1043,7 @@ function PaymentsTab(props) {
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             props.setFinancePaymentQuery((current) => ({
@@ -1589,7 +1761,7 @@ function SalesTab(props) {
 
   return (
     <section className="finance-layout">
-      <article className="panel">
+      <article className="panel finance-sales-ledger-panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Sales Overview</p>
@@ -1616,7 +1788,7 @@ function SalesTab(props) {
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             props.setFinanceSalesQuery((current) => ({ ...current, ...props.financeSalesFilters, page: 1 }))
@@ -1647,9 +1819,6 @@ function SalesTab(props) {
             <button type="submit" className="primary-button">Apply filters</button>
           </div>
         </form>
-      </article>
-
-      <article className="panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Sales Table</p>
@@ -1691,7 +1860,21 @@ function SalesTab(props) {
 }
 
 function ExpensesTab(props) {
+  const [expenseWorkflowForm, setExpenseWorkflowForm] = useState({ accountant_memo_threshold: '1000', receptionist_direct_limit: '1000' })
+  const [isSavingExpenseWorkflow, setIsSavingExpenseWorkflow] = useState(false)
+  const [expenseWorkflowFeedback, setExpenseWorkflowFeedback] = useState(null)
+  useEffect(() => {
+    const settings = props.financeExpenses?.expense_workflow_settings
+    if (settings) {
+      setExpenseWorkflowForm({
+        accountant_memo_threshold: String(settings.accountant_memo_threshold ?? 1000),
+        receptionist_direct_limit: String(settings.receptionist_direct_limit ?? 1000),
+      })
+    }
+  }, [props.financeExpenses?.expense_workflow_settings?.accountant_memo_threshold, props.financeExpenses?.expense_workflow_settings?.receptionist_direct_limit])
+
   const canManageExpenses = (['manager', 'accountant'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
+  const canEditExpenseRecords = props.session?.role === 'manager' && !props.readOnly
   const canCreateExpenses = (['manager', 'accountant', 'receptionist'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
   const canDeleteLinkedLensExpense = props.session?.role === 'manager' && !props.readOnly
   const isCategoryManager = canManageExpenses
@@ -1699,6 +1882,9 @@ function ExpensesTab(props) {
   const isReceptionistExpenseView = props.session?.role === 'receptionist' && !props.readOnly
   const isCeoReadOnlyExpenseView = props.session?.role === 'ceo' && props.readOnly
   const usePremiumExpenseLayout = isAccountantExpenseView || isReceptionistExpenseView || isCeoReadOnlyExpenseView
+  const expenseSelectionBranchId = props.session?.is_admin ? props.selectedBranchId : props.session?.branch_id
+  const expenseRecords = props.financeExpenses?.records ?? []
+  const eligibleExpensesOnPage = expenseRecords.filter(isManualExpenseEligibleForCertificate)
   const expenseStats = props.financeExpenses?.stats ?? {}
   const visibleExpenseTotal = Number(expenseStats.filtered_total ?? expenseStats.total ?? 0)
   const [isCreateExpenseModalOpen, setIsCreateExpenseModalOpen] = useState(false)
@@ -1706,16 +1892,19 @@ function ExpensesTab(props) {
   const [editingCategoryId, setEditingCategoryId] = useState(null)
   const [editingCategoryName, setEditingCategoryName] = useState('')
   const [selectedExpense, setSelectedExpense] = useState(null)
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState([])
+  const [selectedExpenseRecords, setSelectedExpenseRecords] = useState([])
   const [expenseModalForm, setExpenseModalForm] = useState({
     description: '',
     amount: '',
     date: '',
     category: '',
+    receipt_unavailable: false,
   })
   const isSelectedLensLinked = Boolean(selectedExpense?.is_lens_linked)
   const isSelectedFrameReserved = Boolean(selectedExpense?.is_frame_reserved)
   const canEditFrameReservationDate = ['manager', 'general-manager'].includes(props.session?.role) && !props.readOnly
-  const canEditSelectedExpense = canManageExpenses
+  const canEditSelectedExpense = canEditExpenseRecords
     && !isSelectedLensLinked
     && (!isSelectedFrameReserved || canEditFrameReservationDate)
   const canEditSelectedExpenseDetails = canEditSelectedExpense && !isSelectedFrameReserved
@@ -1723,11 +1912,37 @@ function ExpensesTab(props) {
     ? canDeleteLinkedLensExpense
     : props.session?.role === 'manager' && !props.readOnly
   const categoryOptions = props.financeExpenses?.categories ?? []
+  const expenseApprovalRequests = props.financeExpenses?.approval_requests ?? []
+  const canReviewExpenseApprovals = props.session?.role === 'manager'
+  const canManageExpenseWorkflow = props.session?.role === 'manager'
+  const pendingExpenseApprovalCount = expenseApprovalRequests.filter((request) => request.status === 'pending').length
+  const approvedExpenseApprovalCount = expenseApprovalRequests.filter((request) => request.status === 'approved').length
+  const rejectedExpenseApprovalCount = expenseApprovalRequests.filter((request) => request.status === 'rejected').length
+  const [approvalStatusFilter, setApprovalStatusFilter] = useState(canReviewExpenseApprovals ? 'pending' : 'all')
+  const visibleExpenseApprovalRequests = approvalStatusFilter === 'all'
+    ? expenseApprovalRequests
+    : expenseApprovalRequests.filter((request) => request.status === approvalStatusFilter)
+  const submitsExpenseApprovals = ['accountant', 'receptionist'].includes(props.session?.role) && !props.readOnly
+  const draftExpenseAmount = Number(props.expenseForm.amount || 0)
+  const expenseWorkflowSettings = props.financeExpenses?.expense_workflow_settings ?? { accountant_memo_threshold: 1000, receptionist_direct_limit: 1000 }
+  const isMemoThresholdExpense = isAccountantExpenseView && draftExpenseAmount > Number(expenseWorkflowSettings.accountant_memo_threshold ?? 1000)
+  const receptionistAboveLimit = isReceptionistExpenseView && draftExpenseAmount > Number(expenseWorkflowSettings.receptionist_direct_limit ?? 1000)
+  const accountantMemoSignatureAvailable = Boolean(props.financeExpenses?.accountant_memo_signature_available)
+  const gmExpenseSignatureAvailable = Boolean(props.financeExpenses?.gm_expense_signature_available)
+  const [reviewingExpenseRequestId, setReviewingExpenseRequestId] = useState(null)
+  const [approvalNotes, setApprovalNotes] = useState({})
+  const [selectedCertificateIds, setSelectedCertificateIds] = useState([])
+  const [documentPrintError, setDocumentPrintError] = useState('')
+  const approvedCertificates = expenseApprovalRequests.filter((request) => request.document_type === 'certificate_of_honour' && request.status === 'approved')
+  const selectedCertificates = approvedCertificates.filter((request) => selectedCertificateIds.includes(String(request.id)))
+  const activeExpenseWorkspace = props.activeExpenseWorkspace ?? 'ledger'
+  const setActiveExpenseWorkspace = props.setActiveExpenseWorkspace ?? (() => {})
   const managementExpenseDefaults = {
     filter: 'all',
     start_date: '',
     end_date: '',
     category: 'all',
+    no_receipt_coh: 'all',
     search: '',
     sort: 'date_desc',
     page: 1,
@@ -1737,12 +1952,131 @@ function ExpensesTab(props) {
     filter: 'all',
     ...currentMonthDateRange(),
     category: 'all',
+    no_receipt_coh: 'all',
     search: '',
     sort: 'date_desc',
     page: 1,
     per_page: 12,
   }
   const expenseFilterDefaults = isReceptionistExpenseView ? receptionistExpenseDefaults : managementExpenseDefaults
+
+  useEffect(() => {
+    setSelectedExpenseIds([])
+    setSelectedExpenseRecords([])
+  }, [expenseSelectionBranchId])
+
+  async function reviewExpenseRequest(requestId, decision) {
+    setReviewingExpenseRequestId(requestId)
+    try {
+      const request = expenseApprovalRequests.find((item) => item.id === requestId)
+      const completed = await props.reviewExpenseApproval(requestId, decision, approvalNotes[requestId] ?? '', request?.branch_id)
+      if (completed) {
+        setApprovalNotes((current) => ({ ...current, [requestId]: '' }))
+      }
+    } finally {
+      setReviewingExpenseRequestId(null)
+    }
+  }
+
+  async function printCertificates(requests) {
+    if (!requests.length) return
+    const printWindow = openPrintDocumentWindow()
+    if (!printWindow) {
+      setDocumentPrintError('Allow pop-ups to print or save the certificate PDF.')
+      return
+    }
+    setDocumentPrintError('')
+    try {
+      const signedRequests = await Promise.all(requests.map(async (request) => {
+        const supportingDocument = request.supporting_document ?? {}
+        if (!supportingDocument.gm_signature_path) return request
+        const apiBase = (import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api/v1`).replace(/\/+$/, '')
+        const endpoint = `${apiBase}/finance/expense-approvals/${request.id}/gm-signature?branch_id=${request.branch_id}`
+        const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${props.token}` } })
+        if (!response.ok) {
+          let message = `GM signature could not be loaded (HTTP ${response.status}).`
+          try {
+            message = (await response.json()).message || message
+          } catch {
+          }
+          throw new Error(message)
+        }
+        const signatureBlob = await response.blob()
+        const signatureDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = () => reject(new Error('The GM signature image could not be read for printing.'))
+          reader.readAsDataURL(signatureBlob)
+        })
+        return {
+          ...request,
+          supporting_document: { ...supportingDocument, gm_signature_data_url: signatureDataUrl },
+        }
+      }))
+      const pages = signedRequests.map((request) => buildCertificateOfHonourPage(request))
+      writePrintDocumentWindow(printWindow, 'Bealet Certificates of Honour', pages)
+    } catch (printError) {
+      printWindow.close()
+      setDocumentPrintError(printError.message || 'Unable to load the GM signature for this Certificate of Honour.')
+    }
+  }
+
+  function toggleAllVisibleCertificates() {
+    const visibleIds = approvedCertificates.map((request) => String(request.id))
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedCertificateIds.includes(id))
+    setSelectedCertificateIds((current) => allSelected
+      ? current.filter((id) => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])))
+  }
+
+  function printManualExpenseCertificate(expense) {
+    const printWindow = openPrintDocumentWindow()
+    if (!printWindow) {
+      props.setFinanceError?.('Allow pop-ups to print or save the expense Certificate of Honour.')
+      return
+    }
+    props.setFinanceError?.('')
+    writePrintDocumentWindow(
+      printWindow,
+      `Expense Certificate of Honour ${expense.expense_id}`,
+      [buildManualExpenseCertificatePage(expense, props.financeExpenses?.branch_name)],
+    )
+  }
+
+  function printSelectedExpenseCertificates() {
+    if (!selectedExpenseRecords.length) return
+    const printWindow = openPrintDocumentWindow()
+    if (!printWindow) {
+      props.setFinanceError?.('Allow pop-ups to print or save the selected Certificates of Honour.')
+      return
+    }
+    props.setFinanceError?.('')
+    writePrintDocumentWindow(
+      printWindow,
+      'No-Receipt Expense Certificates of Honour',
+      selectedExpenseRecords.map((expense) => buildManualExpenseCertificatePage(expense, props.financeExpenses?.branch_name)),
+    )
+  }
+
+  function toggleExpenseCertificate(expense) {
+    const id = String(expense.expense_id)
+    const isSelected = selectedExpenseIds.includes(id)
+    setSelectedExpenseIds((current) => isSelected ? current.filter((item) => item !== id) : [...current, id])
+    setSelectedExpenseRecords((current) => isSelected
+      ? current.filter((item) => String(item.expense_id) !== id)
+      : [...current.filter((item) => String(item.expense_id) !== id), expense])
+  }
+
+  function toggleCurrentPageExpenseCertificates() {
+    const pageIds = eligibleExpensesOnPage.map((expense) => String(expense.expense_id))
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedExpenseIds.includes(id))
+    setSelectedExpenseIds((current) => allSelected
+      ? current.filter((id) => !pageIds.includes(id))
+      : Array.from(new Set([...current, ...pageIds])))
+    setSelectedExpenseRecords((current) => allSelected
+      ? current.filter((expense) => !pageIds.includes(String(expense.expense_id)))
+      : [...current.filter((expense) => !pageIds.includes(String(expense.expense_id))), ...eligibleExpensesOnPage])
+  }
 
   function commitExpenseFilters(nextFilters) {
     props.setFinanceExpenseFilters(nextFilters)
@@ -1798,6 +2132,7 @@ function ExpensesTab(props) {
       amount: expense.amount ?? '',
       date: expense.date ?? '',
       category: expense.category ?? categoryOptions[0] ?? '',
+      receipt_unavailable: Boolean(expense.receipt_unavailable),
     })
   }
 
@@ -1808,17 +2143,27 @@ function ExpensesTab(props) {
       amount: '',
       date: '',
       category: '',
+      receipt_unavailable: false,
     })
   }
 
   function openCreateExpenseModal() {
-    props.setExpenseForm((current) => ({
+    props.setExpenseForm((current) => {
+      const next = {
       ...current,
       description: '',
       amount: '',
       date: new Date().toISOString().slice(0, 10),
       category: categoryOptions[0] ?? current.category ?? '',
-    }))
+      memo_subject: '',
+      memo_justification: '',
+      memo_purpose: '',
+      memo_period: '',
+      memo_payment_method: 'bank',
+      certificate_confirmed: false,
+      }
+      return updateExpenseMemoFields(next, {})
+    })
     setIsCreateExpenseModalOpen(true)
   }
 
@@ -1838,9 +2183,266 @@ function ExpensesTab(props) {
 
   return (
     <>
-      {props.financeError ? <div className="message-banner error">{props.financeError}</div> : null}
-      {props.financeSuccess ? <div className="message-banner success">{props.financeSuccess}</div> : null}
+      {(canReviewExpenseApprovals || submitsExpenseApprovals) ? (
+        <div className="finance-tabs expense-workflow-tabs" role="tablist" aria-label="Expense workspace">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeExpenseWorkspace === 'ledger'}
+            className={activeExpenseWorkspace === 'ledger' ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
+            onClick={() => setActiveExpenseWorkspace('ledger')}
+          >
+            Expense Ledger
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeExpenseWorkspace === 'approvals'}
+            className={activeExpenseWorkspace === 'approvals' ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
+            onClick={() => setActiveExpenseWorkspace('approvals')}
+          >
+            {canReviewExpenseApprovals ? `GM Approvals (${pendingExpenseApprovalCount})` : `My Requests (${expenseApprovalRequests.length})`}
+          </button>
+          {canManageExpenseWorkflow ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeExpenseWorkspace === 'settings'}
+              className={activeExpenseWorkspace === 'settings' ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
+              onClick={() => setActiveExpenseWorkspace('settings')}
+            >
+              Expense Rules
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
+      {canManageExpenseWorkflow && activeExpenseWorkspace === 'settings' ? (
+        <article className="panel panel-wide expense-workflow-settings-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">General Manager Settings</p>
+              <h3>Expense approval limits</h3>
+              <p className="muted-copy">Set the maximum amount each staff role may submit through the direct expense request route.</p>
+            </div>
+          </div>
+          {props.financeError ? <div className="message-banner error">{props.financeError}</div> : null}
+          {props.financeSuccess ? <div className="message-banner success">{props.financeSuccess}</div> : null}
+          {expenseWorkflowFeedback ? <div className={`message-banner ${expenseWorkflowFeedback.type}`}>{expenseWorkflowFeedback.message}</div> : null}
+          <form
+            className="patient-filter-grid expense-workflow-settings-form"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              if (!props.saveExpenseWorkflowSettings) {
+                setExpenseWorkflowFeedback({ type: 'error', message: 'Expense limits could not be saved: save action is unavailable. Refresh the page and try again.' })
+                return
+              }
+              setIsSavingExpenseWorkflow(true)
+              setExpenseWorkflowFeedback(null)
+              try {
+                const saved = await props.saveExpenseWorkflowSettings({
+                  accountant_memo_threshold: Number(expenseWorkflowForm.accountant_memo_threshold || 0),
+                  receptionist_direct_limit: Number(expenseWorkflowForm.receptionist_direct_limit || 0),
+                })
+                setExpenseWorkflowFeedback(saved
+                  ? { type: 'success', message: 'Expense approval limits saved successfully.' }
+                  : { type: 'error', message: props.financeError || 'The server did not confirm the updated limits. Please try again.' })
+              } catch (saveError) {
+                setExpenseWorkflowFeedback({ type: 'error', message: saveError.message || 'Could not save expense limits.' })
+              } finally {
+                setIsSavingExpenseWorkflow(false)
+              }
+            }}
+          >
+            <label>
+              Accountant Certificate of Honour limit (GH₵)
+              <input type="number" min="0" step="0.01" value={expenseWorkflowForm.accountant_memo_threshold} onChange={(event) => { setExpenseWorkflowFeedback(null); setExpenseWorkflowForm((current) => ({ ...current, accountant_memo_threshold: event.target.value })) }} required />
+              <small>At or below this amount, the Accountant submits a Certificate of Honour. Above it, the expense form requires the completed, signed memo and sends it with the expense to the GM.</small>
+            </label>
+            <label>
+              Receptionist direct submission limit (GH₵)
+              <input type="number" min="0" step="0.01" value={expenseWorkflowForm.receptionist_direct_limit} onChange={(event) => { setExpenseWorkflowFeedback(null); setExpenseWorkflowForm((current) => ({ ...current, receptionist_direct_limit: event.target.value })) }} required />
+              <small>Above this amount, the Receptionist is directed to the Accountant. At or below it, the Receptionist submits a Certificate of Honour for GM approval.</small>
+            </label>
+            <div className="filter-actions-row full-span">
+              <button type="submit" className="primary-button" disabled={isSavingExpenseWorkflow}>
+                {isSavingExpenseWorkflow ? 'Saving limits...' : 'Save expense limits'}
+              </button>
+            </div>
+          </form>
+        </article>
+      ) : null}
+
+      {(canReviewExpenseApprovals || submitsExpenseApprovals) && activeExpenseWorkspace === 'approvals' ? (
+        <article className="panel panel-wide expense-approvals-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">{canReviewExpenseApprovals ? 'General Manager Review' : 'Expense Requests'}</p>
+              <h3>{canReviewExpenseApprovals ? 'Expense approvals and decisions' : 'Your submitted expenses'}</h3>
+              <p className="muted-copy">
+                {canReviewExpenseApprovals
+                  ? 'Review pending certificates and memos for the selected branch, then approve or reject. Previously reviewed requests remain visible for oversight.'
+                  : 'Your expenses remain outside the ledger and reports until the General Manager approves them.'}
+              </p>
+            </div>
+            <span className="panel-tag">{canReviewExpenseApprovals ? `${pendingExpenseApprovalCount} pending` : `${expenseApprovalRequests.length} requests`}</span>
+          </div>
+
+          {documentPrintError ? <div className="message-banner error">{documentPrintError}</div> : null}
+            <div className="expense-approval-summary" aria-label="Expense request counts">
+              <div className="expense-approval-count is-pending"><span>Pending</span><strong>{pendingExpenseApprovalCount}</strong></div>
+              <div className="expense-approval-count is-approved"><span>Approved</span><strong>{approvedExpenseApprovalCount}</strong></div>
+              <div className="expense-approval-count is-rejected"><span>Rejected</span><strong>{rejectedExpenseApprovalCount}</strong></div>
+            </div>
+          {approvedCertificates.length ? (
+            <div className="certificate-print-toolbar">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={approvedCertificates.every((request) => selectedCertificateIds.includes(String(request.id)))}
+                  onChange={toggleAllVisibleCertificates}
+                />
+                Select approved certificates ({approvedCertificates.length})
+              </label>
+              <button type="button" className="primary-button" disabled={!selectedCertificates.length} onClick={() => printCertificates(selectedCertificates)}>
+                Print / Save selected PDF{selectedCertificates.length ? ` (${selectedCertificates.length})` : ''}
+              </button>
+            </div>
+          ) : null}
+          {expenseApprovalRequests.length ? (
+            <>
+            <div className="expense-request-status-filters" role="group" aria-label="Filter expense requests by status">
+              {[
+                { value: 'pending', label: 'Pending', count: pendingExpenseApprovalCount },
+                { value: 'approved', label: 'Approved', count: approvedExpenseApprovalCount },
+                { value: 'rejected', label: 'Rejected', count: rejectedExpenseApprovalCount },
+                { value: 'all', label: 'All requests', count: expenseApprovalRequests.length },
+              ].map((filter) => (
+                <button
+                  type="button"
+                  key={filter.value}
+                  className={approvalStatusFilter === filter.value ? 'expense-request-filter is-active' : 'expense-request-filter'}
+                  aria-pressed={approvalStatusFilter === filter.value}
+                  onClick={() => setApprovalStatusFilter(filter.value)}
+                >
+                  {filter.label}<span>{filter.count}</span>
+                </button>
+              ))}
+            </div>
+            {visibleExpenseApprovalRequests.length ? (
+            <div className="expense-approval-list">
+              {visibleExpenseApprovalRequests.map((approval) => {
+                const document = approval.supporting_document ?? {}
+                const isPending = approval.status === 'pending'
+                const isReviewing = reviewingExpenseRequestId === approval.id
+                return (
+                  <section className="expense-approval-card" key={approval.id}>
+                    <div className="expense-approval-card-heading">
+                      <div>
+                        <span className="expense-approval-document-type">{document.title || (approval.document_type === 'expense_memo' ? 'Expense Memo' : approval.document_type === 'certificate_of_honour' ? 'Certificate of Honour' : 'Expense Submission')}</span>
+                        <h4>{approval.description}</h4>
+                        <p>{approval.category} · {approval.date}</p>
+                      </div>
+                      <div className="expense-approval-card-tools">
+                        {approval.document_type === 'certificate_of_honour' && approval.status === 'approved' ? (
+                          <label className="certificate-row-select" title="Select this approved certificate for bulk printing">
+                            <input
+                              type="checkbox"
+                              checked={selectedCertificateIds.includes(String(approval.id))}
+                              onChange={(event) => setSelectedCertificateIds((current) => event.target.checked
+                                ? Array.from(new Set([...current, String(approval.id)]))
+                                : current.filter((id) => id !== String(approval.id)))}
+                            />
+                            <span>Select PDF</span>
+                          </label>
+                        ) : null}
+                        <span className={`expense-approval-status is-${approval.status}`}>{approval.status}</span>
+                      </div>
+                    </div>
+
+                    {approval.document_type === 'certificate_of_honour' && approval.status === 'approved' ? (
+                      <div className="header-actions"><button type="button" className="ghost-button" onClick={() => printCertificates([approval])}>Print / Save Certificate PDF</button></div>
+                    ) : null}
+
+                    <div className="expense-approval-amount">
+                      <span>Requested amount</span>
+                      <strong>{currency.format(Number(approval.amount ?? 0))}</strong>
+                    </div>
+
+                    <div className="expense-approval-meta">
+                      <span>Submitted by <strong>{approval.submitted_by_name || 'Staff'} ({approval.submitted_role})</strong></span>
+                      <span>Branch <strong>{approval.branch_id === 1 ? 'Labadi' : approval.branch_id === 2 ? 'Madina' : 'Branch ' + approval.branch_id}</strong></span>
+                      <span>Submitted <strong>{approval.submitted_at}</strong></span>
+                    </div>
+
+                    <div className="expense-document-preview">
+                      <strong>{document.title || 'Supporting document'}</strong>
+                      {approval.document_type === 'expense_memo' ? (
+                        <>
+                          <p><b>Subject:</b> {document.memo_subject || 'Expense approval memo'}</p>
+                          <p><b>To:</b> {document.memo_to || 'General Manager'} · <b>From:</b> {document.memo_from || approval.submitted_by_name || 'Accountant'} · <b>Date:</b> {document.memo_date || approval.date}</p>
+                          <p><b>Memo body:</b></p>
+                          <p className="expense-approval-memo-body">{document.memo_body || document.business_purpose || 'Not provided'}</p>
+                          <ExpenseApprovalMemoSignature request={approval} token={props.token} />
+                          <p>This memo and expense are submitted together for your approval.</p>
+                        </>
+                      ) : approval.document_type === 'certificate_of_honour' ? (
+                        <>
+                          <p>{document.declaration || 'The submitter certifies that this expense is for official business and the amount is accurate.'}</p>
+                          <p className="expense-approval-clearance">{approval.status === 'approved' ? 'Approved by the General Manager and recorded in the expense ledger.' : approval.status === 'rejected' ? 'Rejected by the General Manager. This expense was not recorded.' : 'General Manager clearance is required before this expense is recorded.'}</p>
+                          {approval.status === 'approved' && document.gm_signature_path ? <ExpenseApprovalMemoSignature request={approval} token={props.token} signerRole="gm" /> : null}
+                        </>
+                      ) : (
+                        <p className="expense-approval-clearance">General Manager approval is required before this expense is recorded.</p>
+                      )}
+                      {document.receipt_unavailable ? <p><strong>No receipt available:</strong> the approved expense will be marked for backup Certificate of Honour export.</p> : null}
+                      <small>Prepared by {document.prepared_by || approval.submitted_by_name || 'Staff'} · {document.branch || 'Branch'}</small>
+                    </div>
+
+                    {!isPending && approval.decision_note ? <p className="expense-approval-decision-note"><strong>GM note:</strong> {approval.decision_note}</p> : null}
+                    {!isPending && approval.reviewed_by_name ? <p className="muted-copy">Reviewed by {approval.reviewed_by_name} · {approval.reviewed_at}</p> : null}
+
+                    {canReviewExpenseApprovals && isPending ? (
+                      <>
+                        {approval.document_type === 'certificate_of_honour' && !gmExpenseSignatureAvailable ? (
+                          <p className="expense-signature-required" role="alert">Save your reusable General Manager signature in the <a href="#/memos">Memos Signature Library</a> before approving this Certificate of Honour.</p>
+                        ) : null}
+                        <label className="expense-approval-note-field">
+                          Decision note {approvalNotes[approval.id] ? '(required to reject)' : '(optional)'}
+                          <textarea
+                            rows="2"
+                            value={approvalNotes[approval.id] ?? ''}
+                            onChange={(event) => setApprovalNotes((current) => ({ ...current, [approval.id]: event.target.value }))}
+                            placeholder="Add a reason or approval note"
+                          />
+                        </label>
+                        <div className="filter-actions-row expense-approval-actions">
+                          <button type="button" className="primary-button" disabled={isReviewing || (approval.document_type === 'certificate_of_honour' && !gmExpenseSignatureAvailable)} onClick={() => reviewExpenseRequest(approval.id, 'approve')}>
+                            {isReviewing ? 'Saving decision...' : 'Approve and record expense'}
+                          </button>
+                          <button type="button" className="ghost-button" disabled={isReviewing || !(approvalNotes[approval.id] ?? '').trim()} onClick={() => reviewExpenseRequest(approval.id, 'reject')}>
+                            Reject request
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
+                  </section>
+                )
+              })}
+            </div>
+            ) : (
+              <p className="muted-copy expense-approval-empty">No {approvalStatusFilter} expense requests for this branch. Choose another status to review requests.</p>
+            )}
+            </>
+          ) : (
+            <p className="muted-copy expense-approval-empty">
+              {canReviewExpenseApprovals ? 'There are no expense requests for this branch.' : 'You have no expense requests yet.'}
+            </p>
+          )}
+        </article>
+      ) : null}
+
+      {activeExpenseWorkspace === 'ledger' ? (
       <section className={`finance-layout-expenses${usePremiumExpenseLayout ? ' finance-layout-expenses-premium' : ''}${canManageExpenses ? ' finance-layout-expenses-editable' : ''}`}>
         {canCreateExpenses ? (
           <div className="expense-page-toolbar">
@@ -1850,7 +2452,7 @@ function ExpensesTab(props) {
           </div>
         ) : null}
 
-        <article className={`panel panel-wide expense-filters-panel${usePremiumExpenseLayout ? ' expense-premium-panel' : ''}`}>
+        <article className={`panel panel-wide expense-filters-panel expense-ledger-panel${usePremiumExpenseLayout ? ' expense-premium-panel' : ''}`}>
             <div className="panel-heading expense-filter-heading">
               <div className="expense-filter-heading-copy">
                 <p className="eyebrow">Search & Filters</p>
@@ -1861,7 +2463,7 @@ function ExpensesTab(props) {
             </div>
 
             <form
-              className={`expense-page-stack expense-filter-grid-horizontal${usePremiumExpenseLayout ? ' expense-premium-form expense-premium-filter-form' : ''}`}
+              className={`expense-page-stack expense-filter-grid-horizontal table-attached-filter${usePremiumExpenseLayout ? ' expense-premium-form expense-premium-filter-form' : ''}`}
               onSubmit={applyExpenseFilters}
             >
               <label>
@@ -1882,6 +2484,16 @@ function ExpensesTab(props) {
                   {categoryOptions.map((category) => (
                     <option key={category} value={category}>{category}</option>
                   ))}
+                </select>
+              </label>
+              <label>
+                Certificate filter
+                <select
+                  value={props.financeExpenseFilters.no_receipt_coh ?? 'all'}
+                  onChange={(event) => commitExpenseFilters({ ...props.financeExpenseFilters, no_receipt_coh: event.target.value, page: 1 })}
+                >
+                  <option value="all">All expenses</option>
+                  <option value="1">No-Receipt CoH / GM-approved</option>
                 </select>
               </label>
               <label>
@@ -1927,9 +2539,6 @@ function ExpensesTab(props) {
                 </button>
               </div>
             </form>
-        </article>
-
-        <article className="panel panel-wide">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Expense Ledger</p>
@@ -1938,10 +2547,30 @@ function ExpensesTab(props) {
             <span className="panel-tag">{currency.format(visibleExpenseTotal)} total</span>
           </div>
 
+          {canManageExpenses ? (
+            <div className="expense-coh-bulk-toolbar">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={eligibleExpensesOnPage.length > 0 && eligibleExpensesOnPage.every((expense) => selectedExpenseIds.includes(String(expense.expense_id)))}
+                  onChange={toggleCurrentPageExpenseCertificates}
+                  disabled={!eligibleExpensesOnPage.length}
+                />
+                Select eligible on this page ({eligibleExpensesOnPage.length})
+              </label>
+              <span>{selectedExpenseIds.length} certificate{selectedExpenseIds.length === 1 ? '' : 's'} selected across pages</span>
+              <span>Includes manual expenses marked without a receipt and expenses approved by the GM.</span>
+              <button type="button" className="primary-button" disabled={!selectedExpenseRecords.length} onClick={printSelectedExpenseCertificates}>
+                Print / Save selected PDFs{selectedExpenseRecords.length ? ` (${selectedExpenseRecords.length})` : ''}
+              </button>
+            </div>
+          ) : null}
+
           <TableShell>
             <table className="portal-table">
               <thead>
                 <tr>
+                  {canManageExpenses ? <th>Select CoH</th> : null}
                   <th>Expense ID</th>
                   <th>Description</th>
                   <th>Category</th>
@@ -1959,6 +2588,19 @@ function ExpensesTab(props) {
                     className="clickable-table-row"
                     onClick={() => openExpenseModal(expense)}
                   >
+                    {canManageExpenses ? (
+                      <td>
+                        {isManualExpenseEligibleForCertificate(expense) ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select no-receipt Certificate of Honour for expense ${expense.expense_id}`}
+                            checked={selectedExpenseIds.includes(String(expense.expense_id))}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={() => toggleExpenseCertificate(expense)}
+                          />
+                        ) : <span className="muted-copy">-</span>}
+                      </td>
+                    ) : null}
                     <td>{expense.expense_id}</td>
                     <td>{expense.description}</td>
                     <td>{expense.category}</td>
@@ -1967,16 +2609,31 @@ function ExpensesTab(props) {
                     <td>{props.financeExpenses?.branch_name ?? 'Active branch'}</td>
                     <td>{expense.entered_by || 'Unknown'}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="mini-action"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          openExpenseModal(expense)
-                        }}
-                      >
-                        {canManageExpenses && (!expense.is_frame_reserved || canEditFrameReservationDate) ? 'Edit' : 'View'}
-                      </button>
+                      <div className="expense-row-actions">
+                        <button
+                          type="button"
+                          className="mini-action"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openExpenseModal(expense)
+                          }}
+                        >
+                          {canEditExpenseRecords && (!expense.is_frame_reserved || canEditFrameReservationDate) ? 'Edit' : 'View'}
+                        </button>
+                        {canManageExpenses && isManualExpenseEligibleForCertificate(expense) ? (
+                          <button
+                            type="button"
+                            className="mini-action expense-certificate-action"
+                            title="Print or save a no-receipt Certificate of Honour for this expense"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              printManualExpenseCertificate(expense)
+                            }}
+                          >
+                            No-Receipt CoH
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1987,6 +2644,11 @@ function ExpensesTab(props) {
           <Pagination
             pagination={props.financeExpenses?.pagination}
             onPageChange={(page) => props.setFinanceExpenseQuery((current) => ({ ...current, page }))}
+            showPageNumbers
+            onPerPageChange={(perPage) => {
+              props.setFinanceExpenseFilters((current) => ({ ...current, per_page: perPage, page: 1 }))
+              props.setFinanceExpenseQuery((current) => ({ ...current, per_page: perPage, page: 1 }))
+            }}
           />
         </article>
 
@@ -2140,6 +2802,7 @@ function ExpensesTab(props) {
           </article>
         ) : null}
       </section>
+      ) : null}
 
       {selectedExpense ? (
         <div className="modal-overlay" onClick={closeExpenseModal}>
@@ -2195,6 +2858,11 @@ function ExpensesTab(props) {
                 if (!canEditSelectedExpense) return
                 try {
                   await props.updateExpenseRecord(selectedExpense.expense_id, expenseModalForm)
+                  if (!expenseModalForm.receipt_unavailable && !selectedExpense.gm_approved) {
+                    const updatedId = String(selectedExpense.expense_id)
+                    setSelectedExpenseIds((current) => current.filter((id) => id !== updatedId))
+                    setSelectedExpenseRecords((current) => current.filter((expense) => String(expense.expense_id) !== updatedId))
+                  }
                   closeExpenseModal()
                 } catch {
                 }
@@ -2245,6 +2913,17 @@ function ExpensesTab(props) {
                 </select>
               </label>
 
+              {canEditSelectedExpenseDetails ? (
+                <label className="memo-checkbox full-span expense-receipt-unavailable-option">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(expenseModalForm.receipt_unavailable)}
+                    onChange={(event) => setExpenseModalForm((current) => ({ ...current, receipt_unavailable: event.target.checked }))}
+                  />
+                  <span><strong>No supplier receipt available</strong><small>Save this flag to include the entry in the No-Receipt CoH filter.</small></span>
+                </label>
+              ) : null}
+
               {canEditSelectedExpense ? (
                 <div className="filter-actions-row full-span">
                   <button type="submit" className="primary-button" disabled={props.isUpdatingExpenseRecord}>
@@ -2284,7 +2963,7 @@ function ExpensesTab(props) {
                 <textarea
                   rows="4"
                   value={props.expenseForm.description}
-                  onChange={(event) => props.setExpenseForm((current) => ({ ...current, description: event.target.value }))}
+                  onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { description: event.target.value }))}
                   required
                 />
               </label>
@@ -2295,7 +2974,7 @@ function ExpensesTab(props) {
                   min="0"
                   step="0.01"
                   value={props.expenseForm.amount}
-                  onChange={(event) => props.setExpenseForm((current) => ({ ...current, amount: event.target.value }))}
+                  onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { amount: event.target.value }))}
                   required
                 />
               </label>
@@ -2304,7 +2983,7 @@ function ExpensesTab(props) {
                 <input
                   type="date"
                   value={props.expenseForm.date}
-                  onChange={(event) => props.setExpenseForm((current) => ({ ...current, date: event.target.value }))}
+                  onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { date: event.target.value }))}
                   required
                 />
               </label>
@@ -2312,7 +2991,7 @@ function ExpensesTab(props) {
                 Category
                 <select
                   value={props.expenseForm.category}
-                  onChange={(event) => props.setExpenseForm((current) => ({ ...current, category: event.target.value }))}
+                  onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { category: event.target.value }))}
                   required
                 >
                   {!categoryOptions.length ? <option value="">No categories yet</option> : null}
@@ -2321,9 +3000,128 @@ function ExpensesTab(props) {
                   ))}
                 </select>
               </label>
+              {!isReceptionistExpenseView ? (
+                <label className="memo-checkbox full-span expense-receipt-unavailable-option">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(props.expenseForm.receipt_unavailable)}
+                    onChange={(event) => props.setExpenseForm((current) => ({ ...current, receipt_unavailable: event.target.checked }))}
+                  />
+                  <span><strong>No supplier receipt available</strong><small>Mark this expense so it can be filtered and exported with a backup Certificate of Honour.</small></span>
+                </label>
+              ) : null}
+              {submitsExpenseApprovals ? (
+                <div className="expense-approval-rule full-span">
+                  <strong>General Manager approval required</strong>
+                  <span>{isReceptionistExpenseView
+                    ? `At or below ${currency.format(Number(expenseWorkflowSettings.receptionist_direct_limit ?? 1000))}, submit a Certificate of Honour for GM approval. Above the limit, contact the Accountant. Nothing is recorded before approval.`
+                    : `At or below ${currency.format(Number(expenseWorkflowSettings.accountant_memo_threshold ?? 1000))}, submit a Certificate of Honour for GM approval. Above the limit, complete the Expense Memo below; it will go to the GM with the expense request.`}</span>
+                </div>
+              ) : null}
+              {submitsExpenseApprovals && (isReceptionistExpenseView || isAccountantExpenseView) && draftExpenseAmount > 0 && !receptionistAboveLimit && !isMemoThresholdExpense ? (
+                <section className="certificate-of-honour full-span">
+                  <div className="certificate-of-honour-heading">
+                    <span>Supporting Document</span>
+                    <h4>Certificate of Honour</h4>
+                  </div>
+                  <div className="certificate-of-honour-details">
+                    <span><small>Expense</small><strong>{props.expenseForm.description || 'Description to be completed'}</strong></span>
+                    <span><small>Category</small><strong>{props.expenseForm.category || 'Select category'}</strong></span>
+                    <span><small>Date</small><strong>{props.expenseForm.date || 'Select date'}</strong></span>
+                    <span><small>Amount</small><strong>{currency.format(draftExpenseAmount)}</strong></span>
+                  </div>
+                  <p>I certify that this expense was incurred for official business and that the details and amount above are accurate.</p>
+                  <p className="certificate-clearance-notice">This request goes directly to the General Manager. General Manager clearance is required before this expense is recorded.</p>
+                  <label className="certificate-confirmation">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(props.expenseForm.certificate_confirmed)}
+                      onChange={(event) => props.setExpenseForm((current) => ({ ...current, certificate_confirmed: event.target.checked }))}
+                      required
+                    />
+                    I confirm and submit this Certificate of Honour for General Manager approval.
+                  </label>
+                </section>
+              ) : null}
+              {submitsExpenseApprovals && (isMemoThresholdExpense || receptionistAboveLimit) ? (
+                receptionistAboveLimit ? (
+                  <div className="expense-threshold-block full-span" role="alert">
+                    <strong>Contact the Accountant to record this expense.</strong>
+                    <span>This amount is above the current Receptionist limit of {currency.format(Number(expenseWorkflowSettings.receptionist_direct_limit ?? 1000))}. An Accountant must handle it using the Finance memo workflow.</span>
+                  </div>
+                ) : (
+                  <section className="expense-memo-document full-span">
+                    <div>
+                      <span>Supporting Document · Required</span>
+                      <h4>Expense Memo</h4>
+                    </div>
+                  <label>
+                    Memo subject
+                    <input
+                      value={props.expenseForm.memo_subject ?? ''}
+                      onChange={(event) => props.setExpenseForm((current) => ({ ...current, memo_subject: event.target.value }))}
+                      maxLength="255"
+                      required
+                    />
+                  </label>
+                  <div className="memo-template-grid">
+                    <label>
+                      Purpose / Reason
+                      <input
+                        value={props.expenseForm.memo_purpose ?? ''}
+                        onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { memo_purpose: event.target.value }))}
+                        maxLength="255"
+                        placeholder="What is this expense for?"
+                      />
+                    </label>
+                    <label>
+                      Period / Description
+                      <input
+                        value={props.expenseForm.memo_period ?? ''}
+                        onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { memo_period: event.target.value }))}
+                        maxLength="255"
+                        placeholder="Period or additional details"
+                      />
+                    </label>
+                    <label>
+                      Payment method
+                      <select
+                        value={props.expenseForm.memo_payment_method ?? 'bank'}
+                        onChange={(event) => props.setExpenseForm((current) => updateExpenseMemoFields(current, { memo_payment_method: event.target.value }))}
+                      >
+                        <option value="bank">Bank</option>
+                        <option value="cash">Cash</option>
+                        <option value="mobile money">Mobile money</option>
+                        <option value="cash / bank">Cash / bank</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label>
+                    Memo body
+                    <textarea
+                      rows="7"
+                      value={props.expenseForm.memo_justification ?? ''}
+                      onChange={(event) => props.setExpenseForm((current) => ({ ...current, memo_justification: event.target.value }))}
+                      maxLength="4000"
+                      required
+                    />
+                  </label>
+                  {accountantMemoSignatureAvailable ? (
+                    <p className="expense-signature-ready">Your reusable Accountant signature will be attached to this memo.</p>
+                  ) : (
+                    <p className="expense-signature-required" role="alert">A saved reusable Accountant signature is required. Upload it in the <a href="#/memos">Memos signature library</a>, then return here to submit the expense.</p>
+                  )}
+                  <p className="certificate-clearance-notice">This completed memo will be attached to the expense request for the General Manager to review and approve. You do not need to leave this page or create a separate memo.</p>
+                  </section>
+                )
+              ) : null}
               <div className="filter-actions-row full-span">
-                <button type="submit" className="primary-button" disabled={props.isSavingExpense}>
-                  {props.isSavingExpense ? 'Saving expense...' : 'Save expense'}
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={props.isSavingExpense || receptionistAboveLimit || ((isReceptionistExpenseView || isAccountantExpenseView) && draftExpenseAmount > 0 && !receptionistAboveLimit && !isMemoThresholdExpense && !props.expenseForm.certificate_confirmed) || (submitsExpenseApprovals && isMemoThresholdExpense && (!accountantMemoSignatureAvailable || !props.expenseForm.memo_subject?.trim() || !props.expenseForm.memo_justification?.trim()))}
+                >
+                  {props.isSavingExpense ? 'Submitting expense...' : submitsExpenseApprovals ? 'Submit for General Manager approval' : 'Save expense'}
                 </button>
               </div>
             </form>
@@ -2365,7 +3163,7 @@ function ReceiptReprintsOnlyView(props) {
           </div>
 
           <form
-            className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               props.setFinancePaymentQuery((current) => ({
@@ -2600,7 +3398,7 @@ function CeoExpenseReviewView(props) {
           <span className="panel-tag">{props.financeExpenses?.pagination?.total ?? 0} records</span>
         </div>
 
-        <form className="ceo-expense-filter-form" onSubmit={applyCeoExpenseFilters}>
+        <form className="ceo-expense-filter-form table-attached-filter" onSubmit={applyCeoExpenseFilters}>
           <label>
             Search expense notes
             <input
@@ -2755,14 +3553,43 @@ function TableShell({ children }) {
   return <div className="table-shell">{children}</div>
 }
 
-function Pagination({ pagination, onPageChange }) {
+function Pagination({ pagination, onPageChange, showPageNumbers = false, onPerPageChange = null }) {
   if (!pagination) return null
+  const totalPages = Math.max(Number(pagination.total_pages ?? 1), 1)
   return (
-    <div className="pagination-bar">
-      <span className="muted-copy">Page {pagination.page} of {pagination.total_pages || 1}</span>
+    <div className={`pagination-bar${showPageNumbers ? ' pagination-bar-numbered' : ''}`}>
+      <div className="pagination-summary">
+        <span className="muted-copy">Page {pagination.page} of {totalPages} · {pagination.total ?? 0} records</span>
+        {onPerPageChange ? (
+          <label className="pagination-size-control">
+            Rows per page
+            <select value={pagination.per_page ?? 12} onChange={(event) => onPerPageChange(Number(event.target.value))}>
+              <option value="12">12</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+        ) : null}
+      </div>
       <div className="pagination-actions">
         <button type="button" className="mini-action" disabled={pagination.page <= 1} onClick={() => onPageChange(Math.max(pagination.page - 1, 1))}>Previous</button>
-        <button type="button" className="mini-action" disabled={pagination.page >= pagination.total_pages} onClick={() => onPageChange(Math.min(pagination.page + 1, pagination.total_pages || pagination.page))}>Next</button>
+        {showPageNumbers ? (
+          <div className="pagination-number-list" aria-label="Expense ledger pages">
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <button
+                key={page}
+                type="button"
+                className={Number(pagination.page) === page ? 'pagination-number is-current' : 'pagination-number'}
+                aria-current={Number(pagination.page) === page ? 'page' : undefined}
+                aria-label={`Page ${page}`}
+                onClick={() => onPageChange(page)}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <button type="button" className="mini-action" disabled={pagination.page >= totalPages} onClick={() => onPageChange(Math.min(pagination.page + 1, totalPages))}>Next</button>
       </div>
     </div>
   )

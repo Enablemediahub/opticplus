@@ -648,7 +648,7 @@ export default function InsuranceSection(props) {
           ) : null}
 
           <form
-            className="patient-filter-grid"
+            className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               props.setInsuranceQuery((current) => ({

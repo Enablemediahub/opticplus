@@ -493,7 +493,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
           </div>
 
           <div className="payroll-controls-layout">
-            <form className="patient-filter-grid payroll-filter-grid" onSubmit={(event) => {
+            <form className="patient-filter-grid payroll-filter-grid table-attached-filter" onSubmit={(event) => {
               event.preventDefault()
               setQuery((current) => ({ ...current, ...filters }))
             }}>

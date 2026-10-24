@@ -452,7 +452,7 @@ function StockOverviewTab(props) {
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             props.setInventoryQuery((current) => ({ ...current, ...props.inventoryFilters, page: 1 }))
@@ -981,7 +981,7 @@ function FramesTrackerTab(props) {
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             props.setFrameTrackerQuery({ ...props.frameTrackerFilters })
@@ -1128,7 +1128,7 @@ function LensTrackerTab(props) {
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             props.setLensTrackerQuery(props.lensTrackerFilters)

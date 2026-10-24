@@ -429,6 +429,7 @@ const defaultFinanceExpenseFilters = () => ({
   start_date: '',
   end_date: '',
   category: 'all',
+  no_receipt_coh: 'all',
   search: '',
   sort: 'date_desc',
   page: 1,
@@ -446,6 +447,13 @@ const defaultExpenseForm = (category = '') => ({
   date: todayIso(),
   category,
   other_category: '',
+  memo_subject: '',
+  memo_justification: '',
+  memo_purpose: '',
+  memo_period: '',
+  memo_payment_method: 'bank',
+  certificate_confirmed: false,
+  receipt_unavailable: false,
 })
 
 const defaultFinancePaymentFilters = () => ({
@@ -3226,7 +3234,7 @@ function App() {
 
       if (activeView === 'Expenses') {
         const branchId = session.is_admin ? selectedBranchId : session.branch_id
-        const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
+        const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}${financeExpenseQuery.no_receipt_coh === '1' ? '&no_receipt_coh=1' : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
         setFinanceExpenses(expensesResponse)
       }
     } catch (error) {
@@ -3707,7 +3715,7 @@ function App() {
     setFinanceError('')
     setFinanceSuccess('')
     try {
-      await apiFetch('/finance/expenses', {
+      const response = await apiFetch('/finance/expenses', {
         method: 'POST',
         token,
         freshIdempotencyKey: true,
@@ -3717,7 +3725,10 @@ function App() {
           amount: Number(expenseForm.amount || 0),
         },
       })
-      setFinanceSuccess('Expense saved successfully.')
+      const expenseSubmissionMessage = response.message || (response.pending_approval
+        ? 'Expense submitted for General Manager approval.'
+        : 'Expense saved successfully.')
+      setFinanceSuccess(expenseSubmissionMessage)
       setExpenseForm(defaultExpenseForm(financeExpenses?.categories?.[0] ?? ''))
       const defaultExpenseQuery = session.role === 'receptionist'
         ? defaultReceptionistExpenseFilters()
@@ -3742,20 +3753,71 @@ function App() {
         const expensesResponse = await apiFetch(`/finance/expenses?${expenseParams.toString()}`, { token })
         setFinanceExpenses(expensesResponse)
       } catch {
-        setFinanceSuccess('Expense saved successfully. The expense ledger will refresh shortly.')
+        setFinanceSuccess(`${expenseSubmissionMessage} The expense view will refresh shortly.`)
       }
       setFinancePaymentQuery((current) => ({ ...current }))
       try {
         const summary = await apiFetch(`/finance/summary?branch_id=${branchId}`, { token })
         setFinanceSummary(summary)
       } catch {
-        setFinanceSuccess('Expense saved successfully. The finance summary will refresh shortly.')
+        setFinanceSuccess(`${expenseSubmissionMessage} The finance summary will refresh shortly.`)
       }
     } catch (error) {
       setFinanceError(error.message)
       throw error
     } finally {
       setIsSavingExpense(false)
+    }
+  }
+
+  async function saveExpenseWorkflowSettings(settings) {
+    setFinanceError('')
+    setFinanceSuccess('')
+    try {
+      const response = await apiFetch('/finance/expense-workflow-settings', {
+        method: 'PUT',
+        token,
+        body: settings,
+      })
+      const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+      const refreshedExpenses = await apiFetch(`/finance/expenses?branch_id=${branchId}&per_page=5`, { token })
+      const persistedSettings = refreshedExpenses.expense_workflow_settings
+      const accountantLimitSaved = Number(persistedSettings?.accountant_memo_threshold) === Number(settings.accountant_memo_threshold)
+      const receptionistLimitSaved = Number(persistedSettings?.receptionist_direct_limit) === Number(settings.receptionist_direct_limit)
+      if (!accountantLimitSaved || !receptionistLimitSaved) {
+        throw new Error('The server did not retain the new expense limits. Check that the latest backend changes and expense_workflow_settings database table are installed.')
+      }
+      setFinanceExpenses((current) => ({ ...current, expense_workflow_settings: persistedSettings }))
+      setFinanceSuccess(response.message || 'Expense workflow limits saved.')
+      return true
+    } catch (error) {
+      setFinanceError(error.message)
+      return false
+    }
+  }
+
+  async function reviewExpenseApproval(requestId, decision, decisionNote = '', requestBranchId = null) {
+    const branchId = requestBranchId || (session.is_admin ? selectedBranchId : session.branch_id)
+    setFinanceError('')
+    setFinanceSuccess('')
+    try {
+      const response = await apiFetch(`/finance/expense-approvals/${requestId}/decision?branch_id=${branchId}`, {
+        method: 'POST',
+        token,
+        body: { decision, decision_note: decisionNote },
+      })
+      setFinanceSuccess(response.message || 'Expense request reviewed.')
+      setFinanceExpenseQuery((current) => ({ ...current }))
+      try {
+        const summary = await apiFetch(`/finance/summary?branch_id=${branchId}`, { token })
+        setFinanceSummary(summary)
+      } catch {
+        // The expense list will refresh independently even if summary refresh is unavailable.
+      }
+      return true
+    } catch (error) {
+      setFinanceError(error.message)
+      return false
     }
   }
 
@@ -3827,7 +3889,7 @@ function App() {
         body: { name, branch_id: branchId },
       })
 
-      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
+      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}${financeExpenseQuery.no_receipt_coh === '1' ? '&no_receipt_coh=1' : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
       setFinanceExpenses(expensesResponse)
       const categoriesResponse = await apiFetch('/finance/expense-categories', { token })
       const nextCategories = categoriesResponse.categories ?? []
@@ -3866,7 +3928,7 @@ function App() {
         body: { name, branch_id: branchId },
       })
 
-      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
+      const expensesResponse = await apiFetch(`/finance/expenses?branch_id=${branchId}&page=${financeExpenseQuery.page || 1}&per_page=${financeExpenseQuery.per_page || 12}${financeExpenseQuery.filter && financeExpenseQuery.filter !== 'all' ? `&filter=${encodeURIComponent(financeExpenseQuery.filter)}` : ''}${financeExpenseQuery.start_date ? `&start_date=${encodeURIComponent(financeExpenseQuery.start_date)}` : ''}${financeExpenseQuery.end_date ? `&end_date=${encodeURIComponent(financeExpenseQuery.end_date)}` : ''}${financeExpenseQuery.category && financeExpenseQuery.category !== 'all' ? `&category=${encodeURIComponent(financeExpenseQuery.category)}` : ''}${financeExpenseQuery.search ? `&search=${encodeURIComponent(financeExpenseQuery.search)}` : ''}${financeExpenseQuery.no_receipt_coh === '1' ? '&no_receipt_coh=1' : ''}&sort=${encodeURIComponent(financeExpenseQuery.sort || 'date_desc')}`, { token })
       setFinanceExpenses(expensesResponse)
       const categoriesResponse = await apiFetch('/finance/expense-categories', { token })
       setExpenseCategoryCatalog(categoriesResponse.categories ?? [])
@@ -5202,6 +5264,8 @@ function App() {
                 branchOptions={branchOptions}
                 apiFetch={apiFetch}
                 setActiveView={setActiveView}
+                dashboardHeroImage={dashboardHeroImage}
+                dashboardHeroPosition={dashboardHeroPosition}
               />
             ) : null}
 
@@ -5326,6 +5390,8 @@ function App() {
                 expenseForm={expenseForm}
                 setExpenseForm={setExpenseForm}
                 saveExpenseRecord={saveExpenseRecord}
+                saveExpenseWorkflowSettings={saveExpenseWorkflowSettings}
+                reviewExpenseApproval={reviewExpenseApproval}
                 updateExpenseRecord={updateExpenseRecord}
                 deleteExpenseRecord={deleteExpenseRecord}
                 saveExpenseCategory={saveExpenseCategory}
@@ -5357,6 +5423,7 @@ function App() {
                 insuranceMeta={insuranceMeta}
                 financeError={financeError}
                 financeSuccess={financeSuccess}
+                token={token}
                 isLoadingFinanceSummary={isLoadingFinanceSummary}
                 isLoadingFinanceSales={isLoadingFinanceSales}
                 isLoadingFinanceExpenses={isLoadingFinanceExpenses}
@@ -5388,6 +5455,7 @@ function App() {
                 expenseForm={expenseForm}
                 setExpenseForm={setExpenseForm}
                 saveExpenseRecord={saveExpenseRecord}
+                reviewExpenseApproval={reviewExpenseApproval}
                 updateExpenseRecord={updateExpenseRecord}
                 deleteExpenseRecord={deleteExpenseRecord}
                 saveExpenseCategory={saveExpenseCategory}
@@ -5450,6 +5518,7 @@ function App() {
                 expenseForm={expenseForm}
                 setExpenseForm={setExpenseForm}
                 saveExpenseRecord={saveExpenseRecord}
+                reviewExpenseApproval={reviewExpenseApproval}
                 updateExpenseRecord={updateExpenseRecord}
                 deleteExpenseRecord={deleteExpenseRecord}
                 saveExpenseCategory={saveExpenseCategory}
@@ -5499,6 +5568,7 @@ function App() {
             {activeView === 'Expenses' ? (
               <FinanceSection
                 pageMode="expenses"
+                selectedBranchId={selectedBranchId}
                 financeSummary={financeSummary}
                 financeSales={financeSales}
                 financeExpenses={financeExpenses}
@@ -5512,6 +5582,8 @@ function App() {
                 expenseForm={expenseForm}
                 setExpenseForm={setExpenseForm}
                 saveExpenseRecord={saveExpenseRecord}
+                saveExpenseWorkflowSettings={saveExpenseWorkflowSettings}
+                reviewExpenseApproval={reviewExpenseApproval}
                 updateExpenseRecord={updateExpenseRecord}
                 deleteExpenseRecord={deleteExpenseRecord}
                 saveExpenseCategory={saveExpenseCategory}

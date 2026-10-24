@@ -626,7 +626,7 @@ export default function PatientsSection({
           </div>
 
           <form
-            className="patient-filter-grid"
+            className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               setPatientQuery((current) => ({
@@ -1524,7 +1524,13 @@ function ManagerPatientsWorkspace({
       <article className="panel patient-manager-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Database View</p>
+            <p className="eyebrow patient-database-eyebrow">
+              <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" />
+                <circle cx="19" cy="6" r="1.5" />
+              </svg>
+              Database View
+            </p>
             <h3>Patient database analytics and filters</h3>
             <p className="muted-copy">
               Filter the branch database, compare workload mix, and surface patients that need follow-up or assignment.
@@ -1544,105 +1550,6 @@ function ManagerPatientsWorkspace({
             <span>Actionable patient table</span>
           </div>
         </div>
-
-        <form
-          className="patient-filter-grid"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setPatientQuery((current) => ({
-              ...current,
-              ...patientFilters,
-              page: 1,
-            }))
-          }}
-        >
-          <Field label="Search">
-            <input
-              value={patientFilters.search}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, search: event.target.value }))}
-              placeholder="Folder ID, name, phone, email"
-            />
-          </Field>
-          <Field label="Status">
-            <select
-              value={patientFilters.status}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, status: event.target.value }))}
-            >
-              <option value="all">All</option>
-              {(patientMeta?.statuses ?? ['pending', 'seen']).map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Sex">
-            <select
-              value={patientFilters.sex}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, sex: event.target.value }))}
-            >
-              <option value="all">All</option>
-              {(patientMeta?.sexes ?? ['Male', 'Female']).map((sex) => (
-                <option key={sex} value={sex}>
-                  {sex}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Purpose">
-            <select
-              value={patientFilters.purpose}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, purpose: event.target.value }))}
-            >
-              <option value="all">All</option>
-              {(patientMeta?.purposes ?? []).map((purpose) => (
-                <option key={purpose} value={purpose}>
-                  {purpose}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Date from">
-            <input
-              type="date"
-              value={patientFilters.date_from}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, date_from: event.target.value }))}
-            />
-          </Field>
-          <Field label="Date to">
-            <input
-              type="date"
-              value={patientFilters.date_to}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, date_to: event.target.value }))}
-            />
-          </Field>
-          <Field label="Rows per page">
-            <select
-              value={patientFilters.per_page}
-              onChange={(event) => setPatientFilters((current) => ({ ...current, per_page: Number(event.target.value) }))}
-            >
-              {[10, 15, 25, 50].map((size) => (
-                <option key={size} value={size}>
-                  {size} rows
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="filter-actions-row full-span">
-            <button type="submit" className="primary-button">Apply manager filters</button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                setPatientFilters(defaultFilters)
-                setPatientQuery(defaultFilters)
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        </form>
 
         <div className="finance-chip-row patient-manager-chip-row">
           <div className="finance-chip">
@@ -1705,6 +1612,51 @@ function ManagerPatientsWorkspace({
           </div>
           <span className="panel-tag">{patientData?.pagination?.total ?? 0} rows in view</span>
         </div>
+
+        <form
+          className="patient-filter-grid table-attached-filter"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setPatientQuery((current) => ({ ...current, ...patientFilters, page: 1 }))
+          }}
+        >
+          <Field label="Search">
+            <input value={patientFilters.search} onChange={(event) => setPatientFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Folder ID, name, phone, email" />
+          </Field>
+          <Field label="Status">
+            <select value={patientFilters.status} onChange={(event) => setPatientFilters((current) => ({ ...current, status: event.target.value }))}>
+              <option value="all">All</option>
+              {(patientMeta?.statuses ?? ['pending', 'seen']).map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </Field>
+          <Field label="Sex">
+            <select value={patientFilters.sex} onChange={(event) => setPatientFilters((current) => ({ ...current, sex: event.target.value }))}>
+              <option value="all">All</option>
+              {(patientMeta?.sexes ?? ['Male', 'Female']).map((sex) => <option key={sex} value={sex}>{sex}</option>)}
+            </select>
+          </Field>
+          <Field label="Purpose">
+            <select value={patientFilters.purpose} onChange={(event) => setPatientFilters((current) => ({ ...current, purpose: event.target.value }))}>
+              <option value="all">All</option>
+              {(patientMeta?.purposes ?? []).map((purpose) => <option key={purpose} value={purpose}>{purpose}</option>)}
+            </select>
+          </Field>
+          <Field label="Date from">
+            <input type="date" value={patientFilters.date_from} onChange={(event) => setPatientFilters((current) => ({ ...current, date_from: event.target.value }))} />
+          </Field>
+          <Field label="Date to">
+            <input type="date" value={patientFilters.date_to} onChange={(event) => setPatientFilters((current) => ({ ...current, date_to: event.target.value }))} />
+          </Field>
+          <Field label="Rows per page">
+            <select value={patientFilters.per_page} onChange={(event) => setPatientFilters((current) => ({ ...current, per_page: Number(event.target.value) }))}>
+              {[10, 15, 25, 50].map((size) => <option key={size} value={size}>{size} rows</option>)}
+            </select>
+          </Field>
+          <div className="filter-actions-row full-span">
+            <button type="submit" className="primary-button">Apply manager filters</button>
+            <button type="button" className="ghost-button" onClick={() => { setPatientFilters(defaultFilters); setPatientQuery(defaultFilters) }}>Reset</button>
+          </div>
+        </form>
 
         {isLoadingPatients && !patientData ? <p className="muted-copy">Loading patient records...</p> : null}
 
@@ -2098,7 +2050,7 @@ function OptometristPatientsWorkspace({
             </div>
 
             <form
-              className="patient-filter-grid"
+              className="patient-filter-grid table-attached-filter"
               onSubmit={(event) => {
                 event.preventDefault()
                 setPatientQuery((current) => ({ ...current, ...patientFilters, page: 1 }))
@@ -2369,7 +2321,7 @@ function OptometristPatientsWorkspace({
             </div>
 
             <form
-              className="patient-filter-grid"
+              className="patient-filter-grid table-attached-filter"
               onSubmit={(event) => {
                 event.preventDefault()
                 setPatientQuery((current) => ({ ...current, ...patientFilters, page: 1 }))
@@ -2579,7 +2531,7 @@ function OptometristPatientsWorkspace({
           </div>
 
           <form
-            className="patient-filter-grid"
+            className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               setPatientQuery((current) => ({ ...current, ...patientFilters, page: 1 }))

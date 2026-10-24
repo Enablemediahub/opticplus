@@ -242,7 +242,7 @@ export default function BillingSection({
           </div>
 
           <form
-            className="patient-filter-grid"
+            className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               setBillingQuery((current) => ({
@@ -1142,7 +1142,7 @@ function ManagerBillingWorkspace({
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             setBillingQuery((current) => ({ ...current, ...billingFilters, page: 1 }))

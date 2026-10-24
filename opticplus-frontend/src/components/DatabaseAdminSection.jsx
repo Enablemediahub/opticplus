@@ -146,7 +146,7 @@ function isRiskyColumn(column, primaryKey) {
   return column.name === primaryKey || column.key === 'PRI' || column.name.endsWith('_id')
 }
 
-export default function DatabaseAdminSection({ token, selectedBranchId, setSelectedBranchId, branchOptions, apiFetch, setActiveView }) {
+export default function DatabaseAdminSection({ token, selectedBranchId, setSelectedBranchId, branchOptions, apiFetch, setActiveView, dashboardHeroImage, dashboardHeroPosition }) {
   const [filters, setFilters] = useState(defaultFilters)
   const [summaryData, setSummaryData] = useState(null)
   const [tableData, setTableData] = useState(null)
@@ -753,22 +753,33 @@ export default function DatabaseAdminSection({ token, selectedBranchId, setSelec
 
   return (
     <section className="finance-section database-workspace">
-      <div className="patients-header database-page-header">
-        <div>
-          <p className="eyebrow">Database</p>
-          <h3>Live table explorer and duplicate cleaner</h3>
-          <p className="header-copy">
-            Navigate tables like a database client, spread the live rows across a wider workspace, and inspect duplicates before cleaning records.
-          </p>
-          <div className="database-meta-strip">
-            <span><strong>Connected DB:</strong> {summaryData?.database_name || 'Loading...'}</span>
-            <span><strong>Branch view:</strong> {summaryData?.branch_name || 'Loading...'}</span>
-            <span><strong>Access:</strong> {summaryData?.can_write ? 'Write-enabled' : 'Read-only'}</span>
+      <div
+        className="portal-hero database-page-hero"
+        style={dashboardHeroImage ? { '--portal-hero-wallpaper': `url("${dashboardHeroImage}")`, '--portal-hero-position': dashboardHeroPosition } : undefined}
+      >
+        <div className="portal-hero-main">
+          <div className="portal-hero-copy">
+            <p className="eyebrow">Database Workspace</p>
+            <h2>Live table explorer</h2>
+            <div className="portal-hero-meta">
+              <span className="portal-hero-branch">{summaryData?.branch_name || 'Loading branch...'}</span>
+              <span className="portal-hero-role">General Manager</span>
+            </div>
+            <div className="portal-hero-page">
+              <strong>Search, inspect, and manage database records</strong>
+              <p className="header-copy">Browse live tables, review linked records, and resolve duplicates from one workspace.</p>
+            </div>
+            <div className="database-meta-strip">
+              <span><strong>Connected DB:</strong> {summaryData?.database_name || 'Loading...'}</span>
+              <span><strong>Access:</strong> {summaryData?.can_write ? 'Write-enabled' : 'Read-only'}</span>
+            </div>
+          </div>
+          <div className="header-actions portal-hero-actions">
+            <button type="button" className="ghost-button" onClick={() => setActiveView('Dashboard')}>
+              Return to Overview Dashboard
+            </button>
           </div>
         </div>
-        <button type="button" className="ghost-button" onClick={() => setActiveView('Dashboard')}>
-          Return to Overview Dashboard
-        </button>
       </div>
 
       {error ? <div className="message-banner error">{error}</div> : null}
@@ -792,67 +803,69 @@ export default function DatabaseAdminSection({ token, selectedBranchId, setSelec
                 : 'Choose a table tab to browse live rows and duplicate-sensitive columns.'}
             </p>
           </div>
-          <div className="database-toolbar">
-            <label className="database-table-select">
-              Branch
-              <select value={selectedBranchId} onChange={(event) => setSelectedBranchId(Number(event.target.value))}>
-                {(branchOptions ?? []).map((branch) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="database-table-search">
-              Find table
-              <input
-                value={filters.table_search}
-                placeholder="Search tables"
-                onChange={(event) => setFilters((current) => ({ ...current, table_search: event.target.value }))}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    setAppliedTableSearch(filters.table_search.trim())
-                    setTablesReloadNonce((current) => current + 1)
-                  }
-                }}
-              />
-            </label>
-            <label>
-              Rows per page
-              <select
-                value={filters.per_page}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value)
-                  setFilters((current) => ({ ...current, per_page: nextValue }))
-                  setPage(1)
-                }}
-              >
-                {[25, 50, 100].map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="ghost-button"
-              disabled={!selectedTable}
-              onClick={() => openDuplicatesModal()}
-            >
-              Duplicates
-            </button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                setSummaryReloadNonce((current) => current + 1)
-                setTablesReloadNonce((current) => current + 1)
-                if (selectedTable) {
-                  setTableReloadNonce((current) => current + 1)
+        </div>
+
+        <div className="database-toolbar table-attached-filter">
+          <label className="database-table-search">
+            Search tables
+            <input
+              className="database-search-input"
+              value={filters.table_search}
+              placeholder="Enter a table name"
+              onChange={(event) => setFilters((current) => ({ ...current, table_search: event.target.value }))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  setAppliedTableSearch(filters.table_search.trim())
+                  setTablesReloadNonce((current) => current + 1)
                 }
               }}
+            />
+          </label>
+          <label className="database-table-select">
+            Branch
+            <select value={selectedBranchId} onChange={(event) => setSelectedBranchId(Number(event.target.value))}>
+              {(branchOptions ?? []).map((branch) => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Rows per page
+            <select
+              value={filters.per_page}
+              onChange={(event) => {
+                const nextValue = Number(event.target.value)
+                setFilters((current) => ({ ...current, per_page: nextValue }))
+                setPage(1)
+              }}
             >
-              Refresh
-            </button>
-          </div>
+              {[25, 50, 100].map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={!selectedTable}
+            onClick={() => openDuplicatesModal()}
+          >
+            Duplicates
+          </button>
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => {
+              setSummaryReloadNonce((current) => current + 1)
+              setTablesReloadNonce((current) => current + 1)
+              if (selectedTable) {
+                setTableReloadNonce((current) => current + 1)
+              }
+            }}
+          >
+            Refresh
+          </button>
         </div>
 
         <div className="database-tab-strip">
@@ -909,7 +922,7 @@ export default function DatabaseAdminSection({ token, selectedBranchId, setSelec
             </div>
 
             <form
-              className="database-filter-row"
+              className="database-filter-row table-attached-filter"
               onSubmit={(event) => {
                 event.preventDefault()
                 setPage(1)
@@ -921,6 +934,7 @@ export default function DatabaseAdminSection({ token, selectedBranchId, setSelec
               <label className="full-span">
                 Search rows
                 <input
+                  className="database-search-input"
                   value={filters.search}
                   placeholder={tableSearchHint(tableData)}
                   onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}

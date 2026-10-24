@@ -81,6 +81,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/finance/sales', [FinanceController::class, 'sales']);
         Route::get('/finance/expenses', [FinanceController::class, 'expenses']);
         Route::post('/finance/expenses', [FinanceController::class, 'storeExpense']);
+        Route::put('/finance/expense-workflow-settings', [FinanceController::class, 'saveExpenseWorkflowSettings']);
+        Route::get('/finance/expense-approvals/{requestId}/memo-signature', [FinanceController::class, 'expenseApprovalMemoSignature']);
+        Route::get('/finance/expense-approvals/{requestId}/gm-signature', [FinanceController::class, 'expenseApprovalGmSignature']);
+        Route::post('/finance/expense-approvals/{requestId}/decision', [FinanceController::class, 'reviewExpenseApproval']);
         Route::put('/finance/expenses/{expenseId}', [FinanceController::class, 'updateExpense']);
         Route::delete('/finance/expenses/{expenseId}', [FinanceController::class, 'deleteExpense']);
         Route::get('/finance/expense-categories', [FinanceController::class, 'expenseCategories']);
@@ -163,6 +167,11 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/manager/employees', [ManagerController::class, 'storeEmployee']);
         Route::get('/manager/employees/{employeeId}', [ManagerController::class, 'employeeDetail']);
         Route::post('/manager/employees/{employeeId}', [ManagerController::class, 'updateEmployee']);
+        Route::get('/memos/signature', [MemoController::class, 'signature']);
+        Route::get('/memos/signature/image', [MemoController::class, 'signatureImage']);
+        Route::get('/memos/{memoId}/signature-image/{role}', [MemoController::class, 'memoSignatureImage']);
+        Route::post('/memos/signature', [MemoController::class, 'saveSignature']);
+        Route::delete('/memos/signature', [MemoController::class, 'deleteSignature']);
         Route::get('/memos/meta', [MemoController::class, 'meta']);
         Route::get('/memos', [MemoController::class, 'index']);
         Route::post('/memos', [MemoController::class, 'store']);

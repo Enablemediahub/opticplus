@@ -57,7 +57,7 @@ export default function LensTrackerSection(props) {
           </div>
 
           <form
-            className="patient-filter-grid"
+            className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               props.setLensTrackerQuery(props.lensTrackerFilters)

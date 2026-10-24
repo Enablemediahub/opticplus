@@ -101,7 +101,7 @@ export default function BsmiTrackingSection(props) {
           </div>
 
           <form
-            className="patient-filter-grid"
+            className="patient-filter-grid table-attached-filter"
             onSubmit={(event) => {
               event.preventDefault()
               setPage(1)

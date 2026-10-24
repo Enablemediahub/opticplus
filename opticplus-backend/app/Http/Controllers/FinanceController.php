@@ -1333,6 +1333,7 @@ class FinanceController extends Controller
     {
         $this->ensureExpenseCategoriesSchema();
         $this->ensureExpenseRecorderSchema();
+        $this->ensureExpenseWorkflowSettingsSchema();
 
         $branchId = $this->resolveBranchId($request);
         $this->ensureLensCostExpensesSynced($branchId);
@@ -1361,6 +1362,40 @@ class FinanceController extends Controller
         $query = DB::table('expenses');
         $this->applyBranchScope($query, 'branch_id', $branchId);
         $this->applyExpenseFilters($query, $request);
+        if ($request->boolean('no_receipt_coh')) {
+            $hasReceiptFlag = Schema::hasColumn('expenses', 'receipt_unavailable');
+            $hasApprovalRequests = Schema::hasTable('expense_approval_requests');
+            $query->where(function ($certificateQuery) use ($hasReceiptFlag, $hasApprovalRequests): void {
+                if ($hasReceiptFlag) {
+                    $certificateQuery->where('receipt_unavailable', true);
+                }
+                if ($hasApprovalRequests) {
+                    $exists = DB::table('expense_approval_requests as coh_request')
+                        ->selectRaw('1')
+                        ->whereColumn('coh_request.resulting_expense_id', 'expenses.expense_id')
+                        ->where('coh_request.status', 'approved');
+                    if ($hasReceiptFlag) {
+                        $certificateQuery->orWhereExists($exists);
+                    } else {
+                        $certificateQuery->whereExists($exists);
+                    }
+                }
+                if (! $hasReceiptFlag && ! $hasApprovalRequests) {
+                    $certificateQuery->whereRaw('1 = 0');
+                }
+            });
+            if (Schema::hasColumn('expenses', 'source_type')) {
+                $query->where(function ($sourceQuery): void {
+                    $sourceQuery->whereNull('source_type')->orWhere('source_type', '');
+                });
+            }
+            $query->whereRaw("LOWER(TRIM(COALESCE(category, ''))) NOT LIKE 'frame%'")
+                ->whereRaw("LOWER(TRIM(COALESCE(category, ''))) NOT LIKE 'lens%'")
+                ->whereRaw("LOWER(TRIM(COALESCE(category, ''))) NOT LIKE 'payroll%'")
+                ->whereRaw("LOWER(TRIM(COALESCE(category, ''))) NOT LIKE 'salary%'")
+                ->whereRaw("LOWER(COALESCE(description, '')) NOT LIKE '%payroll%'")
+                ->whereRaw("LOWER(COALESCE(description, '')) NOT LIKE '%salary advance%'");
+        }
         $filteredStatsQuery = clone $query;
         $widgetStatsQuery = DB::table('expenses');
         $this->applyBranchScope($widgetStatsQuery, 'branch_id', $branchId);
@@ -1375,6 +1410,12 @@ class FinanceController extends Controller
             'category',
             'branch_id',
         ];
+        if (Schema::hasColumn('expenses', 'receipt_unavailable')) {
+            $selectColumns[] = 'receipt_unavailable';
+        }
+        if (Schema::hasTable('expense_approval_requests')) {
+            $selectColumns[] = DB::raw("EXISTS (SELECT 1 FROM expense_approval_requests approved_request WHERE approved_request.resulting_expense_id = expenses.expense_id AND approved_request.branch_id = expenses.branch_id AND approved_request.status = 'approved') as gm_approved");
+        }
         if (Schema::hasColumn('expenses', 'source_type')) {
             $selectColumns[] = 'source_type';
         }
@@ -1406,6 +1447,8 @@ class FinanceController extends Controller
                     'date' => $expense->date,
                     'category' => $expense->category,
                     'branch_id' => (int) $expense->branch_id,
+                    'receipt_unavailable' => (bool) ($expense->receipt_unavailable ?? false),
+                    'gm_approved' => (bool) ($expense->gm_approved ?? false),
                     'source_type' => $expense->source_type ?? null,
                     'source_id' => isset($expense->source_id) ? (int) $expense->source_id : null,
                     'entered_by' => $expense->entered_by ?? null,
@@ -1438,6 +1481,53 @@ class FinanceController extends Controller
             ->limit(20)
             ->get();
 
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        $approvalRequests = collect();
+        if ($user && Schema::hasTable('expense_approval_requests')) {
+            $approvalQuery = DB::table('expense_approval_requests as ear')
+                ->leftJoin('users as submitter', 'submitter.id', '=', 'ear.submitted_by')
+                ->leftJoin('users as reviewer', 'reviewer.id', '=', 'ear.reviewed_by');
+            $this->applyBranchScope($approvalQuery, 'ear.branch_id', $branchId);
+            if ($role !== 'manager') {
+                $approvalQuery->where('ear.submitted_by', $user->id);
+            }
+            $approvalRequests = $approvalQuery
+                ->orderByRaw("CASE WHEN ear.status = 'pending' THEN 0 ELSE 1 END")
+                ->orderByDesc('ear.submitted_at')
+                ->limit(50)
+                ->get([
+                    'ear.id', 'ear.branch_id', 'ear.description', 'ear.amount', 'ear.date', 'ear.category',
+                    'ear.document_type', 'ear.supporting_document_json', 'ear.status', 'ear.submitted_by',
+                    'ear.submitted_role', 'ear.submitted_at', 'ear.reviewed_by', 'ear.reviewed_at',
+                    'ear.decision_note', 'ear.resulting_expense_id', 'submitter.name as submitted_by_name',
+                    'reviewer.name as reviewed_by_name',
+                ])
+                ->map(function ($approval): array {
+                    $approval->supporting_document = json_decode((string) $approval->supporting_document_json, true) ?: [];
+                    unset($approval->supporting_document_json);
+
+                    return (array) $approval;
+                });
+        }
+        $accountantMemoSignatureAvailable = false;
+        $gmExpenseSignatureAvailable = false;
+        if ($user && $role === 'accountant' && Schema::hasTable('memo_user_signatures')) {
+            $signaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+            $accountantMemoSignatureAvailable = is_string($signaturePath)
+                && Str::startsWith($signaturePath, 'uploads/memo-signatures/')
+                && ! str_contains($signaturePath, '..')
+                && is_file(public_path($signaturePath))
+                && is_readable(public_path($signaturePath));
+        }
+        if ($user && $role === 'manager' && Schema::hasTable('memo_user_signatures')) {
+            $signaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+            $gmExpenseSignatureAvailable = is_string($signaturePath)
+                && Str::startsWith($signaturePath, 'uploads/memo-signatures/')
+                && ! str_contains($signaturePath, '..')
+                && is_file(public_path($signaturePath))
+                && is_readable(public_path($signaturePath));
+        }
         return response()->json([
             'branch_id' => $branchId,
             'branch_name' => $this->branchName($branchId),
@@ -1478,6 +1568,35 @@ class FinanceController extends Controller
             'category_breakdown' => $categoryBreakdown,
             'trend' => $trendRecords,
             'records' => $records,
+            'approval_requests' => $approvalRequests,
+            'expense_workflow_settings' => $this->expenseWorkflowSettings(),
+            'accountant_memo_signature_available' => $accountantMemoSignatureAvailable,
+            'gm_expense_signature_available' => $gmExpenseSignatureAvailable,
+        ]);
+    }
+
+    public function saveExpenseWorkflowSettings(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user || $user->normalized_role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can change expense workflow limits.'], 403);
+        }
+
+        $this->ensureExpenseWorkflowSettingsSchema();
+        $validated = $request->validate([
+            'accountant_memo_threshold' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+            'receptionist_direct_limit' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+        ]);
+        DB::table('expense_workflow_settings')->updateOrInsert(['id' => 1], [
+            'accountant_memo_threshold' => round((float) $validated['accountant_memo_threshold'], 2),
+            'receptionist_direct_limit' => round((float) $validated['receptionist_direct_limit'], 2),
+            'updated_by' => $user->id,
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Expense workflow limits saved.',
+            'settings' => $this->expenseWorkflowSettings(),
         ]);
     }
 
@@ -1485,6 +1604,7 @@ class FinanceController extends Controller
     {
         $this->ensureExpenseCategoriesSchema();
         $this->ensureExpenseRecorderSchema();
+        $this->ensureExpenseWorkflowSettingsSchema();
 
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -1497,6 +1617,13 @@ class FinanceController extends Controller
             'date' => ['required', 'date'],
             'category' => ['required', 'string', 'max:50'],
             'other_category' => ['nullable', 'string', 'max:50'],
+            'memo_justification' => ['nullable', 'string', 'max:4000'],
+            'memo_subject' => ['nullable', 'string', 'max:255'],
+            'memo_purpose' => ['nullable', 'string', 'max:255'],
+            'memo_period' => ['nullable', 'string', 'max:255'],
+            'memo_payment_method' => ['nullable', 'string', 'max:50'],
+            'certificate_confirmed' => ['nullable', 'boolean'],
+            'receipt_unavailable' => ['nullable', 'boolean'],
         ]);
 
         $category = trim((string) $validated['category']);
@@ -1510,9 +1637,115 @@ class FinanceController extends Controller
             return $response;
         }
 
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        $amount = (float) $validated['amount'];
+        $workflowSettings = $this->expenseWorkflowSettings();
+        $accountantMemoRequired = $role === 'accountant'
+            && $amount > (float) $workflowSettings['accountant_memo_threshold'];
+        $receptionistAboveLimit = $role === 'receptionist'
+            && $amount > (float) $workflowSettings['receptionist_direct_limit'];
+        $requiresApproval = in_array($role, ['accountant', 'receptionist'], true);
+        if ($requiresApproval && ! Schema::hasTable('expense_approval_requests')) {
+            return response()->json(['message' => 'Expense approvals are not ready yet. Contact the system administrator.'], 503);
+        }
+        if ($receptionistAboveLimit) {
+            return response()->json([
+                'message' => 'This amount is above the General Manager’s Receptionist limit of GH₵'.number_format((float) $workflowSettings['receptionist_direct_limit'], 2).'. Please contact the Accountant to prepare and submit the expense memo.',
+            ], 422);
+        }
+        if (! $requiresApproval && $role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager, Accountant, or Receptionist can record expenses.'], 403);
+        }
+
+        if ($requiresApproval) {
+            $documentType = $accountantMemoRequired
+                ? 'expense_memo'
+                : 'certificate_of_honour';
+            $memoBody = trim((string) ($validated['memo_justification'] ?? ''));
+            $memoSubject = trim((string) ($validated['memo_subject'] ?? ''));
+            if ($documentType === 'expense_memo') {
+                if ($memoSubject === '' || $memoBody === '') {
+                    return response()->json(['message' => 'Complete the Expense Memo subject and body before submitting this request.'], 422);
+                }
+                if (! Schema::hasTable('memo_user_signatures')) {
+                    return response()->json(['message' => 'Upload and save your reusable Accountant signature in the Memos Signature Library before submitting an Expense Memo.'], 422);
+                }
+                $signaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+                if (! is_string($signaturePath)
+                    || ! Str::startsWith($signaturePath, 'uploads/memo-signatures/')
+                    || str_contains($signaturePath, '..')
+                    || ! is_file(public_path($signaturePath))
+                    || ! is_readable(public_path($signaturePath))) {
+                    return response()->json(['message' => 'Your reusable Accountant signature is missing or its image file cannot be found. Save a valid signature in the Memos Signature Library before submitting an Expense Memo.'], 422);
+                }
+            }
+            if ($documentType === 'certificate_of_honour' && ! $request->boolean('certificate_confirmed')) {
+                return response()->json(['message' => 'Confirm the Certificate of Honour before submitting this expense for approval.'], 422);
+            }
+
+            $document = [
+                'document_type' => $documentType,
+                'title' => match ($documentType) {
+                    'expense_memo' => 'Expense Memo',
+                    'certificate_of_honour' => 'Certificate of Honour',
+                    default => 'Expense Submission',
+                },
+                'description' => trim((string) $validated['description']),
+                'amount' => round($amount, 2),
+                'date' => $validated['date'],
+                'category' => $category,
+                'branch' => $this->branchName($branchId),
+                'prepared_by' => $user?->name,
+                'prepared_role' => $role,
+                'prepared_at' => now()->toDateTimeString(),
+                'receipt_unavailable' => (bool) ($validated['receipt_unavailable'] ?? false),
+                'memo_subject' => $documentType === 'expense_memo' ? $memoSubject : null,
+                'memo_to' => $documentType === 'expense_memo' ? 'General Manager' : null,
+                'memo_from' => $documentType === 'expense_memo' ? $user?->name : null,
+                'memo_date' => $documentType === 'expense_memo' ? $validated['date'] : null,
+                'memo_purpose' => $documentType === 'expense_memo' ? trim((string) ($validated['memo_purpose'] ?? '')) : null,
+                'memo_period' => $documentType === 'expense_memo' ? trim((string) ($validated['memo_period'] ?? '')) : null,
+                'memo_payment_method' => $documentType === 'expense_memo' ? trim((string) ($validated['memo_payment_method'] ?? '')) : null,
+                'memo_body' => $documentType === 'expense_memo' ? $memoBody : null,
+                'memo_signature_path' => $documentType === 'expense_memo' ? $signaturePath : null,
+                'memo_signature_name' => $documentType === 'expense_memo' ? $user?->name : null,
+                'declaration' => $documentType === 'certificate_of_honour'
+                    ? 'I certify that this expense was incurred for official business, the details and amount are accurate, and General Manager approval is required before it is recorded.'
+                    : null,
+            ];
+            $approvalId = DB::table('expense_approval_requests')->insertGetId([
+                'branch_id' => $branchId,
+                'description' => $validated['description'],
+                'amount' => $validated['amount'],
+                'date' => $validated['date'],
+                'category' => $category,
+                'document_type' => $documentType,
+                'supporting_document_json' => json_encode($document, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'status' => 'pending',
+                'submitted_by' => $user->id,
+                'submitted_role' => $role,
+                'submitted_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            AuditLog::logManual($request, 'submit', 'expense_approval_requests', 'request_id: '.$approvalId, [
+                'amount' => $validated['amount'],
+                'category' => $category,
+                'branch_id' => $branchId,
+                'document_type' => $documentType,
+            ], 202);
+
+            return response()->json([
+                'message' => 'Expense submitted to the General Manager for approval. It will not appear in expense totals until approved.',
+                'pending_approval' => true,
+                'approval_request_id' => $approvalId,
+            ], 202);
+        }
+
         $this->upsertExpenseCategory($category);
 
-        $userId = $request->user()?->id;
+        $userId = $user?->id;
         $expenseId = DB::transaction(function () use ($request, $validated, $category, $branchId, $userId): int {
             $expenseData = [
                 'description' => $validated['description'],
@@ -1522,6 +1755,9 @@ class FinanceController extends Controller
                 'branch_id' => $branchId,
                 'created_by' => $userId,
             ];
+            if (Schema::hasColumn('expenses', 'receipt_unavailable')) {
+                $expenseData['receipt_unavailable'] = (bool) ($validated['receipt_unavailable'] ?? false);
+            }
 
             if (Schema::hasColumn('expenses', 'created_at')) {
                 $expenseData['created_at'] = now();
@@ -1550,9 +1786,191 @@ class FinanceController extends Controller
         ], 201);
     }
 
+    public function expenseApprovalMemoSignature(Request $request, int $requestId)
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! $user || ! in_array($role, ['manager', 'accountant'], true)) {
+            return response()->json(['message' => 'You do not have access to this expense memo signature.'], 403);
+        }
+        if (! Schema::hasTable('expense_approval_requests')) {
+            return response()->json(['message' => 'Expense approval requests are not configured.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $query = DB::table('expense_approval_requests')->where('id', $requestId);
+        $this->applyBranchScope($query, 'branch_id', $branchId);
+        if ($role !== 'manager') {
+            $query->where('submitted_by', $user->id);
+        }
+        $approval = $query->first(['supporting_document_json']);
+        if (! $approval) {
+            return response()->json(['message' => 'Expense request not found for this branch or account.'], 404);
+        }
+
+        $document = json_decode((string) $approval->supporting_document_json, true) ?: [];
+        $signaturePath = $document['memo_signature_path'] ?? null;
+        if (! is_string($signaturePath) || ! Str::startsWith($signaturePath, 'uploads/memo-signatures/') || str_contains($signaturePath, '..')) {
+            return response()->json(['message' => 'No reusable Accountant signature was attached to this Expense Memo.'], 404);
+        }
+
+        $imagePath = public_path($signaturePath);
+        if (! is_file($imagePath) || ! is_readable($imagePath)) {
+            return response()->json([
+                'message' => 'The Accountant signature was attached when this Expense Memo was submitted, but its image is missing from server uploads.',
+                'signature_path' => $signaturePath,
+                'expected_location' => 'public/'.$signaturePath,
+            ], 404);
+        }
+
+        return response()->file($imagePath, [
+            'Cache-Control' => 'private, max-age=300',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function expenseApprovalGmSignature(Request $request, int $requestId)
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! $user || ! in_array($role, ['manager', 'accountant'], true)) {
+            return response()->json(['message' => 'You do not have access to this Certificate of Honour signature.'], 403);
+        }
+        if (! Schema::hasTable('expense_approval_requests')) {
+            return response()->json(['message' => 'Expense approval requests are not configured.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $query = DB::table('expense_approval_requests')->where('id', $requestId);
+        $this->applyBranchScope($query, 'branch_id', $branchId);
+        if ($role !== 'manager') {
+            $query->where('submitted_by', $user->id);
+        }
+        $approval = $query->first(['supporting_document_json']);
+        if (! $approval) {
+            return response()->json(['message' => 'Expense request not found for this branch or account.'], 404);
+        }
+
+        $document = json_decode((string) $approval->supporting_document_json, true) ?: [];
+        $signaturePath = $document['gm_signature_path'] ?? null;
+        if (! is_string($signaturePath) || ! Str::startsWith($signaturePath, 'uploads/memo-signatures/') || str_contains($signaturePath, '..')) {
+            return response()->json(['message' => 'This approved Certificate of Honour has no GM signature image saved. Older approvals may predate signature capture.'], 404);
+        }
+
+        $imagePath = public_path($signaturePath);
+        if (! is_file($imagePath) || ! is_readable($imagePath)) {
+            return response()->json([
+                'message' => 'The GM signature image saved with this approved Certificate of Honour is missing from server uploads.',
+                'signature_path' => $signaturePath,
+                'expected_location' => 'public/'.$signaturePath,
+            ], 404);
+        }
+
+        return response()->file($imagePath, [
+            'Cache-Control' => 'private, max-age=300',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function reviewExpenseApproval(Request $request, int $requestId): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if (! $user || $role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can approve or reject expense requests.'], 403);
+        }
+        $this->ensureExpenseRecorderSchema();
+        if (! Schema::hasTable('expense_approval_requests')) {
+            return response()->json(['message' => 'Expense approvals are not configured.'], 503);
+        }
+
+        $validated = $request->validate([
+            'decision' => ['required', 'in:approve,reject'],
+            'decision_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $branchId = $this->resolveBranchId($request);
+        $decision = $validated['decision'];
+        $decisionNote = trim((string) ($validated['decision_note'] ?? ''));
+        if ($decision === 'reject' && $decisionNote === '') {
+            return response()->json(['message' => 'Add a short reason before rejecting this expense request.'], 422);
+        }
+
+        $result = DB::transaction(function () use ($request, $requestId, $branchId, $decision, $decisionNote, $user): array {
+            $query = DB::table('expense_approval_requests')->where('id', $requestId)->lockForUpdate();
+            $this->applyBranchScope($query, 'branch_id', $branchId);
+            $approval = $query->first();
+            if (! $approval) {
+                abort(404, 'Expense approval request not found for this branch.');
+            }
+            if ($approval->status !== 'pending') {
+                abort(409, 'This expense request has already been reviewed.');
+            }
+
+            $expenseId = null;
+            $supportingDocument = json_decode((string) ($approval->supporting_document_json ?? ''), true) ?: [];
+            if ($decision === 'approve') {
+                $this->upsertExpenseCategory((string) $approval->category);
+                if ($approval->document_type === 'certificate_of_honour') {
+                    if (! Schema::hasTable('memo_user_signatures')) {
+                        abort(422, 'Upload and save your reusable General Manager signature in the Memos Signature Library before approving a Certificate of Honour.');
+                    }
+                    $gmSignaturePath = DB::table('memo_user_signatures')->where('user_id', $user->id)->value('signature_path');
+                    if (! is_string($gmSignaturePath)
+                        || ! Str::startsWith($gmSignaturePath, 'uploads/memo-signatures/')
+                        || str_contains($gmSignaturePath, '..')
+                        || ! is_file(public_path($gmSignaturePath))
+                        || ! is_readable(public_path($gmSignaturePath))) {
+                        abort(422, 'A valid reusable General Manager signature is required. Upload it in the Memos Signature Library before approving this Certificate of Honour.');
+                    }
+                    $supportingDocument['gm_signature_path'] = $gmSignaturePath;
+                    $supportingDocument['gm_signature_name'] = $user->name;
+                }
+                $expenseData = [
+                    'description' => $approval->description,
+                    'amount' => $approval->amount,
+                    'date' => $approval->date,
+                    'category' => $approval->category,
+                    'branch_id' => $approval->branch_id,
+                    'created_by' => $approval->submitted_by,
+                ];
+                if (Schema::hasColumn('expenses', 'receipt_unavailable')) {
+                    $expenseData['receipt_unavailable'] = (bool) ($supportingDocument['receipt_unavailable'] ?? false);
+                }
+                if (Schema::hasColumn('expenses', 'created_at')) $expenseData['created_at'] = now();
+                if (Schema::hasColumn('expenses', 'updated_at')) $expenseData['updated_at'] = now();
+                $expenseId = DB::table('expenses')->insertGetId($expenseData);
+            }
+
+            DB::table('expense_approval_requests')->where('id', $requestId)->update([
+                'status' => $decision === 'approve' ? 'approved' : 'rejected',
+                'reviewed_by' => $user->id,
+                'reviewed_at' => now(),
+                'decision_note' => $decisionNote !== '' ? $decisionNote : null,
+                'resulting_expense_id' => $expenseId,
+                'supporting_document_json' => json_encode($supportingDocument, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'updated_at' => now(),
+            ]);
+            AuditLog::logManual($request, $decision === 'approve' ? 'approve' : 'reject', 'expense_approval_requests', 'request_id: '.$requestId, [
+                'expense_id' => $expenseId,
+                'branch_id' => (int) $approval->branch_id,
+                'decision_note' => $decisionNote,
+            ]);
+
+            return ['expense_id' => $expenseId];
+        });
+
+        return response()->json([
+            'message' => $decision === 'approve'
+                ? 'Expense approved and recorded successfully.'
+                : 'Expense request rejected. It was not added to the expense ledger.',
+            'expense_id' => $result['expense_id'],
+        ]);
+    }
+
     public function updateExpense(Request $request, int $expenseId): JsonResponse
     {
         $this->ensureExpenseCategoriesSchema();
+        $this->ensureExpenseRecorderSchema();
 
         if ($response = $this->ensureExpenseWriteAccess($request)) {
             return $response;
@@ -1590,6 +2008,7 @@ class FinanceController extends Controller
                 'amount' => ['required', 'numeric', 'min:0.01'],
                 'date' => ['required', 'date'],
                 'category' => ['required', 'string', 'max:50'],
+                'receipt_unavailable' => ['sometimes', 'boolean'],
             ]);
 
         if ($isFrameReservationExpense) {
@@ -1610,14 +2029,19 @@ class FinanceController extends Controller
 
             $this->upsertExpenseCategory($category);
 
+            $updates = [
+                'description' => $validated['description'],
+                'amount' => $validated['amount'],
+                'date' => $validated['date'],
+                'category' => $category,
+            ];
+            if (Schema::hasColumn('expenses', 'receipt_unavailable') && array_key_exists('receipt_unavailable', $validated)) {
+                $updates['receipt_unavailable'] = (bool) $validated['receipt_unavailable'];
+            }
+
             DB::table('expenses')
                 ->where('expense_id', $expenseId)
-                ->update([
-                    'description' => $validated['description'],
-                    'amount' => $validated['amount'],
-                    'date' => $validated['date'],
-                    'category' => $category,
-                ]);
+                ->update($updates);
         }
 
         return response()->json([
@@ -3106,7 +3530,71 @@ class FinanceController extends Controller
             });
         }
 
+        if (! Schema::hasColumn('expenses', 'receipt_unavailable')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->boolean('receipt_unavailable')->default(false)->after('category');
+            });
+        }
+
         $this->ensureExpensePerformanceIndexes();
+    }
+
+    private function ensureExpenseWorkflowSettingsSchema(): void
+    {
+        if (! Schema::hasTable('expense_workflow_settings')) {
+            Schema::create('expense_workflow_settings', function (Blueprint $table): void {
+                $table->unsignedTinyInteger('id')->primary();
+                $table->decimal('accountant_memo_threshold', 12, 2)->default(1000);
+                $table->decimal('receptionist_direct_limit', 12, 2)->default(1000);
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasColumn('expense_workflow_settings', 'accountant_memo_threshold')) {
+            Schema::table('expense_workflow_settings', function (Blueprint $table): void {
+                $table->decimal('accountant_memo_threshold', 12, 2)->default(1000);
+            });
+        }
+        if (! Schema::hasColumn('expense_workflow_settings', 'receptionist_direct_limit')) {
+            Schema::table('expense_workflow_settings', function (Blueprint $table): void {
+                $table->decimal('receptionist_direct_limit', 12, 2)->default(1000);
+            });
+        }
+        if (! Schema::hasColumn('expense_workflow_settings', 'updated_by')) {
+            Schema::table('expense_workflow_settings', function (Blueprint $table): void {
+                $table->unsignedBigInteger('updated_by')->nullable();
+            });
+        }
+        if (! Schema::hasColumn('expense_workflow_settings', 'created_at')) {
+            Schema::table('expense_workflow_settings', function (Blueprint $table): void {
+                $table->timestamp('created_at')->nullable();
+            });
+        }
+        if (! Schema::hasColumn('expense_workflow_settings', 'updated_at')) {
+            Schema::table('expense_workflow_settings', function (Blueprint $table): void {
+                $table->timestamp('updated_at')->nullable();
+            });
+        }
+
+        DB::table('expense_workflow_settings')->insertOrIgnore([
+            'id' => 1,
+            'accountant_memo_threshold' => 1000,
+            'receptionist_direct_limit' => 1000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function expenseWorkflowSettings(): array
+    {
+        $settings = DB::table('expense_workflow_settings')->where('id', 1)->first();
+
+        return [
+            'accountant_memo_threshold' => (float) ($settings->accountant_memo_threshold ?? 1000),
+            'receptionist_direct_limit' => (float) ($settings->receptionist_direct_limit ?? 1000),
+            'updated_at' => $settings->updated_at ?? null,
+        ];
     }
 
     private function ensureExpenseIdAutoIncrement(): void
@@ -3527,9 +4015,9 @@ class FinanceController extends Controller
         $user = $request->user();
         $role = $user?->normalized_role ?? $user?->role;
 
-        if (! in_array($role, ['manager', 'accountant'], true) && ! ($user?->is_admin ?? false)) {
+        if ($role !== 'manager') {
             return response()->json([
-                'message' => 'Only the General Manager and Accountant can edit or delete expenses.',
+                'message' => 'Only the General Manager can edit recorded expenses. Ask the General Manager to make any correction so expense approval controls remain in effect.',
             ], 403);
         }
 

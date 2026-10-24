@@ -1,19 +1,17 @@
-Hostinger FileZilla sync — insurance submission tracking and bulk actions
-Generated: 2026-10-24 13:55 GMT (Africa/Accra)
+Hostinger FileZilla sync - expense workflow limits save fix and latest expense memo updates
+Generated: 2026-10-24 23:07 GMT (Africa/Accra)
 
-Frontend — upload/replace from tmp/hostinger-package:
+Frontend - upload/replace from tmp/hostinger-package:
 public/index.html
-public/assets/index-Cfs00sJR.js
-public/assets/index-BttVQyBJ.css
+public/assets/index-BQggPOPw.js
+public/assets/index-Y_-Sa6ok.css
 
-Backend — upload/replace:
-app/Http/Controllers/InsuranceController.php
+Backend - upload/replace from tmp/hostinger-package:
 app/Http/Controllers/FinanceController.php
+app/Http/Controllers/MemoController.php
 routes/api.php
 
-database/migrations/2026_10_24_000001_create_insurance_remittance_allocations_table.php
-database/migrations/2026_10_24_000002_reset_automatic_insurance_claimed_statuses.php
-database/schema/insurance_remittance_allocations.mysql.sql
-database/schema/reset_automatic_insurance_claimed_statuses.mysql.sql
+Database setup for GM-configurable expense limits (if not already applied):
+database/schema/expense_workflow_settings_and_memo_link.mysql.sql
 
-The first migration/SQL creates the receipt allocation table. The second resets legacy auto-assigned “claimed” statuses to “pending” without changing claim amounts. Run the migrations, or apply the SQL files manually. The ledger now supports selecting multiple eligible records to mark submitted externally or revert to not submitted.
+This frontend build includes the Expense Memos table (latest 10 entries), Memos page list guards and currency formatting, and the Expense Rules save feedback/read-after-write verification. FinanceController upserts expense workflow limits and returns the saved settings. Expense memo approvals, GM signature capture for approved CoH requests, and single-page CoH PDF formatting remain included from the prior package. No additional schema changes are introduced by this update.

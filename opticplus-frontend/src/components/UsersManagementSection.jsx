@@ -312,7 +312,7 @@ export default function UsersManagementSection({ token, selectedBranchId, apiFet
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             setQuery({ ...filters, page: 1 })

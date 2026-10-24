@@ -2200,7 +2200,7 @@ export default function ReportsSection(props) {
       {auditExportMessage ? <div className="message-banner success">{auditExportMessage}</div> : null}
       {isLoading ? <div className="message-banner">Refreshing workbook data for the selected year and branches...</div> : null}
 
-      <section className="report-toolbar-grid report-workbook-toolbar">
+      <section className="report-toolbar-grid report-workbook-toolbar table-attached-filter">
         <label>
           Year
           <select value={filters.year} onChange={(event) => setFilters((current) => ({ ...current, year: Number(event.target.value) }))}>

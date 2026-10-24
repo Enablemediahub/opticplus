@@ -427,7 +427,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             setQuery({ ...filters, page: 1 })

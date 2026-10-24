@@ -321,7 +321,7 @@ export default function DebtManagementSection(props) {
             <span className="panel-tag">{debtData?.branch_name ?? debtMeta?.branch_name ?? 'Debt register'}</span>
           </div>
 
-          <form className="patient-filter-grid" onSubmit={(event) => {
+          <form className="patient-filter-grid table-attached-filter" onSubmit={(event) => {
             event.preventDefault()
             setQuery((current) => ({ ...current, ...filters, page: 1 }))
           }}>

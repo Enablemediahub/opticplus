@@ -687,7 +687,7 @@ function PickupTab(props) {
         </div>
 
         <form
-          className="patient-filter-grid"
+          className="patient-filter-grid table-attached-filter"
           onSubmit={(event) => {
             event.preventDefault()
             props.setCustomerServiceQuery((current) => ({ ...current, ...props.customerServiceFilters, page: 1 }))

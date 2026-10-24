@@ -959,7 +959,7 @@ export default function ExtractSection(props) {
           </div>
 
           {activeTab === 'revenue' ? (
-            <form className="extract-filter-grid" onSubmit={applyRevenueFilters}>
+            <form className="extract-filter-grid table-attached-filter" onSubmit={applyRevenueFilters}>
               <label>
                 Search
                 <input
@@ -1025,7 +1025,7 @@ export default function ExtractSection(props) {
               </div>
             </form>
           ) : (
-            <form className="extract-filter-grid" onSubmit={applyExpenseFilters}>
+            <form className="extract-filter-grid table-attached-filter" onSubmit={applyExpenseFilters}>
               <label>
                 Search
                 <input

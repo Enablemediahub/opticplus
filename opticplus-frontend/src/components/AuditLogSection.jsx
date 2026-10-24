@@ -132,7 +132,7 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
       </section>
 
       <section className="finance-layout">
-        <article className="panel panel-wide">
+        <article className="panel panel-wide audit-ledger-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Audit Filters</p>
@@ -141,7 +141,7 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
             <span className="panel-tag">{pagination?.total ?? 0} entries</span>
           </div>
 
-          <form className="patient-filter-grid" onSubmit={handleSubmit}>
+          <form className="patient-filter-grid table-attached-filter" onSubmit={handleSubmit}>
             <label>
               Search
               <input
@@ -170,9 +170,6 @@ export default function AuditLogSection({ apiFetch, token, selectedBranchId, ses
               </button>
             </div>
           </form>
-        </article>
-
-        <article className="panel panel-wide">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Activity Table</p>

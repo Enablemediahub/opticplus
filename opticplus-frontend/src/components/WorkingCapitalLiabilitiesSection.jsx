@@ -232,7 +232,7 @@ export default function WorkingCapitalLiabilitiesSection(props) {
           </div>
           <span className="panel-tag">{currency.format(Number(data?.total ?? 0))}</span>
         </div>
-        <div className="patient-filter-grid">
+        <div className="patient-filter-grid table-attached-filter">
           <label>
             Search entries
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Description, notes, or entry type" />

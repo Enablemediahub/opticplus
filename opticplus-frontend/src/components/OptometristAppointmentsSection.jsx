@@ -124,7 +124,7 @@ export default function OptometristAppointmentsSection({ dashboard, isLoadingDas
             <span className="panel-tag">{filteredAppointments.length} visible</span>
           </div>
 
-          <form className="patient-filter-grid" onSubmit={(event) => event.preventDefault()}>
+          <form className="patient-filter-grid table-attached-filter" onSubmit={(event) => event.preventDefault()}>
             <label className="field">
               <span>Search</span>
               <input
