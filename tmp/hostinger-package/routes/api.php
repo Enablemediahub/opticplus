@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\BankAlertController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CustomerServiceController;
 use App\Http\Controllers\DatabaseAdminController;
@@ -30,6 +31,8 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
 
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/company-profile', [CompanyProfileController::class, 'show']);
+    Route::post('/bank-alerts/ingest', [BankAlertController::class, 'ingest'])
+        ->middleware(['auth.bank-alert-device', 'throttle:60,1']);
 
     Route::middleware(['auth.token', 'audit.mutations'])->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
@@ -39,6 +42,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::put('/company-profile', [CompanyProfileController::class, 'update']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/dashboard', [DashboardController::class, 'show']);
+        Route::get('/bank-alerts', [BankAlertController::class, 'index']);
+        Route::post('/bank-alerts/accounts', [BankAlertController::class, 'storeAccount']);
+        Route::post('/bank-alerts/devices', [BankAlertController::class, 'issueDevice']);
+        Route::post('/bank-alerts/{alertId}/review', [BankAlertController::class, 'review']);
         Route::get('/patients', [PatientRecordController::class, 'index']);
         Route::get('/patients/meta', [PatientRecordController::class, 'meta']);
         Route::get('/patients/lookup', [PatientRecordController::class, 'lookup']);
@@ -147,6 +154,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/inventory/frame-tracker/{frameSaleId}/reserve', [InventoryController::class, 'reserveFrameCost']);
         Route::delete('/inventory/frame-tracker/{frameSaleId}/reserve', [InventoryController::class, 'reverseFrameCostReservation']);
         Route::get('/manager/overview', [ManagerController::class, 'overview']);
+        Route::get('/manager/user-presence', [ManagerController::class, 'userPresence']);
         Route::get('/manager/audit-logs', [AuditLogController::class, 'index']);
         Route::get('/manager/users', [ManagerController::class, 'users']);
         Route::post('/manager/users', [ManagerController::class, 'storeUser']);

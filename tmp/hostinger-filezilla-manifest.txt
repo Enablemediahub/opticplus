@@ -1,17 +1,55 @@
-Hostinger FileZilla sync - expense workflow limits save fix and latest expense memo updates
-Generated: 2026-10-24 23:07 GMT (Africa/Accra)
+Hostinger FileZilla sync manifest - OPTICPLUS popup form scrolling
+Generated: 2026-10-25 17:32 GMT (Africa/Accra)
 
-Frontend - upload/replace from tmp/hostinger-package:
+Local package:
+tmp/hostinger-package
+
+Remote destination:
+Laravel application root. Keep each package-relative path unchanged.
+The domain document root must remain the Laravel public/ directory.
+
+DATABASE:
+Run tmp/hostinger-package/database/schema/user_login_presence.mysql.sql in
+phpMyAdmin before uploading the backend PHP files. It adds users.last_login_at
+and creates user_presence_sessions. The Laravel migration is included and is
+safe to run after the SQL has already been applied.
+
+FILES TO UPLOAD/REPLACE VIA FILEZILLA:
+Frontend:
 public/index.html
-public/assets/index-BQggPOPw.js
-public/assets/index-Y_-Sa6ok.css
+public/assets/index-D1mxHyZz.js
+public/assets/index-Cmsk1d_i.css
+public/images/banks/ecobank.jpg
+public/images/banks/gt-bank.png
+public/images/banks/prudential-bank.png
 
-Backend - upload/replace from tmp/hostinger-package:
-app/Http/Controllers/FinanceController.php
-app/Http/Controllers/MemoController.php
+Backend:
+app/Http/Controllers/AuthController.php
+app/Http/Controllers/ManagerController.php
+app/Http/Middleware/AuthenticateApiToken.php
 routes/api.php
+database/migrations/2026_10_25_000002_track_user_login_presence.php
+database/schema/user_login_presence.mysql.sql
 
-Database setup for GM-configurable expense limits (if not already applied):
-database/schema/expense_workflow_settings_and_memo_link.mysql.sql
+Upload each file from tmp/hostinger-package to the matching path under the
+Hostinger Laravel application root. Run the SQL file in phpMyAdmin first, then
+upload the listed files via FileZilla. Do not upload the local .env. The staged
+package contains only the current JavaScript and CSS bundles; obsolete hashed
+bundles have been removed from the package. The bank logo images are served
+from public/images/banks/.
 
-This frontend build includes the Expense Memos table (latest 10 entries), Memos page list guards and currency formatting, and the Expense Rules save feedback/read-after-write verification. FinanceController upserts expense workflow limits and returns the saved settings. Expense memo approvals, GM signature capture for approved CoH requests, and single-page CoH PDF formatting remain included from the prior package. No additional schema changes are introduced by this update.
+Bank Deposits, The Monitor, and Payroll display the supplied Ecobank,
+Prudential Bank, and GTBank logos with account-level bank-reported balances.
+The Bank Deposits page now shows the latest SMS-reported account balance
+separately from the branch ledger balance and identifies its bank, account,
+branch, and timestamp. Monitor and Payroll bank cards clarify that balances
+are per-account SMS reports, not the branch ledger total, and refresh every 30
+seconds and on tab focus. Bulk Payroll uses a flat, professional layout with
+clearer payout scope, selected employee count, estimated payout summary, and
+separate salary/allowance payment method panels. The General Manager dashboard
+now lists users by branch, their online status, and last login time. Online
+status is based on an authenticated request within the previous two minutes;
+active app sessions send a heartbeat every 45 seconds. Login history starts
+when users sign in after this update; historical dates cannot be reconstructed.
+Popup forms now stay within the device viewport and scroll internally so lower
+form fields and action buttons remain reachable on desktop and mobile.

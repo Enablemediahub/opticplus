@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
 import { escapePrintHtml, openPrintDocumentWindow, writePrintDocumentWindow } from '../utils/printDocuments.js'
 
 const currency = new Intl.NumberFormat('en-GH', {
@@ -148,6 +149,21 @@ const defaultTabByMode = {
   debt: 'Payments',
 }
 
+const financeWorkspaceDetails = {
+  Payments: {
+    description: 'Review receipts, collections, and outstanding balances.',
+    icon: 'PA',
+  },
+  Sales: {
+    description: 'Review realized sales and performance across the selected period.',
+    icon: 'SA',
+  },
+  Expenses: {
+    description: 'Browse recorded expenses, approvals, and expense documents.',
+    icon: 'EX',
+  },
+}
+
 const splitPaymentMethodOptions = ['Insurance', 'Cash', 'Mobile Money']
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -181,6 +197,11 @@ function formatExpenseRangeLabel(filters) {
 export default function FinanceSection(props) {
   const pageMode = props.pageMode ?? 'default'
   const financeTabs = useMemo(() => tabsByMode[pageMode] ?? tabsByMode.default, [pageMode])
+  const financeWorkspaceTabs = financeTabs.map((label) => ({
+    id: label,
+    label,
+    ...financeWorkspaceDetails[label],
+  }))
   const expenseWorkspaceStorageKey = `opticplus:expense-workspace:${props.session?.id ?? props.session?.role ?? 'user'}:${pageMode}:${props.selectedBranchId ?? props.session?.branch_id ?? 'default'}`
   const [activeTab, setActiveTab] = useState(defaultTabByMode[pageMode] ?? 'Payments')
   const [activeExpenseWorkspace, setActiveExpenseWorkspace] = useState(() => {
@@ -353,18 +374,14 @@ export default function FinanceSection(props) {
       {props.financeSuccess ? <div className="message-banner success">{props.financeSuccess}</div> : null}
 
       {financeTabs.length > 1 ? (
-        <div className="finance-tabs">
-          {financeTabs.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={tab === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        <WorkspaceTabs
+          tabs={financeWorkspaceTabs}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          ariaLabel="Finance workspaces"
+          heading="Choose a finance workspace"
+          description="Switch between payments, sales, and expense activity."
+        />
       ) : null}
 
       {activeTab === 'Payments' ? <PaymentsTab {...props} /> : null}
@@ -2181,40 +2198,44 @@ function ExpensesTab(props) {
     )
   }
 
+  const expenseWorkspaceTabs = [
+    {
+      id: 'ledger',
+      label: 'Expense Ledger',
+      description: 'Browse recorded expenses, receipts, and branch totals.',
+      icon: 'EL',
+    },
+    {
+      id: 'approvals',
+      label: canReviewExpenseApprovals ? 'GM Approvals' : 'My Requests',
+      description: canReviewExpenseApprovals
+        ? 'Review submitted expenses and make approval decisions.'
+        : 'Track the review status of expenses you submitted.',
+      icon: canReviewExpenseApprovals ? 'GA' : 'MR',
+      count: canReviewExpenseApprovals ? pendingExpenseApprovalCount : expenseApprovalRequests.length,
+      countLabel: canReviewExpenseApprovals ? 'pending approvals' : 'submitted requests',
+    },
+    ...(canManageExpenseWorkflow
+      ? [{
+          id: 'settings',
+          label: 'Expense Rules',
+          description: 'Set submission limits and approval requirements.',
+          icon: 'ER',
+        }]
+      : []),
+  ]
+
   return (
     <>
       {(canReviewExpenseApprovals || submitsExpenseApprovals) ? (
-        <div className="finance-tabs expense-workflow-tabs" role="tablist" aria-label="Expense workspace">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeExpenseWorkspace === 'ledger'}
-            className={activeExpenseWorkspace === 'ledger' ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-            onClick={() => setActiveExpenseWorkspace('ledger')}
-          >
-            Expense Ledger
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeExpenseWorkspace === 'approvals'}
-            className={activeExpenseWorkspace === 'approvals' ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-            onClick={() => setActiveExpenseWorkspace('approvals')}
-          >
-            {canReviewExpenseApprovals ? `GM Approvals (${pendingExpenseApprovalCount})` : `My Requests (${expenseApprovalRequests.length})`}
-          </button>
-          {canManageExpenseWorkflow ? (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeExpenseWorkspace === 'settings'}
-              className={activeExpenseWorkspace === 'settings' ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-              onClick={() => setActiveExpenseWorkspace('settings')}
-            >
-              Expense Rules
-            </button>
-          ) : null}
-        </div>
+        <WorkspaceTabs
+          tabs={expenseWorkspaceTabs}
+          activeTab={activeExpenseWorkspace}
+          onChange={setActiveExpenseWorkspace}
+          ariaLabel="Expense workspace"
+          heading="Choose an expense workspace"
+          description="Switch between recorded expenses, approval requests, and expense rules."
+        />
       ) : null}
 
       {canManageExpenseWorkflow && activeExpenseWorkspace === 'settings' ? (
@@ -2654,34 +2675,56 @@ function ExpensesTab(props) {
 
         {!isReceptionistExpenseView ? (
           <article className="panel panel-wide expense-trend-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Spend Trend</p>
-                <h3>Daily expense movement</h3>
-              </div>
-              <span className="panel-tag">{(props.financeExpenses?.trend ?? []).length} points</span>
-            </div>
-
             <div className="expense-visual-grid">
-              <LineTrendCard
-                title="Spend Trend"
-                items={(props.financeExpenses?.trend ?? []).map((item) => ({
-                  label: item.expense_date,
-                  value: Number(item.total ?? 0),
-                }))}
-              />
+              <details className="expense-chart-disclosure" open>
+                <summary>
+                  <span className="expense-chart-disclosure__copy">
+                    <span className="eyebrow">Spend Trend</span>
+                    <strong>Daily expense movement</strong>
+                  </span>
+                  <span className="expense-chart-disclosure__meta">
+                    {(props.financeExpenses?.trend ?? []).length} days
+                    <span className="expense-chart-disclosure__chevron" aria-hidden="true" />
+                  </span>
+                </summary>
+                <div className="expense-chart-disclosure__content">
+                  <LineTrendCard
+                    title="Spend Trend"
+                    hideHeading
+                    items={(props.financeExpenses?.trend ?? []).map((item) => ({
+                      label: item.expense_date,
+                      value: Number(item.total ?? 0),
+                    }))}
+                  />
+                </div>
+              </details>
 
-              <BarChartCard
-                title="Expense Categories"
-                items={(props.financeExpenses?.category_breakdown ?? []).slice(0, 6).map((item) => ({
-                  label: item.category,
-                  value: Number(item.total ?? 0),
-                  tone: 'danger',
-                }))}
-                total={visibleExpenseTotal}
-                emptyLabel="No expense graph data yet"
-                compact
-              />
+              <details className="expense-chart-disclosure" open>
+                <summary>
+                  <span className="expense-chart-disclosure__copy">
+                    <span className="eyebrow">Category Chart</span>
+                    <strong>Expense Categories</strong>
+                  </span>
+                  <span className="expense-chart-disclosure__meta">
+                    {(props.financeExpenses?.category_breakdown ?? []).length} categories
+                    <span className="expense-chart-disclosure__chevron" aria-hidden="true" />
+                  </span>
+                </summary>
+                <div className="expense-chart-disclosure__content">
+                  <BarChartCard
+                    title="Expense Categories"
+                    items={(props.financeExpenses?.category_breakdown ?? []).slice(0, 6).map((item) => ({
+                      label: item.category,
+                      value: Number(item.total ?? 0),
+                      tone: 'danger',
+                    }))}
+                    total={visibleExpenseTotal}
+                    emptyLabel="No expense graph data yet"
+                    compact
+                    hideHeading
+                  />
+                </div>
+              </details>
             </div>
           </article>
         ) : null}
@@ -3556,10 +3599,21 @@ function TableShell({ children }) {
 function Pagination({ pagination, onPageChange, showPageNumbers = false, onPerPageChange = null }) {
   if (!pagination) return null
   const totalPages = Math.max(Number(pagination.total_pages ?? 1), 1)
+  const currentPage = Math.min(Math.max(Number(pagination.page ?? 1), 1), totalPages)
+  const pageNumbers = showPageNumbers
+    ? [...new Set([1, currentPage - 1, currentPage, currentPage + 1, totalPages]
+      .filter((page) => page >= 1 && page <= totalPages))]
+      .sort((left, right) => left - right)
+      .reduce((items, page, index, pages) => {
+        if (index > 0 && page - pages[index - 1] > 1) items.push(null)
+        items.push(page)
+        return items
+      }, [])
+    : []
   return (
     <div className={`pagination-bar${showPageNumbers ? ' pagination-bar-numbered' : ''}`}>
       <div className="pagination-summary">
-        <span className="muted-copy">Page {pagination.page} of {totalPages} · {pagination.total ?? 0} records</span>
+        <span className="muted-copy">Page {currentPage} of {totalPages} · {pagination.total ?? 0} records</span>
         {onPerPageChange ? (
           <label className="pagination-size-control">
             Rows per page
@@ -3572,24 +3626,28 @@ function Pagination({ pagination, onPageChange, showPageNumbers = false, onPerPa
         ) : null}
       </div>
       <div className="pagination-actions">
-        <button type="button" className="mini-action" disabled={pagination.page <= 1} onClick={() => onPageChange(Math.max(pagination.page - 1, 1))}>Previous</button>
+        <button type="button" className="mini-action" disabled={currentPage <= 1} onClick={() => onPageChange(Math.max(currentPage - 1, 1))}>Previous</button>
         {showPageNumbers ? (
           <div className="pagination-number-list" aria-label="Expense ledger pages">
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
-              <button
-                key={page}
-                type="button"
-                className={Number(pagination.page) === page ? 'pagination-number is-current' : 'pagination-number'}
-                aria-current={Number(pagination.page) === page ? 'page' : undefined}
-                aria-label={`Page ${page}`}
-                onClick={() => onPageChange(page)}
-              >
-                {page}
-              </button>
+            {pageNumbers.map((page, index) => (
+              page === null
+                ? <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span>
+                : (
+                  <button
+                    key={page}
+                    type="button"
+                    className={currentPage === page ? 'pagination-number is-current' : 'pagination-number'}
+                    aria-current={currentPage === page ? 'page' : undefined}
+                    aria-label={`Page ${page}`}
+                    onClick={() => onPageChange(page)}
+                  >
+                    {page}
+                  </button>
+                )
             ))}
           </div>
         ) : null}
-        <button type="button" className="mini-action" disabled={pagination.page >= totalPages} onClick={() => onPageChange(Math.min(pagination.page + 1, totalPages))}>Next</button>
+        <button type="button" className="mini-action" disabled={currentPage >= totalPages} onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}>Next</button>
       </div>
     </div>
   )
@@ -3619,17 +3677,19 @@ function MetricCard({ label, value }) {
   )
 }
 
-function BarChartCard({ title, items, total, emptyLabel = 'No data available', compact = false }) {
+function BarChartCard({ title, items, total, emptyLabel = 'No data available', compact = false, hideHeading = false }) {
   const rows = (items ?? []).filter((item) => Number(item.value ?? 0) > 0)
 
   return (
     <div className={compact ? 'visual-card' : 'panel'}>
-      <div className={compact ? 'visual-card-head' : 'panel-heading'}>
-        <div>
-          <p className="eyebrow">{compact ? 'Category Chart' : 'Chart'}</p>
-          <h3>{title}</h3>
+      {!hideHeading ? (
+        <div className={compact ? 'visual-card-head' : 'panel-heading'}>
+          <div>
+            <p className="eyebrow">{compact ? 'Category Chart' : 'Chart'}</p>
+            <h3>{title}</h3>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {rows.length ? (
         <div className="stack-list">
@@ -3659,33 +3719,48 @@ function BarChartCard({ title, items, total, emptyLabel = 'No data available', c
   )
 }
 
-function LineTrendCard({ items, title }) {
+function LineTrendCard({ items, title, hideHeading = false }) {
   const rows = (items ?? []).filter((item) => Number(item.value ?? 0) >= 0)
+  const chartId = useId().replace(/:/g, '')
 
   if (!rows.length) {
     return <p className="muted-copy">No trend data available yet.</p>
   }
 
   const maxValue = Math.max(...rows.map((item) => Number(item.value ?? 0)), 1)
-  const points = rows.map((item, index) => {
-    const x = rows.length === 1 ? 160 : (index / (rows.length - 1)) * 320
-    const y = 120 - (Number(item.value ?? 0) / maxValue) * 100
-    return `${x},${y}`
-  }).join(' ')
+  const plot = { left: 64, right: 468, top: 20, bottom: 174 }
+  const plotWidth = plot.right - plot.left
+  const plotHeight = plot.bottom - plot.top
+  const chartPoints = rows.map((item, index) => ({
+    x: rows.length === 1 ? plot.left + plotWidth / 2 : plot.left + (index / (rows.length - 1)) * plotWidth,
+    y: plot.bottom - (Number(item.value ?? 0) / maxValue) * plotHeight,
+    item,
+  }))
+  const points = chartPoints.map(({ x, y }) => `${x},${y}`).join(' ')
+  const areaPoints = `${plot.left},${plot.bottom} ${points} ${plot.right},${plot.bottom}`
   const peak = rows.reduce((current, item) => (Number(item.value ?? 0) > Number(current.value ?? 0) ? item : current), rows[0])
   const latest = rows[rows.length - 1]
+  const average = rows.reduce((sum, item) => sum + Number(item.value ?? 0), 0) / rows.length
+  const axisCurrency = new Intl.NumberFormat('en-GH', {
+    style: 'currency',
+    currency: 'GHS',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
+  const dateLabelIndexes = [...new Set([0, Math.floor((rows.length - 1) / 2), rows.length - 1])]
 
   return (
-    <div className="visual-card">
-      <div className="visual-card-head">
-        <div>
-          <p className="eyebrow">Trend</p>
-          <h3>{title}</h3>
+    <div className="visual-card expense-spend-chart">
+      {!hideHeading ? (
+        <div className="visual-card-head">
+          <div>
+            <p className="eyebrow">Trend</p>
+            <h3>{title}</h3>
+          </div>
         </div>
-        <span className="panel-tag">{rows.length} days</span>
-      </div>
+      ) : null}
 
-      <div className="trend-hero">
+      <div className="trend-hero expense-spend-chart__stats">
         <div className="trend-hero-stat">
           <span>Latest</span>
           <strong>{currency.format(Number(latest.value ?? 0))}</strong>
@@ -3696,25 +3771,58 @@ function LineTrendCard({ items, title }) {
           <strong>{currency.format(Number(peak.value ?? 0))}</strong>
           <p>{formatShortDate(peak.label)}</p>
         </div>
+        <div className="trend-hero-stat">
+          <span>Daily average</span>
+          <strong>{currency.format(average)}</strong>
+          <p>Across {rows.length} recorded days</p>
+        </div>
       </div>
 
-      <svg viewBox="0 0 320 140" className="trend-svg" aria-hidden="true">
-        <path d="M0 120 H320" className="trend-axis" />
-        <polyline fill="none" points={points} className="trend-line" />
-        {rows.map((item, index) => {
-          const x = rows.length === 1 ? 160 : (index / (rows.length - 1)) * 320
-          const y = 120 - (Number(item.value ?? 0) / maxValue) * 100
-
-          return <circle key={`${item.label}-${index}`} cx={x} cy={y} r="4" className="trend-point" />
+      <svg
+        viewBox="0 0 500 218"
+        className="trend-svg expense-spend-chart__svg"
+        role="img"
+        aria-label={`${title}: ${rows.length} daily expense values`}
+      >
+        <defs>
+          <linearGradient id={`expense-trend-fill-${chartId}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.36" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0, 0.5, 1].map((ratio) => {
+          const y = plot.bottom - ratio * plotHeight
+          return (
+            <g key={ratio}>
+              <line x1={plot.left} x2={plot.right} y1={y} y2={y} className="expense-spend-chart__gridline" />
+              <text x={plot.left - 10} y={y + 4} textAnchor="end" className="expense-spend-chart__axis-label">
+                {axisCurrency.format(maxValue * ratio)}
+              </text>
+            </g>
+          )
         })}
-      </svg>
-      <div className="trend-labels">
-        {rows.slice(-6).map((item) => (
-          <div key={item.label} className="trend-label">
-            <strong>{currency.format(Number(item.value ?? 0))}</strong>
-            <span>{formatShortDate(item.label)}</span>
-          </div>
+        <polygon points={areaPoints} fill={`url(#expense-trend-fill-${chartId})`} />
+        <polyline fill="none" points={points} className="trend-line expense-spend-chart__line" />
+        {chartPoints.map(({ x, y, item }, index) => (
+          <circle key={`${item.label}-${index}`} cx={x} cy={y} r={rows.length < 16 ? 4 : 2.5} className="trend-point expense-spend-chart__point">
+            <title>{`${formatShortDate(item.label)}: ${currency.format(Number(item.value ?? 0))}`}</title>
+          </circle>
         ))}
+        {dateLabelIndexes.map((index) => (
+          <text
+            key={`${rows[index].label}-${index}`}
+            x={chartPoints[index].x}
+            y="204"
+            textAnchor={index === 0 ? 'start' : index === rows.length - 1 ? 'end' : 'middle'}
+            className="expense-spend-chart__axis-label"
+          >
+            {formatShortDate(rows[index].label)}
+          </text>
+        ))}
+      </svg>
+      <div className="expense-spend-chart__legend">
+        <span><i aria-hidden="true" /> Daily spend</span>
+        <span>{formatShortDate(rows[0].label)} – {formatShortDate(rows[rows.length - 1].label)}</span>
       </div>
     </div>
   )

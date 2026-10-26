@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
 
 export const patientFormDefaults = {
   surname: '',
@@ -4821,20 +4822,20 @@ function PatientPrescriptionModal({
 }
 
 const examTabs = [
-  { id: 'patient', label: 'Patient Info' },
-  { id: 'history', label: 'Medical History' },
-  { id: 'case', label: 'Case History' },
-  { id: 'va', label: 'Visual Acuity' },
-  { id: 'prelim', label: 'Preliminary Tests' },
-  { id: 'ophthal', label: 'Ophthalmoscopy' },
-  { id: 'tonometry', label: 'Tonometry' },
-  { id: 'colour', label: 'Colour Vision' },
-  { id: 'field', label: 'Visual Field' },
-  { id: 'refraction', label: 'Refraction' },
-  { id: 'oldsrx', label: 'Old SRx' },
-  { id: 'rx', label: 'Spectacle Rx' },
-  { id: 'uploads', label: 'Uploads' },
-  { id: 'diagnosis', label: 'Diagnosis' },
+  { id: 'patient', label: 'Patient Info', icon: '01' },
+  { id: 'history', label: 'Medical History', icon: '02' },
+  { id: 'case', label: 'Case History', icon: '03' },
+  { id: 'va', label: 'Visual Acuity', icon: '04' },
+  { id: 'prelim', label: 'Preliminary Tests', icon: '05' },
+  { id: 'ophthal', label: 'Ophthalmoscopy', icon: '06' },
+  { id: 'tonometry', label: 'Tonometry', icon: '07' },
+  { id: 'colour', label: 'Colour Vision', icon: '08' },
+  { id: 'field', label: 'Visual Field', icon: '09' },
+  { id: 'refraction', label: 'Refraction', icon: '10' },
+  { id: 'oldsrx', label: 'Old SRx', icon: '11' },
+  { id: 'rx', label: 'Spectacle Rx', icon: '12' },
+  { id: 'uploads', label: 'Uploads', icon: '13' },
+  { id: 'diagnosis', label: 'Diagnosis', icon: '14' },
 ]
 
 function PatientExamWorkspace({
@@ -4972,18 +4973,15 @@ function PatientExamWorkspace({
           </div>
         </div>
 
-        <div className="optometrist-exam-tabs" role="tablist" aria-label="Examination sections">
-          {examTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`optometrist-exam-tab ${activeTab === tab.id ? 'is-active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <WorkspaceTabs
+          tabs={examTabs}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          ariaLabel="Examination sections"
+          heading="Examination sections"
+          description="Choose a section to enter or review its details."
+          compact
+        />
 
         <div className="optometrist-exam-body">
           {formVersions.length ? (

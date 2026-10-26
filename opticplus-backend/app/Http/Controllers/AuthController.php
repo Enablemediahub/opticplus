@@ -32,6 +32,20 @@ class AuthController extends Controller
 
         $token = Str::random(80);
         Cache::put($this->cacheKey($token), $user->id, now()->addHours(8));
+        $now = now();
+        DB::table('users')->where('id', $user->id)->update(['last_login_at' => $now]);
+        DB::table('user_presence_sessions')->updateOrInsert(
+            ['token_hash' => hash('sha256', $token)],
+            [
+                'user_id' => $user->id,
+                'branch_id' => $user->branch_id,
+                'last_seen_at' => $now,
+                'logged_out_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+        DB::table('user_presence_sessions')->where('last_seen_at', '<', $now->copy()->subDays(30))->delete();
 
         return response()->json([
             'token' => $token,
@@ -117,6 +131,10 @@ class AuthController extends Controller
         $token = $request->attributes->get('current_access_token');
 
         if ($token) {
+            DB::table('user_presence_sessions')
+                ->where('token_hash', hash('sha256', $token))
+                ->whereNull('logged_out_at')
+                ->update(['logged_out_at' => now(), 'updated_at' => now()]);
             Cache::forget($this->cacheKey($token));
         }
 

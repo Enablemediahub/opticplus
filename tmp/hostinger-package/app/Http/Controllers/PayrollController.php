@@ -717,7 +717,7 @@ class PayrollController extends Controller
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
         }
-        if ($response = $this->ensureBankRegisterAccess($request)) {
+        if ($response = $this->ensureManagerBankAccess($request)) {
             return $response;
         }
 
@@ -759,7 +759,7 @@ class PayrollController extends Controller
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
         }
-        if ($response = $this->ensureBankRegisterAccess($request)) {
+        if ($response = $this->ensureManagerBankAccess($request)) {
             return $response;
         }
 
@@ -1367,6 +1367,17 @@ class PayrollController extends Controller
 
         return response()->json([
             'message' => 'Only the General Manager and Accountant can manage bank deposits and balance updates.',
+        ], 403);
+    }
+
+    private function ensureManagerBankAccess(Request $request): ?JsonResponse
+    {
+        if ($request->user()?->normalized_role === 'manager') {
+            return null;
+        }
+
+        return response()->json([
+            'message' => 'Only the General Manager can record manual bank deposits or update a saved bank balance.',
         ], 403);
     }
 

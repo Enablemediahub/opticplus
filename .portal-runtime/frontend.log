@@ -2,131 +2,39 @@
 > opticplus-frontend@0.0.0 dev
 > vite --configLoader runner --host 127.0.0.1 --port 5173
 
-1:16:32 PM [vite] (client) Re-optimizing dependencies because vite config has changed
+9:17:03 AM [vite] (client) Re-optimizing dependencies because vite config has changed
 
-  VITE v8.0.7  ready in 142 ms
+  VITE v8.0.7  ready in 108 ms
 
   ➜  Local:   http://127.0.0.1:5173/
-1:47:42 PM [vite] (client) page reload src/App.jsx
-1:47:43 PM [vite] (client) page reload src/App.jsx
-1:47:48 PM [vite] (client) page reload src/App.jsx
-1:47:53 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:48:06 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:48:31 PM [vite] (client) page reload src/components/ReportsSection.jsx
-1:48:32 PM [vite] (client) page reload src/components/AccountantDashboardSection.jsx
-1:48:34 PM [vite] (client) page reload src/components/FinanceSection.jsx
-1:48:51 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:48:55 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:49:14 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:49:26 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:49:40 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:49:53 PM [vite] (client) page reload src/App.jsx
-1:49:57 PM [vite] (client) page reload src/components/BillingSection.jsx
-1:50:00 PM [vite] (client) page reload src/components/BillingSection.jsx
-1:50:01 PM [vite] (client) page reload src/components/FinanceSection.jsx
-1:54:58 PM [vite] (client) page reload src/App.jsx
-1:55:00 PM [vite] (client) page reload src/App.jsx
-1:55:04 PM [vite] (client) page reload src/App.jsx
-1:55:10 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:55:15 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-1:55:26 PM [vite] (client) hmr update /src/App.css
-2:13:28 PM [vite] (client) hmr update /src/App.css
-2:13:38 PM [vite] (client) hmr update /src/App.css
-2:17:19 PM [vite] (client) page reload src/components/FinanceSection.jsx
-2:17:22 PM [vite] (client) page reload src/components/AuditLogSection.jsx
-2:17:24 PM [vite] (client) page reload src/components/BillingSection.jsx
-2:17:28 PM [vite] (client) page reload src/components/InsuranceSection.jsx
-2:17:35 PM [vite] (client) page reload src/components/PatientsSection.jsx
-2:17:48 PM [vite] (client) page reload src/components/FinanceSection.jsx
-2:17:57 PM [vite] (client) page reload src/components/FinanceSection.jsx
-2:18:10 PM [vite] (client) page reload src/components/InventorySection.jsx
-2:18:12 PM [vite] (client) page reload src/components/UsersManagementSection.jsx
-2:18:14 PM [vite] (client) page reload src/components/StaffProfilesSection.jsx
-2:18:16 PM [vite] (client) page reload src/components/DebtManagementSection.jsx
-2:18:18 PM [vite] (client) page reload src/components/FinanceSection.jsx
-2:18:30 PM [vite] (client) hmr update /src/App.css
-2:18:50 PM [vite] (client) page reload src/components/FinanceSection.jsx
-2:18:55 PM [vite] (client) hmr update /src/App.css
-2:20:44 PM [vite] (client) page reload src/components/PatientsSection.jsx
-2:27:03 PM [vite] (client) hmr update /src/App.css
-2:28:31 PM [vite] (client) hmr update /src/App.css
-2:28:37 PM [vite] (client) hmr update /src/App.css
-2:30:34 PM [vite] (client) hmr update /src/App.css
-2:30:39 PM [vite] (client) hmr update /src/App.css
-2:32:51 PM [vite] (client) page reload src/components/PatientsSection.jsx
-2:32:58 PM [vite] (client) hmr update /src/App.css
-2:33:58 PM [vite] (client) hmr update /src/App.css
-2:34:14 PM [vite] (client) hmr update /src/App.css
-2:36:58 PM [vite] (client) hmr update /src/App.css
-2:37:21 PM [vite] (client) hmr update /src/App.css
-2:37:35 PM [vite] (client) hmr update /src/App.css
-2:57:39 PM [vite] (client) hmr update /src/App.css
-3:05:29 PM [vite] (client) hmr update /src/App.css
-3:08:54 PM [vite] (client) page reload src/components/PlaceLensOrderSection.jsx
-3:09:02 PM [vite] (client) page reload src/components/PlaceLensOrderSection.jsx
-3:09:07 PM [vite] (client) hmr update /src/App.css
-3:10:01 PM [vite] (client) hmr update /src/App.css
-3:11:32 PM [vite] (client) hmr update /src/App.css
-3:23:32 PM [vite] (client) hmr update /src/App.css
-3:23:44 PM [vite] (client) hmr update /src/App.css
-3:50:03 PM [vite] (client) hmr update /src/App.css
-4:25:15 PM [vite] (client) page reload src/components/FinanceSection.jsx
-4:25:15 PM [vite] (client) page reload src/components/ExtractSection.jsx
-4:25:15 PM [vite] (client) page reload src/components/PayrollSection.jsx
-4:25:15 PM [vite] (client) page reload src/components/CustomerServiceSection.jsx
-4:25:15 PM [vite] (client) page reload src/components/BsmiTrackingSection.jsx
-4:25:15 PM [vite] (client) page reload src/components/WorkingCapitalLiabilitiesSection.jsx
-4:25:15 PM [vite] (client) page reload src/components/OptometristAppointmentsSection.jsx
-4:25:20 PM [vite] (client) page reload src/components/LensOrdersSection.jsx
-4:25:29 PM [vite] (client) page reload src/components/FinanceSection.jsx
-4:25:29 PM [vite] (client) page reload src/components/MemosSection.jsx
-4:28:14 PM [vite] (client) page reload src/components/DatabaseAdminSection.jsx
-4:28:30 PM [vite] (client) page reload src/components/MonitorSection.jsx
-4:28:30 PM [vite] (client) page reload src/components/ReportsSection.jsx
-4:28:34 PM [vite] (client) hmr update /src/App.css
-4:28:45 PM [vite] (client) hmr update /src/App.css
-4:30:20 PM [vite] (client) page reload src/components/DatabaseAdminSection.jsx
-4:30:22 PM [vite] (client) page reload src/App.jsx
-4:30:43 PM [vite] (client) hmr update /src/App.css
-4:30:52 PM [vite] (client) hmr update /src/App.css
-4:30:54 PM [vite] (client) page reload src/components/DatabaseAdminSection.jsx
-4:32:49 PM [vite] (client) hmr update /src/App.css
-5:03:15 PM [vite] (client) page reload src/App.jsx
-5:03:20 PM [vite] (client) page reload src/App.jsx
-5:03:34 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:03:45 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:03:58 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:04:13 PM [vite] (client) hmr update /src/App.css
-5:04:39 PM [vite] (client) page reload src/App.jsx
-5:04:47 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:04:57 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:05:47 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:05:51 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:06:03 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:06:10 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:06:56 PM [vite] (client) page reload src/components/FinanceSection.jsx
-5:06:59 PM [vite] (client) page reload src/components/FinanceSection.jsx
-6:46:57 PM [vite] (client) page reload src/components/FinanceSection.jsx
-6:46:57 PM [vite] (client) Pre-transform error: Transform failed with 1 error:
+9:17:04 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:18:23 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:19:05 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:30:53 AM [vite] (client) page reload src/components/FinanceSection.jsx
+9:30:54 AM [vite] (client) Pre-transform error: Transform failed with 1 error:
 
-[31m[PARSE_ERROR] Error:[0m Unterminated string
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:1887:69 [38;5;246m][0m
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
       [38;5;246m│[0m
- [38;5;246m1887 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249ma[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249mw[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249me[0m[38;5;249m [0m[38;5;249me[0m[38;5;249mx[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mp[0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mv[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m">
- [38;5;240m     │[0m                                                                     ─┬─  
- [38;5;240m     │[0m                                                                      ╰─── 
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
 [38;5;246m──────╯[0m
 
   Plugin: vite:oxc
   File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
-6:46:57 PM [vite] Internal server error: Transform failed with 1 error:
+9:30:54 AM [vite] Internal server error: Transform failed with 1 error:
 
-[31m[PARSE_ERROR] Error:[0m Unterminated string
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:1887:69 [38;5;246m][0m
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
       [38;5;246m│[0m
- [38;5;246m1887 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249ma[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249mw[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249me[0m[38;5;249m [0m[38;5;249me[0m[38;5;249mx[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mp[0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mv[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m">
- [38;5;240m     │[0m                                                                     ─┬─  
- [38;5;240m     │[0m                                                                      ╰─── 
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
 [38;5;246m──────╯[0m
 
   Plugin: vite:oxc
@@ -136,14 +44,16 @@
       at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
       at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
       at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-6:46:57 PM [vite] Internal server error: Transform failed with 1 error:
+9:30:54 AM [vite] Internal server error: Transform failed with 1 error:
 
-[31m[PARSE_ERROR] Error:[0m Unterminated string
-      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:1887:69 [38;5;246m][0m
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
       [38;5;246m│[0m
- [38;5;246m1887 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m[38;5;249ma[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m [0m[38;5;249mc[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249ms[0m[38;5;249ms[0m[38;5;249mN[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m=[0m[38;5;249m"[0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m[38;5;249m-[0m[38;5;249mw[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249me[0m[38;5;249m [0m[38;5;249me[0m[38;5;249mx[0m[38;5;249mp[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249me[0m[38;5;249m-[0m[38;5;249ma[0m[38;5;249mp[0m[38;5;249mp[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mv[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249ms[0m[38;5;249m-[0m[38;5;249mp[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249ml[0m">
- [38;5;240m     │[0m                                                                     ─┬─  
- [38;5;240m     │[0m                                                                      ╰─── 
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
 [38;5;246m──────╯[0m
 
   Plugin: vite:oxc
@@ -153,145 +63,480 @@
       at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
       at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
       at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
-6:47:08 PM [vite] (client) page reload src/components/FinanceSection.jsx
-6:54:04 PM [vite] (client) hmr update /src/App.css
-6:54:09 PM [vite] (client) hmr update /src/App.css
-6:57:59 PM [vite] (client) page reload src/components/FinanceSection.jsx
-6:58:06 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:03:17 PM [vite] (client) page reload src/App.jsx
-7:03:21 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:03:24 PM [vite] (client) hmr update /src/App.css
-7:10:17 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:10:19 PM [vite] (client) hmr update /src/App.css
-7:14:05 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:16:25 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:18:57 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:18:59 PM [vite] (client) page reload src/App.jsx
-7:19:15 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:20:35 PM [vite] (client) hmr update /src/App.css
-7:22:03 PM [vite] (client) hmr update /src/App.css
-7:23:24 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:23:27 PM [vite] (client) hmr update /src/App.css
-7:24:09 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:24:12 PM [vite] (client) hmr update /src/App.css
-7:24:15 PM [vite] (client) hmr update /src/App.css
-7:24:44 PM [vite] (client) hmr update /src/App.css
-7:44:49 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:44:51 PM [vite] (client) page reload src/components/MemosSection.jsx
-7:45:00 PM [vite] (client) hmr update /src/App.css
-7:55:27 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:58:33 PM [vite] (client) page reload src/components/FinanceSection.jsx
-7:58:38 PM [vite] (client) hmr update /src/App.css
-7:58:56 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:05:41 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:05:52 PM [vite] (client) hmr update /src/App.css
-8:19:10 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:19:15 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:19:19 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:19:26 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:19:34 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:19:41 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:19:47 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:19:50 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:20:01 PM [vite] (client) hmr update /src/App.css
-8:20:30 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:20:33 PM [vite] (client) page reload src/utils/printDocuments.js
-8:20:47 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:21:11 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:29:44 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:29:47 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:29:53 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:30:05 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:30:20 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:30:23 PM [vite] (client) page reload src/components/MemosSection.jsx
-8:30:40 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:30:43 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:30:47 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:30:49 PM [vite] (client) hmr update /src/App.css
-8:31:03 PM [vite] (client) hmr update /src/App.css
-8:31:10 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:37:46 PM [vite] (client) page reload src/App.jsx
-8:37:56 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:37:59 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:38:02 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:38:09 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:38:15 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:38:26 PM [vite] (client) hmr update /src/App.css
-8:38:38 PM [vite] (client) page reload src/App.jsx
-8:38:51 PM [vite] (client) hmr update /src/App.css
-8:39:16 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:39:30 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:40:52 PM [vite] (client) page reload src/App.jsx
-8:40:55 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:40:59 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:41:06 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:41:19 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:41:21 PM [vite] (client) hmr update /src/App.css
-8:41:24 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:50:03 PM [vite] (client) page reload src/components/FinanceSection.jsx
-8:50:07 PM [vite] (client) page reload src/components/FinanceSection.jsx
-9:05:52 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:05:56 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:06:01 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:06:09 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:06:12 PM [vite] (client) hmr update /src/App.css
-9:06:17 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:12:39 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:15:14 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:15:19 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:32:26 PM [vite] (client) page reload src/components/MemosSection.jsx
-9:32:34 PM [vite] (client) hmr update /src/App.css
-9:48:04 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:15:25 PM [vite] (client) page reload src/App.jsx
-10:15:35 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:15:38 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:15:45 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:15:52 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:15:56 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:15:58 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:16:01 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:16:04 PM [vite] (client) page reload src/App.jsx
-10:16:56 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:25:54 PM [vite] (client) page reload src/App.jsx
-10:25:57 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:26:06 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:26:08 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:26:11 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:26:15 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:26:20 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:26:45 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:27:18 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:27:34 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:27:51 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:36:06 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:36:08 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:36:11 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:36:13 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:36:14 PM [vite] (client) page reload src/App.jsx
-10:36:21 PM [vite] (client) hmr update /src/App.css
-10:38:24 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:46:09 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:46:23 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:46:30 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:46:38 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:46:43 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:46:45 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:46:52 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:46:58 PM [vite] (client) page reload src/utils/printDocuments.js
-10:47:03 PM [vite] (client) page reload src/utils/printDocuments.js
-10:47:09 PM [vite] (client) hmr update /src/App.css
-10:47:18 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:47:20 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:47:22 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:48:12 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:48:16 PM [vite] (client) page reload src/components/FinanceSection.jsx
-10:48:27 PM [vite] (client) page reload src/utils/printDocuments.js
-10:51:22 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:52:22 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:53:10 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:57:43 PM [vite] (client) page reload src/components/MemosSection.jsx
-10:57:45 PM [vite] (client) hmr update /src/App.css
-11:04:27 PM [vite] (client) page reload src/components/FinanceSection.jsx
-11:04:32 PM [vite] (client) page reload src/App.jsx
-11:06:06 PM [vite] (client) page reload src/App.jsx
-11:06:17 PM [vite] (client) page reload src/App.jsx
+9:31:06 AM [vite] (client) hmr update /src/App.css
+9:31:06 AM [vite] (client) Pre-transform error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
+      [38;5;246m│[0m
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
+[38;5;246m──────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
+9:31:07 AM [vite] Internal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
+      [38;5;246m│[0m
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
+[38;5;246m──────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
+      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
+      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
+      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+9:31:07 AM [vite] Internal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
+      [38;5;246m│[0m
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
+[38;5;246m──────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
+      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
+      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
+      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+9:31:10 AM [vite] (client) hmr update /src/App.css
+9:31:10 AM [vite] (client) Pre-transform error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
+      [38;5;246m│[0m
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
+[38;5;246m──────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
+9:31:10 AM [vite] Internal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
+      [38;5;246m│[0m
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
+[38;5;246m──────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
+      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
+      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
+      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+9:31:10 AM [vite] Internal server error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Unexpected token
+      [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/components/FinanceSection.jsx:2280:10 [38;5;246m][0m
+      [38;5;246m│[0m
+ [38;5;246m2280 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m<[0m/div>
+ [38;5;240m     ┆[0m ┆   
+ [38;5;246m3827 │[0m ├─▶ }
+ [38;5;240m     │[0m │       
+ [38;5;240m     │[0m ╰─────── 
+[38;5;246m──────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/components/FinanceSection.jsx
+      at transformWithOxc (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3745:19)
+      at TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:3813:26)
+      at EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:51)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+9:31:20 AM [vite] (client) page reload src/components/FinanceSection.jsx
+9:31:21 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:31:22 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:31:51 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:38:49 AM [vite] (client) hmr update /src/App.css
+9:39:01 AM [vite] (client) page reload src/components/FinanceSection.jsx
+9:39:01 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:08 AM [vite] (client) page reload src/components/InventorySection.jsx
+9:39:08 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:08 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:08 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:12 AM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+9:39:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:17 AM [vite] (client) page reload src/components/InsuranceSection.jsx
+9:39:17 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:17 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:17 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:26 AM [vite] (client) page reload src/components/PatientsSection.jsx
+9:39:26 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:26 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:26 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:34 AM [vite] (client) page reload src/components/ExtractSection.jsx
+9:39:34 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:34 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:34 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:39:50 AM [vite] (client) hmr update /src/App.css
+9:40:16 AM [vite] (client) hmr update /src/App.css
+9:40:18 AM [vite] (client) hmr update /src/App.css
+9:40:35 AM [vite] (client) page reload src/components/WorkspaceTabs.jsx
+9:40:36 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:40:36 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:40:36 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:40:37 AM [vite] (client) hmr update /src/App.css
+9:40:39 AM [vite] (client) hmr update /src/App.css
+9:46:02 AM [vite] (client) page reload src/components/InventorySection.jsx
+9:46:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:03 AM [vite] (client) [console.error] ReferenceError: Cannot access 'activeTab' before initialization
+    at InventorySection (http://127.0.0.1:5173/src/components/InventorySection.jsx?t=1792921562432:81:3)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+
+The above error occurred in the <InventorySection> component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, StartupErrorBoundary.
+
+9:46:03 AM [vite] (client) [console.error] OPTICPLUS startup error: ReferenceError: Cannot access 'activeTab' before initialization
+    at InventorySection (http://127.0.0.1:5173/src/components/InventorySection.jsx?t=1792921562432:81:3)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+9:46:18 AM [vite] (client) page reload src/App.jsx
+9:46:18 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:18 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:18 AM [vite] (client) [console.error] ReferenceError: Cannot access 'activeTab' before initialization
+    at InventorySection (http://127.0.0.1:5173/src/components/InventorySection.jsx?t=1792921562432:81:3)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+
+The above error occurred in the <InventorySection> component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, StartupErrorBoundary.
+
+9:46:18 AM [vite] (client) [console.error] OPTICPLUS startup error: ReferenceError: Cannot access 'activeTab' before initialization
+    at InventorySection (http://127.0.0.1:5173/src/components/InventorySection.jsx?t=1792921562432:81:3)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+9:46:18 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:36 AM [vite] (client) page reload src/components/InventorySection.jsx
+9:46:36 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:36 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:36 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:38 AM [vite] (client) page reload src/App.jsx
+9:46:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:46:38 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:11 AM [vite] (client) page reload src/components/LensOrderWorkspaceSection.jsx
+9:49:11 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:11 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:15 AM [vite] (client) page reload src/components/LensOrdersSection.jsx
+9:49:15 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:15 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:15 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:17 AM [vite] (client) page reload src/App.jsx
+9:49:17 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:17 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:17 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:49:19 AM [vite] (client) hmr update /src/App.css
+9:49:26 AM [vite] (client) hmr update /src/App.css
+9:51:16 AM [vite] (client) page reload src/components/LensOrdersSection.jsx
+9:51:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:51:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:51:16 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:51:22 AM [vite] (client) hmr update /src/App.css
+9:53:02 AM [vite] (client) page reload src/components/LensOrdersSection.jsx
+9:53:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:53:02 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:53:03 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:53:03 AM [vite] (client) hmr update /src/App.css
+9:56:09 AM [vite] (client) hmr update /src/App.css
+9:59:13 AM [vite] (client) page reload src/components/FinanceSection.jsx
+9:59:13 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:59:13 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:59:14 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+9:59:19 AM [vite] (client) hmr update /src/App.css
+9:59:48 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:04:11 AM [vite] (client) page reload src/components/FinanceSection.jsx
+10:04:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:04:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:04:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:04:12 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:04:26 AM [vite] (client) hmr update /src/App.css
+10:07:47 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+10:08:03 AM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+12:02:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+12:02:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+12:02:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:00 PM [vite] (client) page reload src/App.jsx
+2:42:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:01 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:28 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+2:42:28 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:29 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:29 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:29 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:42:29 PM [vite] (client) [console.error] ReferenceError: saveAccount is not defined
+    at BankDepositsSection (http://127.0.0.1:5173/src/components/BankDepositsSection.jsx?t=1792939348415:430:17)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+
+The above error occurred in the <BankDepositsSection> component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, StartupErrorBoundary.
+
+2:42:29 PM [vite] (client) [console.error] OPTICPLUS startup error: ReferenceError: saveAccount is not defined
+    at BankDepositsSection (http://127.0.0.1:5173/src/components/BankDepositsSection.jsx?t=1792939348415:430:17)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+2:44:13 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+2:44:13 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:14 PM [vite] (client) [console.error] ReferenceError: saveAccount is not defined
+    at BankDepositsSection (http://127.0.0.1:5173/src/components/BankDepositsSection.jsx?t=1792939453314:441:17)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+
+The above error occurred in the <BankDepositsSection> component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, StartupErrorBoundary.
+
+2:44:14 PM [vite] (client) [console.error] OPTICPLUS startup error: ReferenceError: saveAccount is not defined
+    at BankDepositsSection (http://127.0.0.1:5173/src/components/BankDepositsSection.jsx?t=1792939453314:441:17)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:13047:12)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:4392:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:5748:16)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:6319:20)
+    at runWithFiberInDEV (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:1030:66)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8608:92)
+    at workLoopSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8504:37)
+    at renderRootSync (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8488:6)
+    at performWorkOnRoot (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=ddb0eeff:8173:27)
+2:44:22 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+2:44:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:44:37 PM [vite] (client) hmr update /src/App.css
+2:44:45 PM [vite] (client) hmr update /src/App.css
+2:46:17 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+2:46:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:46:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:46:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:46:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:48:29 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+2:48:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:48:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:48:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:48:30 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:53:39 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+2:53:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:53:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:53:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+2:53:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+3:08:11 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+3:16:34 PM [vite] (client) page reload dist-hostinger-package-202610251516/index.html
+3:59:47 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+3:59:47 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+3:59:47 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:23:17 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+4:23:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:23:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:23:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:23:25 PM [vite] (client) page reload dist-hostinger-auto-refresh-20261025/index.html
+4:26:31 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:26:37 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:32:17 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+4:32:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:32:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:32:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:32:17 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:32:21 PM [vite] (client) hmr update /src/App.css
+4:32:29 PM [vite] (client) page reload dist-hostinger-bank-logos-20261025/index.html
+4:33:26 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+4:33:26 PM [vite] (client) hmr update /src/App.css
+4:33:27 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:33:27 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:33:27 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:33:27 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:33:30 PM [vite] (client) page reload dist-hostinger-bank-logos-large-20261025/index.html
+4:34:03 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:35:38 PM [vite] (client) hmr update /src/App.css
+4:35:38 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+4:35:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:35:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:35:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:35:39 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:35:42 PM [vite] (client) page reload dist-hostinger-bank-logos-right-20261025/index.html
+4:36:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:36:47 PM [vite] (client) hmr update /src/App.css
+4:36:51 PM [vite] (client) page reload dist-hostinger-bank-logos-fit-20261025/index.html
+4:41:10 PM [vite] (client) page reload src/components/PayrollSection.jsx
+4:41:10 PM [vite] (client) page reload src/components/MonitorSection.jsx
+4:41:10 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:41:11 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:41:11 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:41:20 PM [vite] (client) page reload src/components/BankBalanceCards.jsx
+4:41:21 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:41:21 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:41:21 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:41:25 PM [vite] (client) page reload dist-hostinger-monitor-payroll-banks-20261025/index.html
+4:42:29 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:31 PM [vite] (client) page reload src/components/PayrollSection.jsx
+4:46:32 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:32 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:32 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:32 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:46:54 PM [vite] (client) hmr update /src/App.css
+4:46:59 PM [vite] (client) page reload dist-hostinger-bulk-payroll-pro-20261025/index.html
+4:47:23 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:51:24 PM [vite] (client) page reload src/components/PayrollSection.jsx
+4:51:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:51:24 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:51:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:51:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:51:56 PM [vite] (client) hmr update /src/App.css
+4:52:12 PM [vite] (client) page reload src/components/PayrollSection.jsx
+4:52:12 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:52:12 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:52:12 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:52:12 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+4:52:17 PM [vite] (client) hmr update /src/App.css
+4:52:25 PM [vite] (client) page reload dist-hostinger-bulk-payroll-flat-20261025/index.html
+4:53:01 PM [vite] (client) hmr update /src/App.css
+4:53:05 PM [vite] (client) page reload dist-hostinger-bulk-payroll-flat-20261025/index.html
+4:53:05 PM [vite] (client) page reload dist-hostinger-bulk-payroll-flat-20261025/index.html
+4:53:40 PM [vite] (client) hmr update /src/App.css
+4:53:43 PM [vite] (client) page reload dist-hostinger-bulk-payroll-flat-20261025/index.html
+4:53:43 PM [vite] (client) page reload dist-hostinger-bulk-payroll-flat-20261025/index.html
+4:53:54 PM [vite] (client) page reload dist-hostinger-bulk-payroll-flat-20261025/index.html
+4:54:58 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:08 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+5:04:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:14 PM [vite] (client) page reload src/components/BankBalanceCards.jsx
+5:04:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:25 PM [vite] (client) page reload src/components/BankDepositsSection.jsx
+5:04:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:25 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:04:27 PM [vite] (client) hmr update /src/App.css
+5:04:31 PM [vite] (client) page reload dist-hostinger-bank-balance-clear-20261025/index.html
+5:04:51 PM [vite] (client) page reload dist-hostinger-bank-balance-clear-20261025/index.html
+5:08:37 PM [vite] (client) page reload src/App.jsx
+5:08:37 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:08:38 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:08:38 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:08:38 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:07 PM [vite] (client) page reload src/components/ManagerDashboardSection.jsx
+5:09:07 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:08 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:13 PM [vite] (client) page reload src/components/ManagerDashboardSection.jsx
+5:09:13 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:14 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:16 PM [vite] (client) page reload src/components/ManagerDashboardSection.jsx
+5:09:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:16 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:09:29 PM [vite] (client) hmr update /src/App.css
+5:10:18 PM [vite] (client) hmr update /src/App.css
+5:10:48 PM [vite] (client) page reload src/App.jsx
+5:10:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:10:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:10:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:10:48 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:10:57 PM [vite] (client) page reload dist-hostinger-user-presence-20261025/index.html
+5:12:11 PM [vite] (client) page reload dist-hostinger-user-presence-20261025/index.html
+5:14:03 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:31:39 PM [vite] (client) hmr update /src/App.css
+5:31:51 PM [vite] (client) page reload dist-hostinger-modal-scroll-20261025/index.html
+5:32:12 PM [vite] (client) page reload dist-hostinger-modal-scroll-20261025/index.html
+5:51:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:51:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:51:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+5:51:09 PM [vite] (client) [console.warn] Module "stream" has been externalized for browser compatibility. Cannot access "stream.Readable" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.

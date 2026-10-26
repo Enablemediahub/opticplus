@@ -12,6 +12,10 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [presence, setPresence] = useState(null)
+  const [presenceError, setPresenceError] = useState('')
+  const [isLoadingPresence, setIsLoadingPresence] = useState(false)
+  const [presenceUpdatedAt, setPresenceUpdatedAt] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -35,6 +39,42 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
     }
   }, [apiFetch, selectedBranchId, token])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPresence() {
+      if (document.visibilityState !== 'visible') return
+      setIsLoadingPresence(true)
+      setPresenceError('')
+      try {
+        const response = await apiFetch(`/manager/user-presence?branch_id=${selectedBranchId}`, { token })
+        if (!cancelled) {
+          setPresence(response)
+          setPresenceUpdatedAt(new Date())
+        }
+      } catch (nextError) {
+        if (!cancelled) setPresenceError(nextError.message)
+      } finally {
+        if (!cancelled) setIsLoadingPresence(false)
+      }
+    }
+
+    loadPresence()
+    const intervalId = window.setInterval(loadPresence, 30_000)
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') loadPresence()
+    }
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
+    }
+  }, [apiFetch, selectedBranchId, token])
+
   const stats = [
     ['Today Sales', currency.format(Number(data?.stats.today_sales ?? 0)), 'Revenue recorded today', 'money', 'seen'],
     ['Today Patients', data?.stats.today_patients ?? '...', 'Patients registered today', 'patients', 'today'],
@@ -48,6 +88,12 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
     ],
   ]
   const quickLinks = buildManagerQuickLinks(data?.quick_links ?? [])
+  const presenceByBranch = (presence?.users ?? []).reduce((groups, user) => {
+    const key = user.branch_name || 'Unknown branch'
+    groups[key] = [...(groups[key] ?? []), user]
+    return groups
+  }, {})
+  const onlineUsers = (presence?.users ?? []).filter((user) => user.is_online).length
 
   return (
     <section className="finance-section">
@@ -67,6 +113,54 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
         {stats.map(([label, value, note, icon, className]) => (
           <StatWidget key={label} label={label} value={isLoading && !data ? '...' : value} note={note} icon={icon} className={className} />
         ))}
+      </section>
+
+      <section className="panel manager-user-presence">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">User Sign-ins</p>
+            <h3>Online users and last login by branch</h3>
+            <p className="header-copy">Online means the user made an authenticated request within the last 2 minutes. This list refreshes every 30 seconds.</p>
+          </div>
+          <span className="panel-tag">
+            {isLoadingPresence && !presence ? 'Loading users...' : `${onlineUsers} online`}
+          </span>
+        </div>
+
+        {presenceError ? <div className="message-banner error">{presenceError}</div> : null}
+
+        {Object.entries(presenceByBranch).length ? (
+          <div className="manager-presence-branches">
+            {Object.entries(presenceByBranch).map(([branchName, users]) => (
+              <section className="manager-presence-branch" key={branchName}>
+                <div className="manager-presence-branch-heading">
+                  <h4>{branchName}</h4>
+                  <span>{users.filter((user) => user.is_online).length} online of {users.length} users</span>
+                </div>
+                <div className="manager-presence-list">
+                  {users.map((user) => (
+                    <article className="manager-presence-user" key={user.id}>
+                      <div className="manager-presence-user-name">
+                        <span className={`presence-indicator${user.is_online ? ' is-online' : ''}`} aria-label={user.is_online ? 'Online' : 'Offline'} />
+                        <div>
+                          <strong>{user.name}</strong>
+                          <span>{user.username} · {titleize(user.role)}{user.employee_status === 'inactive' ? ' · Inactive account' : ''}</span>
+                        </div>
+                      </div>
+                      <div className="manager-presence-user-meta">
+                        <span className={`presence-status${user.is_online ? ' is-online' : ''}`}>{user.is_online ? 'Online' : 'Offline'}</span>
+                        <span>Last login: {user.last_login_at ? formatDateTime(user.last_login_at) : 'Not recorded yet'}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <p className="muted-copy">{presenceError ? 'User sign-in activity could not be loaded.' : 'No users were found for this branch selection.'}</p>
+        )}
+        {presenceUpdatedAt ? <p className="muted-copy manager-presence-updated">Last refreshed {presenceUpdatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p> : null}
       </section>
 
       <section className="content-grid manager-dashboard-grid">
@@ -196,6 +290,22 @@ function buildManagerQuickLinks(items) {
   }
 
   return nextItems
+}
+
+function titleize(value) {
+  return String(value ?? '')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function MetricCard({ label, value, change = null, subtext = '', tone = 'info' }) {

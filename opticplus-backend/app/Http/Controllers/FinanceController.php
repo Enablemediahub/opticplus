@@ -1478,7 +1478,6 @@ class FinanceController extends Controller
             ->selectRaw('DATE(date) as expense_date, SUM(amount) as total')
             ->groupBy(DB::raw('DATE(date)'))
             ->orderBy('expense_date')
-            ->limit(20)
             ->get();
 
         $user = $request->user();

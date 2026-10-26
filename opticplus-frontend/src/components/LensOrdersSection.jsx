@@ -306,6 +306,8 @@ export default function LensOrdersSection(props) {
         <StatWidget label="Optometrists" value={String(summary.assigned_optometrists ?? 0)} note="Assigned staff linked to the orders" icon="support" className="today" />
       </section>
 
+      {props.workspaceNavigation}
+
       <article className="panel lens-orders-panel">
         <div className="panel-heading lens-orders-panel-heading">
           <div>

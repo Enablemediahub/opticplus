@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import BankBalanceCards from './BankBalanceCards.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
@@ -481,6 +482,7 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
         <StatWidget label="Pending Advances" value={String(Number(data?.stats?.pending_advance_count ?? 0))} note={currency.format(Number(data?.stats?.expected_advances ?? 0))} icon="alert" className="pending" />
         <StatWidget label="Processed Staff" value={String(Number(data?.stats?.processed_count ?? 0))} note="Already paid for the selected payroll month" icon="receipt" className="today" />
       </section>
+      <BankBalanceCards apiFetch={apiFetch} token={token} branchId={branchId} />
 
       <section className="content-grid payroll-content-grid">
         <article className="panel panel-wide payroll-controls-panel">
@@ -535,62 +537,55 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
               <div className="payroll-bulk-hero-header">
                 <div>
                   <p className="eyebrow">Bulk Payroll</p>
-                  <h4>Tick employees, then set the salary and allowance tracks</h4>
-                  <p>Declared salary and allowance can carry different payment methods in the same bulk run.</p>
+                  <h4>Prepare payroll for multiple employees</h4>
+                  <p>1. Select employees in Payroll Candidates below. 2. Choose what to pay. 3. Confirm payment methods and process.</p>
                 </div>
-                <div className="payroll-bulk-badge">
-                  <span>Selected staff</span>
-                  <strong>{bulkPayrollSummary.selected_count}</strong>
-                </div>
+                <span className="payroll-bulk-selection-count">
+                  {bulkPayrollSummary.selected_count} {bulkPayrollSummary.selected_count === 1 ? 'employee' : 'employees'} selected
+                </span>
               </div>
 
               <div className="payroll-bulk-hero-grid">
                 <div className="payroll-bulk-summary">
                   <div>
-                    <span>Batch scope</span>
-                    <strong>{bulkMode === 'full' ? 'Declared + allowance' : bulkMode === 'declared' ? 'Declared salary' : 'Allowance pool'}</strong>
-                  </div>
-                  <div>
-                    <span>Selected payout</span>
+                    <span>Estimated total to process</span>
                     <strong>{currency.format(bulkPayrollSummary.total_amount)}</strong>
-                  </div>
-                  <div>
-                    <span>Allowance pool</span>
-                    <strong>{currency.format(bulkPayrollSummary.allowance_total)}</strong>
-                  </div>
-                  <div>
-                    <span>Payroll month</span>
-                    <strong>{monthLabel(query.month, query.year)}</strong>
                   </div>
                   <div>
                     <span>Advance deductions</span>
                     <strong>{currency.format(selectedBulkEmployees.reduce((total, employee) => total + Number(employee.pending_advances ?? 0), 0))}</strong>
                   </div>
                   <div>
-                    <span>Selection total</span>
-                    <strong>{currency.format(bulkMode === 'allowance' ? bulkPayrollSummary.allowance_total : bulkPayrollSummary.total_amount)}</strong>
+                    <span>Payroll period</span>
+                    <strong>{monthLabel(query.month, query.year)}</strong>
                   </div>
                 </div>
 
                 <div className="payroll-bulk-scope-group" role="group" aria-label="Bulk payroll scope">
+                  <p className="payroll-bulk-section-label">What would you like to process?</p>
                   <button type="button" className={`payroll-bulk-method-pill${bulkMode === 'full' ? ' is-active' : ''}`} onClick={() => setBulkMode('full')}>
-                    <span>Declared + allowance</span>
+                    <span>Salary + allowance</span>
                     <small>Process both payment paths</small>
+                    {bulkMode === 'full' ? <em>Selected</em> : null}
                   </button>
                   <button type="button" className={`payroll-bulk-method-pill${bulkMode === 'declared' ? ' is-active' : ''}`} onClick={() => setBulkMode('declared')}>
                     <span>Declared salary</span>
                     <small>Salary only, allowance untouched</small>
+                    {bulkMode === 'declared' ? <em>Selected</em> : null}
                   </button>
                   <button type="button" className={`payroll-bulk-method-pill${bulkMode === 'allowance' ? ' is-active' : ''}`} onClick={() => setBulkMode('allowance')}>
                     <span>Allowance pool</span>
                     <small>Allowance only, expense recorded</small>
+                    {bulkMode === 'allowance' ? <em>Selected</em> : null}
                   </button>
                 </div>
               </div>
 
               <div className="payroll-bulk-methods-rail">
-                <div className="payroll-bulk-method-panel">
-                  <span>Declared salary payment method</span>
+                <div className={`payroll-bulk-method-panel${bulkMode === 'allowance' ? ' is-inactive' : ''}`}>
+                  <div className="payroll-bulk-track-heading">
+                    <div><strong>Salary payment method</strong><small>{bulkMode === 'allowance' ? 'Not included in this payout track' : 'Choose how declared salary will be paid'}</small></div>
+                  </div>
                   <div className="payroll-bulk-method-group" role="group" aria-label="Declared salary payment method">
                     {(meta?.payment_methods ?? []).length ? (
                       (meta?.payment_methods ?? []).map((method) => (
@@ -598,16 +593,17 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                           key={`declared-${method}`}
                           type="button"
                           className={`payroll-bulk-method-pill${bulkDeclaredPaymentMethod === method ? ' is-active' : ''}`}
+                          disabled={bulkMode === 'allowance'}
                           onClick={() => setBulkDeclaredPaymentMethod(method)}
                         >
                           <span>{titleize(method)}</span>
-                          <small>{bulkDeclaredPaymentMethod === method ? 'Selected' : 'Tap to select'}</small>
+                          {bulkDeclaredPaymentMethod === method && bulkMode !== 'allowance' ? <em>Selected</em> : null}
                         </button>
                       ))
                     ) : (
                       <label className="payroll-bulk-method-select">
                         <span>Declared salary payment method</span>
-                        <select value={bulkDeclaredPaymentMethod} onChange={(event) => setBulkDeclaredPaymentMethod(event.target.value)}>
+                        <select value={bulkDeclaredPaymentMethod} disabled={bulkMode === 'allowance'} onChange={(event) => setBulkDeclaredPaymentMethod(event.target.value)}>
                           <option value="bank_transfer">Bank Transfer</option>
                         </select>
                       </label>
@@ -615,8 +611,10 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                   </div>
                 </div>
 
-                <div className="payroll-bulk-method-panel">
-                  <span>Allowance payment method</span>
+                <div className={`payroll-bulk-method-panel${bulkMode === 'declared' ? ' is-inactive' : ''}`}>
+                  <div className="payroll-bulk-track-heading">
+                    <div><strong>Allowance payment method</strong><small>{bulkMode === 'declared' ? 'Not included in this payout track' : 'Choose how the allowance portion will be paid'}</small></div>
+                  </div>
                   <div className="payroll-bulk-method-group" role="group" aria-label="Allowance payment method">
                     {(meta?.payment_methods ?? []).length ? (
                       (meta?.payment_methods ?? []).map((method) => (
@@ -624,16 +622,17 @@ export default function PayrollSection({ apiFetch, token, session, selectedBranc
                           key={`allowance-${method}`}
                           type="button"
                           className={`payroll-bulk-method-pill${bulkAllowancePaymentMethod === method ? ' is-active' : ''}`}
+                          disabled={bulkMode === 'declared'}
                           onClick={() => setBulkAllowancePaymentMethod(method)}
                         >
                           <span>{titleize(method)}</span>
-                          <small>{bulkAllowancePaymentMethod === method ? 'Selected' : 'Tap to select'}</small>
+                          {bulkAllowancePaymentMethod === method && bulkMode !== 'declared' ? <em>Selected</em> : null}
                         </button>
                       ))
                     ) : (
                       <label className="payroll-bulk-method-select">
                         <span>Allowance payment method</span>
-                        <select value={bulkAllowancePaymentMethod} onChange={(event) => setBulkAllowancePaymentMethod(event.target.value)}>
+                        <select value={bulkAllowancePaymentMethod} disabled={bulkMode === 'declared'} onChange={(event) => setBulkAllowancePaymentMethod(event.target.value)}>
                           <option value="cash">Cash</option>
                         </select>
                       </label>

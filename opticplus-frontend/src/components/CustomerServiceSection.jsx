@@ -1,7 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
 
-const customerTabs = ['Messages', 'Pickup Glasses']
+const customerTabs = [
+  {
+    id: 'Messages',
+    label: 'Messages',
+    description: 'Send customer updates and manage reusable message templates.',
+    icon: 'MS',
+  },
+  {
+    id: 'Pickup Glasses',
+    label: 'Pickup Glasses',
+    description: 'Review glasses ready for pickup and follow up with customers.',
+    icon: 'PG',
+  },
+]
 
 export default function CustomerServiceSection(props) {
   const [activeTab, setActiveTab] = useState('Messages')
@@ -146,18 +160,14 @@ export default function CustomerServiceSection(props) {
         </div>
       ) : null}
 
-      <div className="finance-tabs">
-        {customerTabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={tab === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <WorkspaceTabs
+        tabs={customerTabs}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Customer service workspaces"
+        heading="Choose a customer service workspace"
+        description="Switch between customer messaging and glasses pickup follow-up."
+      />
 
       {activeTab === 'Messages' ? (
         <MessagesTab {...props} isMergedView={isMergedView} openSmsPreview={openSmsPreview} openTemplateEditor={openTemplateEditor} />
@@ -908,4 +918,3 @@ function PickupTab(props) {
     </section>
   )
 }
-

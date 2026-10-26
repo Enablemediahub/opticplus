@@ -15,6 +15,7 @@ import ExtractSection from './components/ExtractSection.jsx'
 import FinanceSection from './components/FinanceSection.jsx'
 import InsuranceSection from './components/InsuranceSection.jsx'
 import InventorySection from './components/InventorySection.jsx'
+import LensOrderWorkspaceSection from './components/LensOrderWorkspaceSection.jsx'
 import LensOrdersSection from './components/LensOrdersSection.jsx'
 import LoginScreen from './components/LoginScreen.jsx'
 import ExecutiveDashboardSection from './components/ExecutiveDashboardSection.jsx'
@@ -85,8 +86,7 @@ const managerNavSections = [
     title: 'Inventory & Products',
     items: [
       { label: 'Inventory', navLabel: 'Product Tracker', icon: 'inventory' },
-      { label: 'Place Lens Order', navLabel: 'Place Lens Order', icon: 'glasses' },
-      { label: 'Lens Orders', navLabel: 'Lens Orders', icon: 'receipt' },
+      { label: 'Lens Orders', navLabel: 'Lens Order Management', icon: 'glasses' },
       { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
       { label: 'Assets Register', navLabel: 'Company Assets', icon: 'briefcase' },
     ],
@@ -1505,6 +1505,36 @@ function App() {
   }, [token])
 
   useEffect(() => {
+    if (!token || !session || isBooting) return undefined
+
+    const refreshPresence = async () => {
+      if (document.visibilityState !== 'visible') return
+      try {
+        await apiFetch('/me', { token })
+      } catch (error) {
+        if (error.status === 401) {
+          setToken('')
+          setSession(null)
+        } else {
+          setLoginError(error.message)
+        }
+      }
+    }
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') refreshPresence()
+    }
+    const intervalId = window.setInterval(refreshPresence, 45_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
+    }
+  }, [isBooting, session, token])
+
+  useEffect(() => {
     let cancelled = false
 
     async function loadDashboard() {
@@ -2857,7 +2887,7 @@ function App() {
   }, [activeView, session?.role])
 
   useEffect(() => {
-    if (activeView !== 'Lens Orders' || session?.role === 'technician') return
+    if (activeView !== 'Lens Orders' || ['manager', 'technician'].includes(session?.role)) return
     setActiveView('Dashboard')
   }, [activeView, session?.role])
 
@@ -4999,7 +5029,7 @@ function App() {
                       <button
                         key={item.label}
                         type="button"
-                        className={item.label === activeView ? 'nav-item active' : 'nav-item'}
+                        className={item.label === activeView || (isGeneralManager && item.label === 'Lens Orders' && activeView === 'Place Lens Order') ? 'nav-item active' : 'nav-item'}
                         onClick={() => handleSidebarNavigation(item.label)}
                       >
                         <PortalIcon name={item.icon} className="nav-icon" />
@@ -5032,7 +5062,7 @@ function App() {
           </aside>
           ) : null}
 
-          <div className={isChromeHiddenView ? `portal-main ${isDatabaseFullscreen ? 'database-fullscreen-main' : 'patient-form-fullscreen-main'}` : 'portal-main'}>
+          <div className={isChromeHiddenView ? `portal-main ${isDatabaseFullscreen ? 'database-fullscreen-main' : 'patient-form-fullscreen-main'}` : `portal-main${activeView === 'Lens Orders' ? ' lens-orders-main' : ''}`}>
             {!isChromeHiddenView ? (
             <header className="portal-header">
               <div
@@ -5660,6 +5690,7 @@ function App() {
             {activeView === 'Bank Deposits' ? (
               <BankDepositsSection
                 apiFetch={apiFetch}
+                apiBase={API_BASE}
                 token={token}
                 selectedBranchId={selectedBranchId}
                 session={session}
@@ -5840,31 +5871,53 @@ function App() {
               />
             ) : null}
 
-            {activeView === 'Lens Orders' ? (
-              <LensOrdersSection
-                lensOrdersData={lensOrdersData}
-                lensOrdersFilters={lensOrdersFilters}
-                setLensOrdersFilters={setLensOrdersFilters}
-                lensOrdersError={lensOrdersError}
-                lensOrdersSuccess={lensOrdersSuccess}
-                setLensOrdersError={setLensOrdersError}
-                setLensOrdersSuccess={setLensOrdersSuccess}
-                fetchGlassesPrescriptions={fetchGlassesPrescriptions}
-                placeLensOrder={placeLensOrder}
-                overturnLensOrder={overturnLensOrder}
-                updatePickupStatus={updatePickupStatus}
-                pickupBusyIds={pickupBusyIds}
-                session={session}
-                companyName={companyProfileForm.company_name}
-              />
+            {(activeView === 'Lens Orders' || (isGeneralManager && activeView === 'Place Lens Order')) ? (
+              isGeneralManager ? (
+                <LensOrderWorkspaceSection
+                  activeView={activeView}
+                  setActiveView={setActiveView}
+                  lensOrdersData={lensOrdersData}
+                  lensOrdersFilters={lensOrdersFilters}
+                  setLensOrdersFilters={setLensOrdersFilters}
+                  lensOrdersError={lensOrdersError}
+                  lensOrdersSuccess={lensOrdersSuccess}
+                  setLensOrdersError={setLensOrdersError}
+                  setLensOrdersSuccess={setLensOrdersSuccess}
+                  fetchGlassesPrescriptions={fetchGlassesPrescriptions}
+                  placeLensOrder={placeLensOrder}
+                  overturnLensOrder={overturnLensOrder}
+                  updatePickupStatus={updatePickupStatus}
+                  pickupBusyIds={pickupBusyIds}
+                  session={session}
+                  companyName={companyProfileForm.company_name}
+                  placedOrders={placedLensOrders}
+                  setPlacedOrders={setPlacedLensOrders}
+                />
+              ) : (
+                <LensOrdersSection
+                  lensOrdersData={lensOrdersData}
+                  lensOrdersFilters={lensOrdersFilters}
+                  setLensOrdersFilters={setLensOrdersFilters}
+                  lensOrdersError={lensOrdersError}
+                  lensOrdersSuccess={lensOrdersSuccess}
+                  setLensOrdersError={setLensOrdersError}
+                  setLensOrdersSuccess={setLensOrdersSuccess}
+                  fetchGlassesPrescriptions={fetchGlassesPrescriptions}
+                  placeLensOrder={placeLensOrder}
+                  overturnLensOrder={overturnLensOrder}
+                  updatePickupStatus={updatePickupStatus}
+                  pickupBusyIds={pickupBusyIds}
+                  session={session}
+                  companyName={companyProfileForm.company_name}
+                />
+              )
             ) : null}
 
-            {activeView === 'Place Lens Order' && (session?.role === 'receptionist' || isGeneralManager) ? (
+            {activeView === 'Place Lens Order' && session?.role === 'receptionist' ? (
               <PlaceLensOrderSection
                 fetchGlassesPrescriptions={fetchGlassesPrescriptions}
                 placeLensOrder={placeLensOrder}
                 overturnLensOrder={overturnLensOrder}
-                canOverturn={isGeneralManager}
                 session={session}
                 placedOrders={placedLensOrders}
                 setPlacedOrders={setPlacedLensOrders}

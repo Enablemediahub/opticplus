@@ -6,6 +6,7 @@ use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateApiToken
@@ -36,6 +37,29 @@ class AuthenticateApiToken
             return response()->json([
                 'message' => 'Authenticated user no longer exists.',
             ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $now = now();
+        $tokenHash = hash('sha256', $token);
+        $presenceQuery = DB::table('user_presence_sessions')->where('token_hash', $tokenHash);
+        if ($presenceQuery->exists()) {
+            $presenceQuery
+                ->whereNull('logged_out_at')
+                ->where('last_seen_at', '<=', $now->copy()->subSeconds(30))
+                ->update([
+                    'last_seen_at' => $now,
+                    'updated_at' => $now,
+                ]);
+        } else {
+            DB::table('user_presence_sessions')->insertOrIgnore([
+                'user_id' => $user->id,
+                'branch_id' => $user->branch_id,
+                'token_hash' => $tokenHash,
+                'last_seen_at' => $now,
+                'logged_out_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
         }
 
         $request->attributes->set('current_access_token', $token);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx-js-style/dist/xlsx.min.js'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
@@ -899,18 +900,27 @@ export default function ExtractSection(props) {
             </div>
           </div>
 
-          <div className="extract-bulk-actions">
-            <button type="button" className={activeTab === 'revenue' ? 'report-type-card is-active' : 'report-type-card'} onClick={() => setActiveTab('revenue')}>
-              <span>Revenue</span>
-              <strong>Classify sales and collections</strong>
-              <p>Mark visible revenue rows as taxable, non-taxable, or needing review.</p>
-            </button>
-            <button type="button" className={activeTab === 'expense' ? 'report-type-card is-active' : 'report-type-card'} onClick={() => setActiveTab('expense')}>
-              <span>Expenses</span>
-              <strong>Classify spending treatment</strong>
-              <p>Decide whether each expense is deductible, non-deductible, or needs review.</p>
-            </button>
-          </div>
+          <WorkspaceTabs
+            tabs={[
+              {
+                id: 'revenue',
+                label: 'Revenue',
+                description: 'Classify sales and collections as taxable, non-taxable, or needing review.',
+                icon: 'RV',
+              },
+              {
+                id: 'expense',
+                label: 'Expenses',
+                description: 'Classify spending as deductible, non-deductible, or needing review.',
+                icon: 'EX',
+              },
+            ]}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            ariaLabel="Tax review categories"
+            heading="Choose a classification workspace"
+            description="Switch between classifying revenue and expense records."
+          />
 
           <div className="extract-toolbar">
             {activeTab === 'revenue' ? (

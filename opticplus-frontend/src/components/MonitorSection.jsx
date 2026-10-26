@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import BankBalanceCards from './BankBalanceCards.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 2 })
 const branchOptions = [{ id: 0, name: 'Merged company' }, { id: 1, name: 'Labadi' }, { id: 2, name: 'Madina' }]
@@ -304,6 +305,7 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
       <div className="header-actions"><button type="button" className="ghost-button" onClick={() => setRefreshVersion((current) => current + 1)} disabled={loading}>Refresh data</button><button type="button" className="ghost-button" onClick={printReport} disabled={!report}>Print / Save PDF</button><button type="button" className="primary-button" onClick={exportExcel} disabled={!report}>Export Excel workbook</button></div>
     </div>
     {error ? <div className="message-banner error">{error}</div> : null}
+    <BankBalanceCards apiFetch={apiFetch} token={token} branchId={branchId} />
     <div className="monitor-controls extraction-filter-controls table-attached-filter">
       <label>Reporting branch<select value={branchId} onChange={(event) => setBranchSelection({ source: selectedBranchId, value: event.target.value })}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
       <label>Period<select

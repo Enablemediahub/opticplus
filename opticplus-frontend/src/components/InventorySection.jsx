@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
@@ -12,6 +13,20 @@ const productTrackerTabs = [
   { label: 'Lens Tracker', value: 'Lens Tracker & Lens Spec' },
   { label: 'Frames Tracker', value: 'Frames Tracker' },
 ]
+const inventoryWorkspaceDetails = {
+  'Stock Overview': {
+    description: 'Review stock levels, movements, and stocktake records.',
+    icon: 'ST',
+  },
+  'Lens Tracker & Lens Spec': {
+    description: 'Manage lens costs and review lens specifications.',
+    icon: 'LE',
+  },
+  'Frames Tracker': {
+    description: 'Track frame costs, reservations, and profitability.',
+    icon: 'FR',
+  },
+}
 
 const monthFormatter = new Intl.DateTimeFormat('en-GH', { month: 'long', year: 'numeric' })
 
@@ -52,12 +67,29 @@ export default function InventorySection(props) {
   const tabs = props.productTrackerMode
     ? productTrackerTabs
     : inventoryTabs.map((tab) => ({ label: tab, value: tab }))
+  const workspaceTabs = tabs.map((tab) => ({
+    id: tab.value,
+    label: tab.label,
+    ...inventoryWorkspaceDetails[tab.value],
+  }))
   const storageKey = `opticplus:inventory-tab:v1:${props.productTrackerMode ? 'product-tracker' : 'inventory'}:${props.inventoryBranchId ?? 'active'}`
   const defaultTab = props.initialTab ?? tabs[0].value
   const [activeTab, setActiveTab] = useState(() => readInventoryTab(storageKey, tabs.map((tab) => tab.value), defaultTab))
   const [lensDrafts, setLensDrafts] = useState({})
   const [frameCostDrafts, setFrameCostDrafts] = useState({})
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const workspaceNavigation = props.showTabs !== false ? (
+    <WorkspaceTabs
+      tabs={workspaceTabs}
+      activeTab={activeTab}
+      onChange={setActiveTab}
+      ariaLabel={props.productTrackerMode ? 'Product tracker workspaces' : 'Inventory workspaces'}
+      heading={props.productTrackerMode ? 'Choose a product tracker' : 'Choose an inventory workspace'}
+      description={props.productTrackerMode
+        ? 'Switch between lens and frame cost tracking.'
+        : 'Switch between stock overview, lens tracking, and frame tracking.'}
+    />
+  ) : null
 
   useEffect(() => {
     try {
@@ -95,25 +127,11 @@ export default function InventorySection(props) {
       {props.inventoryError ? <div className="message-banner error">{props.inventoryError}</div> : null}
       {props.inventorySuccess ? <div className="message-banner success">{props.inventorySuccess}</div> : null}
 
-      {props.showTabs !== false ? (
-        <div className="finance-tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              className={tab.value === activeTab ? 'nav-item finance-tab active' : 'nav-item finance-tab'}
-              onClick={() => setActiveTab(tab.value)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
       {activeTab === 'Stock Overview' ? (
         <StockOverviewTab
           key={props.inventoryBranchId}
           {...props}
+          workspaceNavigation={workspaceNavigation}
           frameCostDrafts={frameCostDrafts}
           setFrameCostDrafts={setFrameCostDrafts}
           isEditModalOpen={isEditModalOpen}
@@ -122,11 +140,12 @@ export default function InventorySection(props) {
       ) : activeTab === 'Lens Tracker & Lens Spec' ? (
         <LensTrackerTab
           {...props}
+          workspaceNavigation={workspaceNavigation}
           lensDrafts={lensDrafts}
           setLensDrafts={setLensDrafts}
         />
       ) : (
-        <FramesTrackerTab {...props} />
+        <FramesTrackerTab {...props} workspaceNavigation={workspaceNavigation} />
       )}
     </section>
   )
@@ -236,6 +255,8 @@ function StockOverviewTab(props) {
         <StatWidget label="Low Stock" value={props.inventoryData?.stats.low_stock ?? '...'} note="Lines with ten units or fewer left" icon="alert" className="pending" />
         <StatWidget label="Inventory Floor Value" value={currency.format(Number(props.inventoryData?.stats.inventory_floor_value ?? 0))} note="Based on minimum selling price and stock on hand" icon="money" className="today" />
       </section>
+
+      {props.workspaceNavigation}
 
       {canManageInventory ? (
         <article className="panel patient-form-panel">
@@ -970,6 +991,8 @@ function FramesTrackerTab(props) {
         <StatWidget label="Reserved Cost" value={currency.format(totalReservedCost)} note="Recorded frame reservation expenses" icon="money" className="today" />
       </section>
 
+      {props.workspaceNavigation}
+
       <article className="panel">
         <div className="panel-heading">
           <div>
@@ -1117,6 +1140,8 @@ function LensTrackerTab(props) {
           <StatWidget label="Total Profit" value={currency.format(Number(stats.total_profit ?? 0))} note="Profit from tracked lens rows" icon="trend" className="today" />
         )}
       </section>
+
+      {props.workspaceNavigation}
 
       <article className="panel">
         <div className="panel-heading">

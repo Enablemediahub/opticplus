@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
@@ -62,6 +63,24 @@ export default function InsuranceSection(props) {
   const showClaimCreationPanel = eyebrow !== 'Insurance Claims'
   const selectableClaims = (props.insuranceData?.claims ?? []).filter((claim) => ['pending', 'claimed'].includes(String(claim.status).toLowerCase()))
   const selectedCurrentClaims = selectedClaimIds.filter((id) => selectableClaims.some((claim) => Number(claim.id) === Number(id)))
+  const claimsWorkspaceTabs = [
+    {
+      id: 'ledger',
+      label: 'Claims Ledger',
+      description: 'Review submitted insurance claims and their current status.',
+      icon: 'CL',
+      count: props.insuranceData?.pagination?.total ?? 0,
+      countLabel: 'claims',
+    },
+    {
+      id: 'payments',
+      label: 'Insurance Payments',
+      description: 'Record insurer receipts and match payments to claim months.',
+      icon: 'IP',
+      count: paymentsData?.receipts?.length ?? 0,
+      countLabel: 'receipts',
+    },
+  ]
 
   useEffect(() => {
     setSelectedClaimIds([])
@@ -570,16 +589,14 @@ export default function InsuranceSection(props) {
         ) : null}
 
         {eyebrow === 'Insurance Claims' && canRecordRemittances ? (
-          <div className="finance-tabs insurance-view-tabs" role="tablist" aria-label="Insurance claims views">
-            <button type="button" role="tab" aria-selected={claimsTab === 'ledger'} className={`finance-tab insurance-view-tab ${claimsTab === 'ledger' ? 'active' : ''}`} onClick={() => setClaimsTab('ledger')}>
-              <span className="insurance-view-tab__icon" aria-hidden="true">▤</span><span>Claims Ledger</span>
-              <span className="insurance-view-tab__count">{props.insuranceData?.pagination?.total ?? 0}</span>
-            </button>
-            <button type="button" role="tab" aria-selected={claimsTab === 'payments'} className={`finance-tab insurance-view-tab ${claimsTab === 'payments' ? 'active' : ''}`} onClick={() => setClaimsTab('payments')}>
-              <span className="insurance-view-tab__icon" aria-hidden="true">◉</span><span>Insurance Payments</span>
-              <span className="insurance-view-tab__count">{paymentsData?.receipts?.length ?? 0}</span>
-            </button>
-          </div>
+          <WorkspaceTabs
+            tabs={claimsWorkspaceTabs}
+            activeTab={claimsTab}
+            onChange={setClaimsTab}
+            ariaLabel="Insurance claims workspaces"
+            heading="Choose an insurance workspace"
+            description="Switch between the claims ledger and insurer payment reconciliation."
+          />
         ) : null}
 
         {claimsTab === 'payments' && eyebrow === 'Insurance Claims' && canRecordRemittances ? (

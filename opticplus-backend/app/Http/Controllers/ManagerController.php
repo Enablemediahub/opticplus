@@ -13,6 +13,58 @@ use Illuminate\Validation\Rule;
 
 class ManagerController extends Controller
 {
+    public function userPresence(Request $request): JsonResponse
+    {
+        if ($request->user()?->normalized_role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can view user sign-in activity.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $onlineSince = now()->subMinutes(2);
+        $users = DB::table('users')
+            ->select([
+                'users.id',
+                'users.name',
+                'users.username',
+                'users.role',
+                'users.branch_id',
+                'users.branch',
+                'users.employee_status',
+                'users.last_login_at',
+            ])
+            ->when($branchId > 0, fn ($query) => $query->where('users.branch_id', $branchId))
+            ->selectSub(
+                DB::table('user_presence_sessions')
+                    ->selectRaw('MAX(last_seen_at)')
+                    ->whereColumn('user_presence_sessions.user_id', 'users.id')
+                    ->whereNull('logged_out_at')
+                    ->where('last_seen_at', '>=', $onlineSince),
+                'online_last_seen_at',
+            )
+            ->orderBy('users.branch_id')
+            ->orderBy('users.name')
+            ->get()
+            ->map(fn ($user) => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => $this->normalizeRole((string) $user->role),
+                'branch_id' => (int) ($user->branch_id ?? 0),
+                'branch_name' => $this->branchName((int) ($user->branch_id ?? 0)),
+                'employee_status' => $user->employee_status ?: 'active',
+                'last_login_at' => $user->last_login_at,
+                'is_online' => $user->online_last_seen_at !== null,
+                'last_seen_at' => $user->online_last_seen_at,
+            ]);
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'online_threshold_seconds' => 120,
+            'users' => $users,
+        ]);
+    }
+
     public function overview(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);
