@@ -1,55 +1,39 @@
-Hostinger FileZilla sync manifest - OPTICPLUS popup form scrolling
-Generated: 2026-10-25 17:32 GMT (Africa/Accra)
+Hostinger FileZilla sync manifest
+Generated: 2026-10-27 23:20 GMT
+Update: Frame and lens daily set-aside widgets, tracker navigation, and current platform fixes.
+Package: tmp/hostinger-package
+Remote destination: Laravel application root; preserve relative paths.
 
-Local package:
-tmp/hostinger-package
+UPLOAD FRONTEND
+  public/index.html
+  public/assets/index-CsPSDMcL.js
+  public/assets/index-oJ9f2Cp-.css
 
-Remote destination:
-Laravel application root. Keep each package-relative path unchanged.
-The domain document root must remain the Laravel public/ directory.
+UPLOAD BACKEND
+  app/Http/Controllers/DashboardController.php
+  app/Http/Controllers/FinanceController.php
+  app/Http/Controllers/InventoryController.php
+  app/Http/Controllers/DebtController.php
+  app/Http/Controllers/BillingController.php
+  routes/api.php
+  database/migrations/2026_10_11_000001_add_cost_price_to_products_table.php
+  database/migrations/2026_10_13_000001_create_frame_cost_reservations_table.php
+  database/migrations/2026_10_26_000001_create_billing_refunds_table.php
+  database/migrations/2026_10_26_000002_create_sales_allocation_items_table.php
+  database/migrations/2026_10_26_000003_seed_madina_rent_allocation.php
+  database/migrations/2026_10_26_000004_add_sales_allocation_target_dates.php
+  database/migrations/2026_10_26_000005_add_sales_allocation_start_dates.php
+  database/migrations/2026_10_26_000006_create_sales_allocation_savings_entries_table.php
 
-DATABASE:
-Run tmp/hostinger-package/database/schema/user_login_presence.mysql.sql in
-phpMyAdmin before uploading the backend PHP files. It adds users.last_login_at
-and creates user_presence_sessions. The Laravel migration is included and is
-safe to run after the SQL has already been applied.
+DELETE OLD FRONTEND ASSETS ON HOSTINGER AFTER UPLOAD
+  public/assets/index-C7DhpXqF.js
+  public/assets/index-D7F9Cq4z.css
+  public/assets/index-2IDxmqCP.js
+  public/assets/index-LLBSSCFS.css
+  public/assets/index-Beej20LZ.css
+  public/assets/index-CRATZBhV.js
+  public/assets/index-D6Ru9Zq2.css
+  public/assets/index-d3FUpwMd.js
 
-FILES TO UPLOAD/REPLACE VIA FILEZILLA:
-Frontend:
-public/index.html
-public/assets/index-D1mxHyZz.js
-public/assets/index-Cmsk1d_i.css
-public/images/banks/ecobank.jpg
-public/images/banks/gt-bank.png
-public/images/banks/prudential-bank.png
-
-Backend:
-app/Http/Controllers/AuthController.php
-app/Http/Controllers/ManagerController.php
-app/Http/Middleware/AuthenticateApiToken.php
-routes/api.php
-database/migrations/2026_10_25_000002_track_user_login_presence.php
-database/schema/user_login_presence.mysql.sql
-
-Upload each file from tmp/hostinger-package to the matching path under the
-Hostinger Laravel application root. Run the SQL file in phpMyAdmin first, then
-upload the listed files via FileZilla. Do not upload the local .env. The staged
-package contains only the current JavaScript and CSS bundles; obsolete hashed
-bundles have been removed from the package. The bank logo images are served
-from public/images/banks/.
-
-Bank Deposits, The Monitor, and Payroll display the supplied Ecobank,
-Prudential Bank, and GTBank logos with account-level bank-reported balances.
-The Bank Deposits page now shows the latest SMS-reported account balance
-separately from the branch ledger balance and identifies its bank, account,
-branch, and timestamp. Monitor and Payroll bank cards clarify that balances
-are per-account SMS reports, not the branch ledger total, and refresh every 30
-seconds and on tab focus. Bulk Payroll uses a flat, professional layout with
-clearer payout scope, selected employee count, estimated payout summary, and
-separate salary/allowance payment method panels. The General Manager dashboard
-now lists users by branch, their online status, and last login time. Online
-status is based on an authenticated request within the previous two minutes;
-active app sessions send a heartbeat every 45 seconds. Login history starts
-when users sign in after this update; historical dates cannot be reconstructed.
-Popup forms now stay within the device viewport and scroll internally so lower
-form fields and action buttons remain reachable on desktop and mobile.
+The package contains the current frontend build and backend source. The local .env is excluded.
+Upload the backend migrations before or together with the corresponding PHP files. Do not upload the local .env.

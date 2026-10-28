@@ -25,6 +25,13 @@ class CustomerServiceController extends Controller
         $paymentStatus = $request->string('payment_status')->toString() ?: 'all';
         $dateFrom = $request->string('date_from')->toString();
         $dateTo = $request->string('date_to')->toString();
+        $effectivePickupStatusSql = "CASE
+            WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 'picked_up'
+            WHEN BINARY gp.status = 0x6e6f746966696564 OR BINARY form_order.pickup_status = 0x6e6f746966696564 THEN 'notified'
+            WHEN BINARY gp.status = 0x7265616479 OR BINARY form_order.pickup_status = 0x7265616479 THEN 'ready'
+            WHEN BINARY gp.status = 0x70656e64696e67 OR BINARY form_order.pickup_status = 0x70656e64696e67 THEN 'pending'
+            ELSE COALESCE(NULLIF(gp.status, ''), NULLIF(form_order.pickup_status, ''))
+        END";
         $page = max((int) $request->integer('page', 1), 1);
         $perPage = min(max((int) $request->integer('per_page', 12), 8), 30);
         $offset = ($page - 1) * $perPage;
@@ -83,20 +90,9 @@ class CustomerServiceController extends Controller
             // Include picked-up rows so the frontend can keep them in the archive table.
         } elseif ($status !== 'all') {
             if ($status === 'not_ready') {
-                $query->where(function ($inner): void {
-                        $inner->whereRaw("CASE WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 0 ELSE 1 END = 1")
-                            ->where(function ($statusQuery): void {
-                                $statusQuery->whereNull(DB::raw('COALESCE(gp.status, form_order.pickup_status)'))
-                                    ->orWhereIn(DB::raw('COALESCE(gp.status, form_order.pickup_status)'), ['pending', '']);
-                            });
-                });
+                $query->whereRaw("( ({$effectivePickupStatusSql}) IS NULL OR BINARY ({$effectivePickupStatusSql}) = 0x70656e64696e67 )");
             } else {
-                if ($status === 'picked_up') {
-                    $query->whereRaw('BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570');
-                } else {
-                    $query->whereRaw('BINARY COALESCE(gp.status, form_order.pickup_status) = BINARY ?', [$status])
-                        ->whereRaw('BINARY gp.status <> 0x7069636b65645f7570 AND BINARY form_order.pickup_status <> 0x7069636b65645f7570');
-                }
+                $query->whereRaw("BINARY ({$effectivePickupStatusSql}) = BINARY ?", [$status]);
             }
         }
 
@@ -131,12 +127,7 @@ class CustomerServiceController extends Controller
             'b.status as billing_status',
             'b.health_insurance',
             'b.receipt_number',
-            DB::raw("CASE
-                WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 'picked_up'
-                WHEN BINARY gp.status = 0x6e6f746966696564 OR BINARY form_order.pickup_status = 0x6e6f746966696564 THEN 'notified'
-                WHEN BINARY gp.status = 0x7265616479 OR BINARY form_order.pickup_status = 0x7265616479 THEN 'ready'
-                ELSE COALESCE(gp.status, form_order.pickup_status)
-            END as pickup_status"),
+            DB::raw("{$effectivePickupStatusSql} as pickup_status"),
             'gp.created_at as pickup_created_at',
             'gp.prescription_id',
         ];
@@ -154,14 +145,12 @@ class CustomerServiceController extends Controller
         }
 
         $records = $query
-            ->orderByRaw("
-                CASE
-                    WHEN BINARY gp.status = 0x7265616479 OR BINARY form_order.pickup_status = 0x7265616479 THEN 1
-                    WHEN BINARY gp.status = 0x6e6f746966696564 OR BINARY form_order.pickup_status = 0x6e6f746966696564 THEN 2
-                    WHEN BINARY gp.status = 0x7069636b65645f7570 OR BINARY form_order.pickup_status = 0x7069636b65645f7570 THEN 3
-                    ELSE 4
-                END
-            ")
+            ->orderByRaw("CASE BINARY ({$effectivePickupStatusSql})
+                WHEN 0x7265616479 THEN 1
+                WHEN 0x6e6f746966696564 THEN 2
+                WHEN 0x7069636b65645f7570 THEN 3
+                ELSE 4
+            END")
             ->orderByDesc('b.date')
             ->limit($perPage)
             ->offset($offset)
@@ -233,14 +222,12 @@ class CustomerServiceController extends Controller
                     $join->where('form_order.branch_id', '=', $branchId);
                 }
             })
-            ->whereRaw('BINARY gp.status IN (0x7265616479, 0x6e6f746966696564) OR BINARY form_order.pickup_status IN (0x7265616479, 0x6e6f746966696564)')
-            ->orderByRaw("
-                CASE
-                    WHEN BINARY COALESCE(gp.status, form_order.pickup_status) = 0x7265616479 THEN 1
-                    WHEN BINARY COALESCE(gp.status, form_order.pickup_status) = 0x6e6f746966696564 THEN 2
-                    ELSE 3
-                END
-            ")
+            ->whereRaw("BINARY ({$effectivePickupStatusSql}) IN (0x7265616479, 0x6e6f746966696564)")
+            ->orderByRaw("CASE BINARY ({$effectivePickupStatusSql})
+                WHEN 0x7265616479 THEN 1
+                WHEN 0x6e6f746966696564 THEN 2
+                ELSE 3
+            END")
             ->orderByDesc('b.date')
             ->limit(10)
             ->get([
@@ -253,7 +240,7 @@ class CustomerServiceController extends Controller
                 'b.balance',
                 'b.date as billing_date',
                 'pr.phone',
-                DB::raw('COALESCE(gp.status, form_order.pickup_status) as pickup_status'),
+                DB::raw("{$effectivePickupStatusSql} as pickup_status"),
             ])
             ->map(function ($record) {
                 $record->pickup_status_display = match ($record->pickup_status) {
@@ -657,6 +644,9 @@ class CustomerServiceController extends Controller
             ->where('id', $billingId)
             ->where('branch_id', $branchId)
             ->first(['id', 'patient_id', 'folder_id']);
+        if (! $billing) {
+            return response()->json(['message' => 'Pickup record was not found.'], 404);
+        }
 
         $updateQuery = DB::table('glasses_prescriptions')
             ->where(function ($query) use ($billing): void {
@@ -677,7 +667,7 @@ class CustomerServiceController extends Controller
         }
 
         $updated = $updateQuery->update($payload);
-        $examFormUpdated = $billing ? $this->updateExamFormPickupStatus($billing, $branchId, 'picked_up') : 0;
+        $examFormUpdated = $this->updateExamFormPickupStatus($billing, $branchId, 'picked_up');
 
         if (! $updated && ! $examFormUpdated) {
             return response()->json(['message' => 'Pickup record was not found.'], 404);
@@ -703,6 +693,9 @@ class CustomerServiceController extends Controller
             ->where('id', $billingId)
             ->where('branch_id', $branchId)
             ->first(['id', 'patient_id', 'folder_id']);
+        if (! $billing) {
+            return response()->json(['message' => 'Pickup record was not found.'], 404);
+        }
 
         $updateQuery = DB::table('glasses_prescriptions')
             ->where(function ($query) use ($billing): void {
@@ -712,23 +705,34 @@ class CustomerServiceController extends Controller
                             ->where('folder_id', $billing->folder_id);
                     });
             })
-            ->whereIn('status', ['ready', 'notified', 'picked_up']);
+            ->whereIn('status', ['pending', 'ready', 'notified', 'picked_up']);
 
         if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
             $updateQuery->where('branch_id', $branchId);
         }
 
+        $prescriptionExists = (clone $updateQuery)->exists();
         $payload = ['status' => 'pending'];
         if (Schema::hasColumn('glasses_prescriptions', 'updated_at')) {
             $payload['updated_at'] = now();
         }
 
         $updated = $updateQuery->update($payload);
-        $examFormUpdated = $billing ? $this->updateExamFormPickupStatus($billing, $branchId, 'pending') : 0;
-        if (! $updated && ! $examFormUpdated) {
+        $examFormExists = false;
+        if (Schema::hasTable('lens_order_requests') && ! empty($billing->patient_id)) {
+            $this->ensureLensOrderPickupSchema();
+            $examFormExists = DB::table('lens_order_requests')
+                ->where('branch_id', $branchId)
+                ->whereRaw('BINARY source = 0x6578616d5f666f726d')
+                ->whereRaw('BINARY status = 0x706c61636564')
+                ->whereRaw('BINARY source_id LIKE CONCAT(0x464f524d2d, ?, 0x2d, 0x25)', [(string) $billing->patient_id])
+                ->exists();
+        }
+        $examFormUpdated = $this->updateExamFormPickupStatus($billing, $branchId, 'pending');
+        if (! $prescriptionExists && ! $examFormExists && ! $updated && ! $examFormUpdated) {
             return response()->json([
-                'message' => 'Only ready, notified, or picked-up entries can be reversed.',
-            ], 422);
+                'message' => 'Pickup record was not found.',
+            ], 404);
         }
 
         AuditLog::logManual($request, 'edit', 'pickup', 'billing_id: '.$billingId, [

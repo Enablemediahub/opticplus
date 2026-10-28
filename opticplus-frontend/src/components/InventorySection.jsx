@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import PortalIcon from './PortalIcon.jsx'
 import StatWidget from './StatWidget.jsx'
 import WorkspaceTabs from './WorkspaceTabs.jsx'
 
@@ -92,6 +93,11 @@ export default function InventorySection(props) {
   ) : null
 
   useEffect(() => {
+    if (!props.productTrackerMode || !props.requestedTab || !productTrackerTabs.some((tab) => tab.value === props.requestedTab)) return
+    setActiveTab(props.requestedTab)
+  }, [props.productTrackerMode, props.requestedTab])
+
+  useEffect(() => {
     try {
       window.sessionStorage.setItem(storageKey, activeTab)
     } catch (error) {
@@ -126,6 +132,33 @@ export default function InventorySection(props) {
 
       {props.inventoryError ? <div className="message-banner error">{props.inventoryError}</div> : null}
       {props.inventorySuccess ? <div className="message-banner success">{props.inventorySuccess}</div> : null}
+
+      {props.productTrackerMode ? (
+        <section className="product-tracker-reserve-grid" aria-label="Today's product cost reserves">
+          <button
+            type="button"
+            className="stat-card patient-stat-card product-tracker-reserve-card frame-reserve-card"
+            onClick={() => setActiveTab('Frames Tracker')}
+            aria-label="Open Frames Tracker"
+          >
+            <div className="stat-card-icon"><PortalIcon name="inventory" className="widget-icon" /></div>
+            <span>Frame money to set aside today</span>
+            <strong>{currency.format(Number(props.dailyProductCosts?.frame_cost_to_set_aside_today ?? 0))}</strong>
+            <p>{currency.format(Number(props.dailyProductCosts?.unpriced_frame_sales_today ?? 0))} frame sales without tracked costs</p>
+          </button>
+          <button
+            type="button"
+            className="stat-card patient-stat-card product-tracker-reserve-card lens-reserve-card"
+            onClick={() => setActiveTab('Lens Tracker & Lens Spec')}
+            aria-label="Open Lens Tracker"
+          >
+            <div className="stat-card-icon"><PortalIcon name="glasses" className="widget-icon" /></div>
+            <span>Lens money to set aside today</span>
+            <strong>{currency.format(Number(props.dailyProductCosts?.lens_cost_to_set_aside_today ?? 0))}</strong>
+            <p>{currency.format(Number(props.dailyProductCosts?.unpriced_lens_sales_today ?? 0))} lens sales without tracked costs</p>
+          </button>
+        </section>
+      ) : null}
 
       {activeTab === 'Stock Overview' ? (
         <StockOverviewTab

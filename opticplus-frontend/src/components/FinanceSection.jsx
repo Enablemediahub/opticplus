@@ -1315,6 +1315,11 @@ function PaymentsTab(props) {
                       <button type="button" className="mini-action" onClick={() => props.printFinanceReceipt(transaction)}>
                         Reprint
                       </button>
+                      {transaction.refund_id ? (
+                        <button type="button" className="mini-action" onClick={() => props.printFinanceReceipt(transaction, true)}>
+                          Refund receipt
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -3328,6 +3333,11 @@ function ReceiptReprintsOnlyView(props) {
                       <button type="button" className="mini-action" onClick={() => props.printFinanceReceipt(transaction)}>
                         Reprint
                       </button>
+                      {transaction.refund_id ? (
+                        <button type="button" className="mini-action" onClick={() => props.printFinanceReceipt(transaction, true)}>
+                          Refund receipt
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

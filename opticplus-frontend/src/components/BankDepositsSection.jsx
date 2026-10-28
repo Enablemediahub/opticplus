@@ -32,6 +32,12 @@ const bankBrands = [
   { name: 'GTBank', logo: '/images/banks/gt-bank.png' },
 ]
 
+function latestBankBalanceAccount(accounts) {
+  return accounts
+    .filter((account) => account.is_active && account.reported_balance != null && account.reported_balance_at)
+    .sort((left, right) => Date.parse(right.reported_balance_at) - Date.parse(left.reported_balance_at))[0] ?? null
+}
+
 export default function BankDepositsSection({ apiFetch, apiBase, token, session, selectedBranchId }) {
   const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
   const isGeneralManager = (session?.normalized_role ?? session?.role) === 'manager'
@@ -71,9 +77,10 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         payment_method: current.payment_method || response.payment_methods?.[0] || 'bank_transfer',
       }))
       if (!silent) {
+        const latestBalanceAccount = latestBankBalanceAccount(alertResponse.accounts)
         setBalanceForm((current) => ({
           ...current,
-          balance: String(Number(response.current_balance ?? 0)),
+          balance: String(Number(latestBalanceAccount?.reported_balance ?? response.current_balance ?? 0)),
         }))
       }
     } catch (loadError) {
@@ -116,9 +123,10 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
     month_adjustments: Number(data?.stats?.month_adjustments ?? 0),
   }), [data])
 
-  const latestReportedAccount = useMemo(() => bankAlerts.accounts
-    .filter((account) => account.reported_balance != null && account.reported_balance_at)
-    .sort((left, right) => Date.parse(right.reported_balance_at) - Date.parse(left.reported_balance_at))[0] ?? null, [bankAlerts.accounts])
+  const latestReportedAccount = useMemo(() => latestBankBalanceAccount(bankAlerts.accounts), [bankAlerts.accounts])
+  const currentDisplayedBalance = latestReportedAccount
+    ? Number(latestReportedAccount.reported_balance)
+    : runningSummary.current_balance
 
   const bankCards = useMemo(() => {
     const configuredBanks = [...new Set(bankAlerts.accounts.map((account) => bankBrandFor(account.bank_name)?.name).filter(Boolean))]
@@ -264,16 +272,21 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       {success ? <div className="message-banner success">{success}</div> : null}
 
       <section className="stats-grid patient-stats-grid bank-balance-stats-grid">
-        <StatWidget label="Current Bank Balance" value={currency.format(runningSummary.current_balance)} note={`${data?.branch_name ?? 'Active branch'} ledger balance`} icon="finance" className="total" />
         <StatWidget
-          label="Latest Bank SMS Balance"
-          value={latestReportedAccount ? currency.format(Number(latestReportedAccount.reported_balance)) : 'Awaiting SMS'}
+          label="Current Bank Balance"
+          value={currency.format(currentDisplayedBalance)}
           note={latestReportedAccount
-            ? `${bankBrandFor(latestReportedAccount.bank_name)?.name ?? latestReportedAccount.bank_name} •••• ${latestReportedAccount.account_suffix} | ${branchName(latestReportedAccount.branch_id)} | ${formatDateTime(latestReportedAccount.reported_balance_at)}`
-            : 'No configured account has reported a balance by SMS yet.'}
+            ? `Automatically using latest ${bankBrandFor(latestReportedAccount.bank_name)?.name ?? latestReportedAccount.bank_name} SMS •••• ${latestReportedAccount.account_suffix} · ${formatDateTime(latestReportedAccount.reported_balance_at)}`
+            : `${data?.branch_name ?? 'Active branch'} bank-register balance · awaiting an SMS balance`}
+          icon="finance"
+          className="total"
+        />
+        <StatWidget
+          label="Bank Register Balance"
+          value={currency.format(runningSummary.current_balance)}
+          note={`${data?.branch_name ?? 'Active branch'} ledger balance · manual adjustments and approved transactions`}
           icon="money"
           className="seen"
-          valueClassName="bank-sms-stat-value"
         />
         <StatWidget label="Deposits This Month" value={currency.format(runningSummary.month_deposits)} note="Positive cash-ins recorded in the current month" icon="money" className="seen" />
         <StatWidget label="Withdrawals This Month" value={currency.format(runningSummary.month_withdrawals)} note="Payroll and other branch withdrawals posted this month" icon="alert" className="pending" />
@@ -281,7 +294,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       </section>
       <p className="muted-copy">
         Balances refresh automatically every 30 seconds while this page is open.
-        The SMS figure is the latest balance reported by one account, not a total across accounts. It does not overwrite the branch ledger; the ledger changes when transactions are approved or recorded.
+        Current Bank Balance follows the latest SMS-reported account balance; if no SMS balance is available, it falls back to the bank-register balance. SMS is from one account, not a total across accounts. Manual balance entry remains available and updates the bank register.
         {lastRefreshedAt ? ` Last refreshed ${lastRefreshedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}.` : ''}
       </p>
 
@@ -502,11 +515,11 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
 
           <form className="bank-register-form-grid" onSubmit={saveBalance}>
             <label>
-              Current saved balance
+              Current bank-register balance
               <input type="text" value={currency.format(runningSummary.current_balance)} readOnly />
             </label>
             <label>
-              New balance amount
+              Manual balance entry
               <input type="number" min="0" step="0.01" value={balanceForm.balance} onChange={(event) => setBalanceForm((current) => ({ ...current, balance: event.target.value }))} placeholder="0.00" />
             </label>
             <label className="full-span">

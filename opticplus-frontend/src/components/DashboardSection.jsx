@@ -38,10 +38,26 @@ export default function DashboardSection({ dashboard, stats, isLoadingDashboard,
             label={stat.label}
             value={stat.value}
             note={stat.note}
-            icon={dashboardIconFor(stat.label)}
+            icon={stat.icon ?? dashboardIconFor(stat.label)}
+            className={stat.className ?? ''}
           />
         ))}
       </section>
+
+      {hideFinanceSnapshot ? (
+        <section className="product-tracker-reserve-grid dashboard-reserve-widgets" aria-label="Today's product cost reserves">
+          <div className="stat-card patient-stat-card product-tracker-reserve-card frame-reserve-card">
+            <span>Frame money to set aside today</span>
+            <strong>{currency.format(Number(dashboard.stats.frame_cost_to_set_aside_today ?? 0))}</strong>
+            <p>{currency.format(Number(dashboard.stats.unpriced_frame_sales_today ?? 0))} frame sales without tracked costs</p>
+          </div>
+          <div className="stat-card patient-stat-card product-tracker-reserve-card lens-reserve-card">
+            <span>Lens money to set aside today</span>
+            <strong>{currency.format(Number(dashboard.stats.lens_cost_to_set_aside_today ?? 0))}</strong>
+            <p>{currency.format(Number(dashboard.stats.unpriced_lens_sales_today ?? 0))} lens sales without tracked costs</p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="content-grid">
         <article className="panel panel-wide">

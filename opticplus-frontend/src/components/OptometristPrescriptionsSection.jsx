@@ -253,7 +253,7 @@ export default function OptometristPrescriptionsSection({
         <PrescriptionModal
           prescription={selectedPrescription}
           companyProfile={companyProfile}
-            updatePatientPrescription={updatePatientPrescription}
+          updatePatientPrescription={updatePatientPrescription}
           onClose={() => setSelectedPrescription(null)}
         />
       ) : null}

@@ -71,6 +71,8 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/billing', [BillingController::class, 'index']);
         Route::get('/billing/export', [BillingController::class, 'export']);
         Route::get('/billing/daily-payments', [BillingController::class, 'dailyPayments']);
+        Route::get('/billing/{billingId}/refund-options', [BillingController::class, 'refundOptions']);
+        Route::post('/billing/{billingId}/refunds', [BillingController::class, 'refund']);
         Route::put('/billing/pricing', [BillingController::class, 'updatePricing']);
         Route::post('/billing', [BillingController::class, 'store']);
         Route::put('/billing/{billingId}', [BillingController::class, 'update']);
@@ -110,6 +112,11 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/finance/payments/{billingId}/paystack/initialize', [FinanceController::class, 'initializePaystackPayment']);
         Route::post('/finance/payments/{billingId}/paystack/verify', [FinanceController::class, 'verifyPaystackPayment']);
         Route::get('/debts/meta', [DebtController::class, 'meta']);
+        Route::get('/debts/sales-allocations', [DebtController::class, 'salesAllocation']);
+        Route::post('/debts/sales-allocations/{allocationId}/savings', [DebtController::class, 'recordSalesAllocationSaving']);
+        Route::post('/debts/sales-allocations', [DebtController::class, 'storeSalesAllocation']);
+        Route::put('/debts/sales-allocations/{allocationId}', [DebtController::class, 'updateSalesAllocation']);
+        Route::delete('/debts/sales-allocations/{allocationId}', [DebtController::class, 'deleteSalesAllocation']);
         Route::get('/debts', [DebtController::class, 'index']);
         Route::post('/debts', [DebtController::class, 'store']);
         Route::get('/debts/{debtId}', [DebtController::class, 'show']);

@@ -43,6 +43,8 @@ export default function BillingSection({
   billingForm,
   setBillingForm,
   saveBillingRecord,
+  fetchBillingRefundOptions,
+  refundBillingRecord,
   updateBillingRecord,
   deleteBillingRecord,
   isSavingBill,
@@ -63,6 +65,11 @@ export default function BillingSection({
 }) {
   const [isBillingModalOpen, setIsBillingModalOpen] = useState(false)
   const [isBillingSummaryOpen, setIsBillingSummaryOpen] = useState(false)
+  const [refundTarget, setRefundTarget] = useState(null)
+  const [refundOptions, setRefundOptions] = useState(null)
+  const [refundForm, setRefundForm] = useState({ amount: '', component: '', refund_method: '', reason: '' })
+  const [isLoadingRefundOptions, setIsLoadingRefundOptions] = useState(false)
+  const [isSubmittingRefund, setIsSubmittingRefund] = useState(false)
   const [pricingForm, setPricingForm] = useState({
     consultation_price: '100.00',
     existing_consultation_price: '80.00',
@@ -72,6 +79,13 @@ export default function BillingSection({
   })
   const [isSavingPricing, setIsSavingPricing] = useState(false)
   const isManagementView = Boolean(session?.is_admin || ['manager', 'ceo', 'accountant'].includes(session?.role))
+  const canAuthorizeRefund = ['accountant', 'manager'].includes(session?.role)
+  const selectedRefundMethod = refundOptions?.refund_methods?.find((item) => item.method === refundForm.refund_method)
+  const selectedRefundComponent = refundOptions?.components?.find((item) => item.key === refundForm.component)
+  const refundAvailable = Math.min(
+    Number(selectedRefundMethod?.available ?? 0),
+    Number(selectedRefundComponent?.available ?? 0),
+  )
   const normalizedFrameItems = useMemo(
     () => normalizeBillingFrameItems(billingForm.frame_items, billingForm.frame_code_id, billingForm.frame_price),
     [billingForm.frame_items, billingForm.frame_code_id, billingForm.frame_price],
@@ -131,6 +145,50 @@ export default function BillingSection({
       await saveBillingPricing(pricingForm)
     } finally {
       setIsSavingPricing(false)
+    }
+  }
+
+  async function openRefundDialog(record) {
+    setRefundTarget(record)
+    setRefundOptions(null)
+    setRefundForm({ amount: '', component: '', refund_method: '', reason: '' })
+    setIsLoadingRefundOptions(true)
+
+    try {
+      const options = await fetchBillingRefundOptions(record.id)
+      setRefundOptions(options)
+      setRefundForm({
+        amount: '',
+        component: options.components?.[0]?.key ?? '',
+        refund_method: options.refund_methods?.[0]?.method ?? '',
+        reason: '',
+      })
+    } catch (error) {
+      setRefundTarget(null)
+      window.alert(error.message || 'Unable to load refund options for this bill.')
+    } finally {
+      setIsLoadingRefundOptions(false)
+    }
+  }
+
+  async function submitRefund(event) {
+    event.preventDefault()
+    if (!refundTarget) return
+    setIsSubmittingRefund(true)
+
+    try {
+      const result = await refundBillingRecord(refundTarget.id, {
+        amount: Number(refundForm.amount),
+        component: refundForm.component,
+        refund_method: refundForm.refund_method,
+        reason: refundForm.reason.trim(),
+      })
+      if (result) {
+        setRefundTarget(null)
+        setRefundOptions(null)
+      }
+    } finally {
+      setIsSubmittingRefund(false)
     }
   }
 
@@ -194,6 +252,8 @@ export default function BillingSection({
           isLoadingBilling={isLoadingBilling}
           setSelectedPaymentRecordId={setSelectedPaymentRecordId}
           setIsBillingSummaryOpen={setIsBillingSummaryOpen}
+          canAuthorizeRefund={canAuthorizeRefund}
+          openRefundDialog={openRefundDialog}
           openBillingPayment={openBillingPayment}
           setIsBillingModalOpen={setIsBillingModalOpen}
           updateBillingRecord={updateBillingRecord}
@@ -331,6 +391,7 @@ export default function BillingSection({
                       <th>Total</th>
                       <th>Discount</th>
                       <th>Paid</th>
+                      <th>Refunded</th>
                       <th>Total Insurance Billing</th>
                       <th>Balance</th>
                       <th>Actions</th>
@@ -352,6 +413,7 @@ export default function BillingSection({
                         <td>{currency.format(Number(record.total_amount ?? 0))}</td>
                         <td>{currency.format(Number(record.discount ?? 0))}</td>
                         <td>{currency.format(Number(record.total_paid ?? 0))}</td>
+                        <td>{currency.format(Number(record.total_refunded ?? 0))}</td>
                         <td>{currency.format(Number(record.insurance_claimed ?? 0))}</td>
                         <td className={hasBalanceDue(record.calculated_balance) ? 'billing-balance-due' : undefined}>
                           {currency.format(Number(record.calculated_balance ?? 0))}
@@ -368,6 +430,11 @@ export default function BillingSection({
                             >
                               View summary
                             </button>
+                            {canAuthorizeRefund ? (
+                              <button type="button" className="mini-action" onClick={() => openRefundDialog(record)}>
+                                Refund
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -983,6 +1050,133 @@ export default function BillingSection({
           </article>
         </div>
       ) : null}
+      {refundTarget ? (
+        <div className="modal-overlay" onClick={() => setRefundTarget(null)}>
+          <article
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="billing-refund-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Authorized Billing Refund</p>
+                <h3 id="billing-refund-title">{refundTarget.name || 'Billing record'}</h3>
+                <p className="muted-copy">{refundTarget.receipt_number || `Billing #${refundTarget.id}`} · {refundTarget.branch_name}</p>
+              </div>
+              <button type="button" className="mini-action" onClick={() => setRefundTarget(null)}>Close</button>
+            </div>
+
+            {billingError ? <div className="message-banner error">{billingError}</div> : null}
+            {isLoadingRefundOptions ? <p className="muted-copy">Checking refundable payment methods and bill items...</p> : null}
+            {!isLoadingRefundOptions && refundOptions ? (
+              <>
+                <div className="billing-summary-note">
+                  <strong>Refund limits</strong>
+                  <p>
+                    Refunded so far: {currency.format(Number(refundOptions.total_refunded ?? 0))}. Refunds are limited to collected payments and the selected bill item.
+                    The refund is recorded as a linked expense and reversed collection.
+                  </p>
+                </div>
+                <form className="patient-form-grid" onSubmit={submitRefund}>
+                  <label>
+                    Bill item
+                    <select
+                      value={refundForm.component}
+                      onChange={(event) => setRefundForm((current) => ({ ...current, component: event.target.value }))}
+                      required
+                    >
+                      {refundOptions.components.map((item) => (
+                        <option key={item.key} value={item.key}>{item.label} · up to {currency.format(Number(item.available))}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Refund payment method
+                    <select
+                      value={refundForm.refund_method}
+                      onChange={(event) => setRefundForm((current) => ({ ...current, refund_method: event.target.value }))}
+                      required
+                    >
+                      {refundOptions.refund_methods.map((item) => (
+                        <option key={item.method} value={item.method}>{item.method} · {currency.format(Number(item.available))} available</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Refund amount
+                    <input
+                      type="number"
+                      min="0.01"
+                      max={Number.isFinite(refundAvailable) ? refundAvailable : undefined}
+                      step="0.01"
+                      value={refundForm.amount}
+                      onChange={(event) => setRefundForm((current) => ({ ...current, amount: event.target.value }))}
+                      required
+                    />
+                    <small>Maximum available for this item and method: {currency.format(refundAvailable)}</small>
+                  </label>
+                  <label className="full-span">
+                    Reason for refund
+                    <textarea
+                      value={refundForm.reason}
+                      onChange={(event) => setRefundForm((current) => ({ ...current, reason: event.target.value }))}
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Explain the billing error or product issue..."
+                      required
+                    />
+                  </label>
+                  {!refundOptions.refund_methods.length || !refundOptions.components.length ? (
+                    <p className="muted-copy full-span">There is no refundable payment balance remaining for this bill.</p>
+                  ) : null}
+                  <div className="modal-actions full-span">
+                    <button type="button" className="ghost-button" onClick={() => setRefundTarget(null)}>Cancel</button>
+                    <button
+                      type="submit"
+                      className="primary-button"
+                      disabled={
+                        isSubmittingRefund ||
+                        !refundOptions.refund_methods.length ||
+                        !refundOptions.components.length ||
+                        Number(refundForm.amount) <= 0 ||
+                        Number(refundForm.amount) > refundAvailable ||
+                        !refundForm.reason.trim()
+                      }
+                    >
+                      {isSubmittingRefund ? 'Recording refund...' : 'Authorize and record refund'}
+                    </button>
+                  </div>
+                </form>
+
+                <article className="billing-summary-note">
+                  <strong>Refund history</strong>
+                  {!refundOptions.refunds.length ? <p>No refunds have been recorded for this bill.</p> : (
+                    <div className="table-shell">
+                      <table className="portal-table">
+                        <thead><tr><th>Date</th><th>Item</th><th>Amount</th><th>Method</th><th>Authorized by</th><th>Reason</th></tr></thead>
+                        <tbody>
+                          {refundOptions.refunds.map((refund) => (
+                            <tr key={refund.id}>
+                              <td>{String(refund.refunded_at ?? '').slice(0, 10)}</td>
+                              <td>{refund.component}</td>
+                              <td>{currency.format(Number(refund.amount ?? 0))}</td>
+                              <td>{refund.refund_method}</td>
+                              <td>{refund.authorized_by_name} ({refund.authorized_role})</td>
+                              <td>{refund.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </article>
+              </>
+            ) : null}
+          </article>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -997,6 +1191,8 @@ function ManagerBillingWorkspace({
   isLoadingBilling,
   setSelectedPaymentRecordId,
   setIsBillingSummaryOpen,
+  canAuthorizeRefund,
+  openRefundDialog,
   openBillingPayment,
   setIsBillingModalOpen,
   updateBillingRecord,
@@ -1210,6 +1406,7 @@ function ManagerBillingWorkspace({
                     <th>Insurance</th>
                     <th>Total</th>
                     <th>Paid</th>
+                    <th>Refunded</th>
                     <th>Balance</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -1236,6 +1433,7 @@ function ManagerBillingWorkspace({
                       <td>{record.health_insurance || 'NONE'}</td>
                       <td>{currency.format(Number(record.total_amount ?? 0))}</td>
                       <td>{currency.format(Number(record.total_paid ?? 0))}</td>
+                      <td>{currency.format(Number(record.total_refunded ?? 0))}</td>
                       <td className={hasBalanceDue(record.calculated_balance) ? 'billing-balance-due' : undefined}>
                         {currency.format(Number(record.calculated_balance ?? 0))}
                       </td>
@@ -1252,6 +1450,11 @@ function ManagerBillingWorkspace({
                           >
                             Summary
                           </button>
+                          {canAuthorizeRefund ? (
+                            <button type="button" className="mini-action" onClick={() => openRefundDialog(record)}>
+                              Refund
+                            </button>
+                          ) : null}
                           {canEditBilling ? (
                             <button
                               type="button"

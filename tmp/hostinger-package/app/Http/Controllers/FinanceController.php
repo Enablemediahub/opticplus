@@ -77,6 +77,12 @@ class FinanceController extends Controller
         $insuranceBilledMonth = (float) (clone $insuranceClaimsBase)
             ->whereDate('date', '>=', $monthStart)
             ->sum('amount_paid');
+        $refundExpensesMonth = Schema::hasColumn('expenses', 'source_type')
+            ? (float) tap(
+                DB::table('expenses')->where('source_type', 'billing_refund')->whereDate('date', '>=', $monthStart),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->sum('amount')
+            : 0.0;
 
         return response()->json([
             'branch_id' => $branchId,
@@ -97,7 +103,7 @@ class FinanceController extends Controller
                 'net_month' => $salesMonth -
                     (float) tap(DB::table('expenses'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
                         ->whereDate('date', '>=', $monthStart)
-                        ->sum('amount'),
+                        ->sum('amount') + $refundExpensesMonth,
                 'outstanding_balance' => (float) ($outstandingBalance ?? 0),
                 'insurance_pending' => (float) tap(DB::table('insurance_claims'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))
                     ->where('status', 'pending')
@@ -218,10 +224,25 @@ class FinanceController extends Controller
         $insurancePending = (float) (clone $insuranceBase)->where('status', 'pending')->sum('amount_paid');
         $insuranceExpected = round((float) (clone $insuranceBase)->sum('amount_paid'), 2);
         $collectedRevenue = round(array_sum($collections) + $insurancePaid, 2);
-        $lensRevenue = (float) ($billing->lens_total ?? 0);
+        $refundsByComponent = Schema::hasTable('billing_refunds')
+            ? tap(
+                DB::table('billing_refunds')->whereBetween(DB::raw('DATE(refunded_at)'), [$startDate, $endDate]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->selectRaw("
+                COALESCE(SUM(CASE WHEN component = 'lenses' THEN amount ELSE 0 END), 0) as lens_refunds,
+                COALESCE(SUM(CASE WHEN component = 'frames' THEN amount ELSE 0 END), 0) as frame_refunds,
+                COALESCE(SUM(CASE WHEN component = 'consultation' THEN amount ELSE 0 END), 0) as consultation_refunds
+            ")->first()
+            : (object) ['lens_refunds' => 0, 'frame_refunds' => 0, 'consultation_refunds' => 0];
+        $refundExpenseTotal = Schema::hasColumn('expenses', 'source_type')
+            ? (float) (clone $expenseBase)->where('source_type', 'billing_refund')->sum('amount')
+            : 0.0;
+        $lensRevenue = (float) ($billing->lens_total ?? 0) - (float) $refundsByComponent->lens_refunds;
         $lensProfit = round($lensRevenue - $lensExpenseTotal, 2);
-        $grossProfit = round($lensProfit + $frameProfit + (float) ($billing->consultation_total ?? 0), 2);
-        $cashPosition = round($collectedRevenue - $totalExpenses, 2);
+        $frameProfit -= (float) $refundsByComponent->frame_refunds;
+        $consultationRevenue = (float) ($billing->consultation_total ?? 0) - (float) $refundsByComponent->consultation_refunds;
+        $grossProfit = round($lensProfit + $frameProfit + $consultationRevenue, 2);
+        $cashPosition = round($collectedRevenue - ($totalExpenses - $refundExpenseTotal), 2);
 
         $expenseBreakdown = (clone $expenseBase)
             ->select('category', DB::raw('SUM(amount) as total'))
@@ -255,6 +276,29 @@ class FinanceController extends Controller
             ->groupBy('date')
             ->get()
             ->keyBy('date');
+        $refundExpenseDaily = Schema::hasColumn('expenses', 'source_type')
+            ? (clone $expenseBase)
+                ->where('source_type', 'billing_refund')
+                ->selectRaw('date, SUM(amount) as expense_total')
+                ->groupBy('date')
+                ->get()
+                ->keyBy('date')
+            : collect();
+        $refundComponentDaily = Schema::hasTable('billing_refunds')
+            ? tap(
+                DB::table('billing_refunds')->whereBetween(DB::raw('DATE(refunded_at)'), [$startDate, $endDate]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )
+                ->selectRaw("
+                    DATE(refunded_at) as refund_date,
+                    SUM(CASE WHEN component = 'consultation' THEN amount ELSE 0 END) as consultation_refunds,
+                    SUM(CASE WHEN component = 'frames' THEN amount ELSE 0 END) as frame_refunds,
+                    SUM(CASE WHEN component = 'lenses' THEN amount ELSE 0 END) as lens_refunds
+                ")
+                ->groupBy(DB::raw('DATE(refunded_at)'))
+                ->get()
+                ->keyBy('refund_date')
+            : collect();
 
         $dailyRows = collect()
             ->merge($billingDaily->keys())
@@ -262,29 +306,33 @@ class FinanceController extends Controller
             ->merge($insuranceDaily->keys())
             ->merge($remittanceDaily->keys())
             ->merge($expenseDaily->keys())
+            ->merge($refundComponentDaily->keys())
             ->filter()
             ->unique()
             ->sortDesc()
             ->take(31)
-            ->map(function ($date) use ($billingDaily, $salesDaily, $insuranceDaily, $remittanceDaily, $expenseDaily) {
+            ->map(function ($date) use ($billingDaily, $salesDaily, $insuranceDaily, $remittanceDaily, $expenseDaily, $refundExpenseDaily, $refundComponentDaily) {
                 $billingRow = $billingDaily->get($date);
                 $salesRow = $salesDaily->get($date);
                 $insuranceRow = $insuranceDaily->get($date);
                 $remittanceRow = $remittanceDaily->get($date);
                 $expenseRow = $expenseDaily->get($date);
+                $refundExpenseRow = $refundExpenseDaily->get($date);
+                $refundComponentRow = $refundComponentDaily->get($date);
                 $collectedTotal = round((float) ($salesRow->collected_total ?? 0) + (float) ($remittanceRow->insurance_paid ?? 0), 2);
                 $expenseTotal = round((float) ($expenseRow->expense_total ?? 0), 2);
+                $refundExpense = (float) ($refundExpenseRow->expense_total ?? 0);
 
                 return [
                     'date' => $date,
-                    'consultation_total' => round((float) ($billingRow->consultation_total ?? 0), 2),
-                    'frame_total' => round((float) ($billingRow->frame_total ?? 0), 2),
-                    'lens_total' => round((float) ($billingRow->lens_total ?? 0), 2),
+                    'consultation_total' => round((float) ($billingRow->consultation_total ?? 0) - (float) ($refundComponentRow->consultation_refunds ?? 0), 2),
+                    'frame_total' => round((float) ($billingRow->frame_total ?? 0) - (float) ($refundComponentRow->frame_refunds ?? 0), 2),
+                    'lens_total' => round((float) ($billingRow->lens_total ?? 0) - (float) ($refundComponentRow->lens_refunds ?? 0), 2),
                     'collected_total' => $collectedTotal,
                     'insurance_expected' => round((float) ($insuranceRow->insurance_expected ?? 0), 2),
                     'insurance_received' => round((float) ($remittanceRow->insurance_paid ?? 0), 2),
                     'expense_total' => $expenseTotal,
-                    'net_position' => round($collectedTotal - $expenseTotal, 2),
+                    'net_position' => round($collectedTotal - ($expenseTotal - $refundExpense), 2),
                 ];
             })
             ->values();
@@ -303,12 +351,12 @@ class FinanceController extends Controller
                 'cash_position' => $cashPosition,
                 'gross_profit' => $grossProfit,
                 'total_expenses' => round($totalExpenses, 2),
-                'consultation_revenue' => round((float) ($billing->consultation_total ?? 0), 2),
+                'consultation_revenue' => round($consultationRevenue, 2),
                 'lens_revenue' => round($lensRevenue, 2),
                 'lens_cost' => round($lensExpenseTotal, 2),
                 'lens_profit' => $lensProfit,
                 'lens_count' => (int) ($billing->lens_count ?? 0),
-                'frame_revenue' => round((float) ($billing->frame_total ?? 0), 2),
+                'frame_revenue' => round((float) ($billing->frame_total ?? 0) - (float) $refundsByComponent->frame_refunds, 2),
                 'frame_profit' => round($frameProfit, 2),
                 'frame_count' => (int) ($billing->frame_count ?? 0),
                 'insurance_claimed' => round($insuranceClaimed, 2),
@@ -358,16 +406,17 @@ class FinanceController extends Controller
         $billing = tap(DB::table('billing')->whereBetween('date', [$start, $end]), $scope)
             ->selectRaw('MONTH(date) as month, SUM(consultation_price) consultation, SUM(frame_price) frames, SUM(lens_price) lenses, SUM(case_price) cases, SUM(total_amount) billed, SUM(balance) debtors')
             ->groupByRaw('MONTH(date)')->get()->keyBy('month');
-        $salesRows = tap(
-            DB::table('sales as s')
+        $salesRowsQuery = DB::table('sales as s')
                 ->leftJoin('billing as b', function ($join): void {
                     $join->on('s.billing_id', '=', 'b.id')
                         ->on('s.branch_id', '=', 'b.branch_id');
                 })
                 ->whereBetween('s.date', [$start, $end])
-                ->where('s.payment_method', '!=', 'Insurance'),
-            fn ($query) => $this->applyBranchScope($query, 's.branch_id', $branchId)
-        )
+                ->where('s.payment_method', '!=', 'Insurance');
+        if (Schema::hasTable('billing_refunds')) {
+            $salesRowsQuery->leftJoin('billing_refunds as br', 'br.sale_id', '=', 's.id');
+        }
+        $salesRows = tap($salesRowsQuery, fn ($query) => $this->applyBranchScope($query, 's.branch_id', $branchId))
             ->select([
                 DB::raw('MONTH(s.date) as month'),
                 's.date as sale_date',
@@ -380,6 +429,12 @@ class FinanceController extends Controller
                 'b.lens_price',
                 'b.case_price',
                 'b.total_amount as billing_total',
+                Schema::hasTable('billing_refunds')
+                    ? 'br.id as refund_id'
+                    : DB::raw('NULL as refund_id'),
+                Schema::hasTable('billing_refunds')
+                    ? 'br.component as refund_component'
+                    : DB::raw('NULL as refund_component'),
             ])
             ->orderBy('s.date')
             ->orderBy('s.id')
@@ -400,6 +455,18 @@ class FinanceController extends Controller
                 $cashInHandByMonth[$month - 1] += $amountPaid;
             } elseif ($paymentBucket === 'mobile_money') {
                 $cashInMomoByMonth[$month - 1] += $amountPaid;
+            }
+
+            if ($saleRow->refund_id !== null) {
+                $refundBucket = match ($saleRow->refund_component) {
+                    'consultation' => 'consultation',
+                    'lenses' => 'lens',
+                    'frames' => 'frame',
+                    'case' => 'case',
+                    default => 'other',
+                };
+                $salesBreakdown[$month][$refundBucket] += $amountPaid;
+                continue;
             }
 
             if ($saleRow->billing_id === null) {
@@ -456,6 +523,12 @@ class FinanceController extends Controller
         $insuranceReceivedByMonth = $this->insuranceReceivedByReceiptMonth($branchId, $start, $end);
         $expenses = tap(DB::table('expenses')->whereBetween('date', [$start, $end]), $scope)
             ->selectRaw('MONTH(date) as month, category, SUM(amount) total')->groupByRaw('MONTH(date), category')->get();
+        $refundExpensesByMonth = Schema::hasColumn('expenses', 'source_type')
+            ? tap(
+                DB::table('expenses')->whereBetween('date', [$start, $end])->where('source_type', 'billing_refund'),
+                $scope
+            )->selectRaw('MONTH(date) as month, SUM(amount) as total')->groupByRaw('MONTH(date)')->pluck('total', 'month')
+            : collect();
 
         $collectionSources = [];
         $loanCollections = array_fill(0, 12, 0.0);
@@ -656,13 +729,14 @@ class FinanceController extends Controller
             $bill = $billing->get($month);
             $claim = $insurance->get($month);
             $expenseTotal = array_sum(array_map(fn ($values) => (float) $values[$month - 1], $categoryRows));
+            $refundExpenseTotal = (float) ($refundExpensesByMonth[$month] ?? 0);
             $salesAllocation = $salesBreakdown[$month] ?? ['consultation' => 0.0, 'lens' => 0.0, 'frame' => 0.0, 'case' => 0.0, 'other' => 0.0];
             $receivedInsurance = (float) ($insuranceReceivedByMonth[$month] ?? 0);
             $collected = (float) ($sales[$month] ?? 0) + $receivedInsurance + (float) ($loanCollections[$month - 1] ?? 0);
             $allocatedKnownTotal = $salesAllocation['consultation'] + $salesAllocation['lens'] + $salesAllocation['frame'] + $salesAllocation['case'];
             $salesAllocation['other'] = max(0.0, (float) ($sales[$month] ?? 0) - $allocatedKnownTotal);
             $salesReconciliation = 0.0;
-            $runningCash += $collected - $expenseTotal;
+            $runningCash += $collected - ($expenseTotal - $refundExpenseTotal);
             $months[] = [
                 'month' => $month,
                 'label' => strtoupper(now()->setDate($year, $month, 1)->format('M')),
@@ -706,7 +780,8 @@ class FinanceController extends Controller
                 SUM(CASE WHEN lc.cost_price IS NOT NULL THEN lc.cost_price ELSE 0 END) as cost,
                 SUM(CASE WHEN lc.cost_price IS NOT NULL THEN b.lens_price - lc.cost_price ELSE 0 END) as profit,
                 COUNT(b.id) as sold_count,
-                SUM(CASE WHEN lc.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count
+                SUM(CASE WHEN lc.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count,
+                SUM(CASE WHEN lc.cost_price IS NULL THEN b.lens_price ELSE 0 END) as unpriced_sales
             ')
             ->groupByRaw('DATE(b.date)')
             ->get();
@@ -731,6 +806,7 @@ class FinanceController extends Controller
             $dailyExtractionByDate[$date]['lens_profit'] = (float) $row->profit;
             $dailyExtractionByDate[$date]['lens_sold_count'] = (int) $row->sold_count;
             $dailyExtractionByDate[$date]['lens_missing_cost_count'] = (int) $row->missing_cost_count;
+            $dailyExtractionByDate[$date]['unpriced_lens_sales'] = (float) $row->unpriced_sales;
         }
 
         $frameExtractionRows = tap(
@@ -749,7 +825,8 @@ class FinanceController extends Controller
                 SUM(CASE WHEN p.cost_price IS NOT NULL THEN p.cost_price ELSE 0 END) as cost,
                 SUM(CASE WHEN p.cost_price IS NOT NULL THEN COALESCE(bf.frame_price, 0) - p.cost_price ELSE 0 END) as profit,
                 COUNT(*) as sold_count,
-                SUM(CASE WHEN p.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count
+                SUM(CASE WHEN p.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count,
+                SUM(CASE WHEN p.cost_price IS NULL THEN COALESCE(bf.frame_price, 0) ELSE 0 END) as unpriced_sales
             ')
             ->groupByRaw('DATE(b.date)')
             ->get();
@@ -774,22 +851,170 @@ class FinanceController extends Controller
             $dailyExtractionByDate[$date]['frame_profit'] = (float) $row->profit;
             $dailyExtractionByDate[$date]['frames_sold_count'] = (int) $row->sold_count;
             $dailyExtractionByDate[$date]['frame_missing_cost_count'] = (int) $row->missing_cost_count;
+            $dailyExtractionByDate[$date]['unpriced_frame_sales'] = (float) $row->unpriced_sales;
         }
 
+        if (Schema::hasTable('expenses')
+            && Schema::hasColumn('expenses', 'date')
+            && Schema::hasColumn('expenses', 'category')
+            && Schema::hasColumn('expenses', 'amount')) {
+            $otherExpenseQuery = tap(
+                DB::table('expenses')
+                    ->whereBetween('date', [$extractionStart, $extractionEnd])
+                    ->whereRaw('LOWER(TRIM(category)) IN (?, ?)', ['other', 'other expenses']),
+                fn ($query) => $scope($query)
+            );
+            if (Schema::hasColumn('expenses', 'source_type')) {
+                $otherExpenseQuery->where(fn ($query) => $query
+                    ->whereNull('source_type')
+                    ->orWhere('source_type', '!=', 'billing_refund'));
+            }
+
+            $otherExpensesByDate = $otherExpenseQuery
+                ->selectRaw('date, SUM(amount) as total')
+                ->groupBy('date')
+                ->get()
+                ->keyBy('date');
+
+            foreach ($otherExpensesByDate as $date => $expense) {
+                $dailyExtractionByDate[$date] ??= [
+                    'date' => (string) $date,
+                    'lens_sales' => 0.0,
+                    'lens_cost' => 0.0,
+                    'lens_profit' => 0.0,
+                    'lens_sold_count' => 0,
+                    'lens_missing_cost_count' => 0,
+                    'frame_sales' => 0.0,
+                    'frame_cost' => 0.0,
+                    'frame_profit' => 0.0,
+                    'frames_sold_count' => 0,
+                    'frame_missing_cost_count' => 0,
+                ];
+                $dailyExtractionByDate[$date]['other_expenses'] = (float) $expense->total;
+            }
+        }
+
+        if (Schema::hasTable('billing_refunds')) {
+            $refundRows = tap(
+                DB::table('billing_refunds')->whereBetween(DB::raw('DATE(refunded_at)'), [$extractionStart, $extractionEnd]),
+                $scope
+            )->get(['refunded_at', 'amount', 'component']);
+
+            foreach ($refundRows as $refund) {
+                $date = substr((string) $refund->refunded_at, 0, 10);
+                $dailyExtractionByDate[$date] ??= [
+                    'date' => $date,
+                    'lens_sales' => 0.0,
+                    'lens_cost' => 0.0,
+                    'lens_profit' => 0.0,
+                    'lens_sold_count' => 0,
+                    'lens_missing_cost_count' => 0,
+                    'frame_sales' => 0.0,
+                    'frame_cost' => 0.0,
+                    'frame_profit' => 0.0,
+                    'frames_sold_count' => 0,
+                    'frame_missing_cost_count' => 0,
+                ];
+                $amount = (float) $refund->amount;
+                if ($refund->component === 'lenses') {
+                    $dailyExtractionByDate[$date]['lens_sales'] -= $amount;
+                    $dailyExtractionByDate[$date]['lens_profit'] -= $amount;
+                } elseif ($refund->component === 'frames') {
+                    $dailyExtractionByDate[$date]['frame_sales'] -= $amount;
+                    $dailyExtractionByDate[$date]['frame_profit'] -= $amount;
+                }
+            }
+        }
+
+        $collectionRows = tap(
+            DB::table('sales')
+                ->whereBetween('date', [$extractionStart, $extractionEnd])
+                ->whereNotNull('payment_method')
+                ->whereRaw('LOWER(payment_method) NOT LIKE ?', ['%insurance%']),
+            fn ($query) => $scope($query)
+        )
+            ->selectRaw('
+                date,
+                SUM(CASE WHEN amount_paid > 0 THEN amount_paid ELSE 0 END) as gross_collections,
+                ABS(SUM(CASE WHEN amount_paid < 0 THEN amount_paid ELSE 0 END)) as refund_reversals,
+                SUM(amount_paid) as net_collections
+            ')
+            ->groupBy('date')
+            ->get();
+        foreach ($collectionRows as $collection) {
+            $date = (string) $collection->date;
+            $dailyExtractionByDate[$date] ??= [
+                'date' => $date,
+                'lens_sales' => 0.0,
+                'lens_cost' => 0.0,
+                'lens_profit' => 0.0,
+                'lens_sold_count' => 0,
+                'lens_missing_cost_count' => 0,
+                'frame_sales' => 0.0,
+                'frame_cost' => 0.0,
+                'frame_profit' => 0.0,
+                'frames_sold_count' => 0,
+                'frame_missing_cost_count' => 0,
+            ];
+            $dailyExtractionByDate[$date]['gross_collections'] = (float) $collection->gross_collections;
+            $dailyExtractionByDate[$date]['refund_reversals'] = (float) $collection->refund_reversals;
+            $dailyExtractionByDate[$date]['net_collections'] = (float) $collection->net_collections;
+        }
+
+        $savingsAllocationPercent = Schema::hasTable('sales_allocation_items')
+            && Schema::hasColumn('sales_allocation_items', 'allocation_percent')
+            && Schema::hasColumn('sales_allocation_items', 'treatment')
+            ? (float) tap(
+                DB::table('sales_allocation_items')
+                    ->where('is_active', true)
+                    ->where('treatment', 'savings'),
+                fn ($query) => $scope($query)
+            )->sum('allocation_percent')
+            : 0.0;
         $dailyExtraction = collect($dailyExtractionByDate)
             ->sortKeys()
             ->values()
-            ->map(fn (array $day) => [
-                ...$day,
-                'lens_sales' => round($day['lens_sales'], 2),
-                'lens_cost' => round($day['lens_cost'], 2),
-                'lens_profit' => round($day['lens_profit'], 2),
-                'frame_sales' => round($day['frame_sales'], 2),
-                'frame_cost' => round($day['frame_cost'], 2),
-                'frame_profit' => round($day['frame_profit'], 2),
-                'total_cost_to_set_aside' => round($day['lens_cost'] + $day['frame_cost'], 2),
-                'gross_profit_to_bank' => round($day['lens_profit'] + $day['frame_profit'], 2),
-            ]);
+            ->map(function (array $day) use ($savingsAllocationPercent): array {
+                $lensCost = round($day['lens_cost'], 2);
+                $frameCost = round($day['frame_cost'], 2);
+                $otherExpenses = round((float) ($day['other_expenses'] ?? 0), 2);
+                $unpricedLensSales = round((float) ($day['unpriced_lens_sales'] ?? 0), 2);
+                $unpricedFrameSales = round((float) ($day['unpriced_frame_sales'] ?? 0), 2);
+                $availableAfterReserves = round(max(
+                    (float) ($day['net_collections'] ?? 0)
+                        - $lensCost
+                        - $frameCost
+                        - $unpricedLensSales
+                        - $unpricedFrameSales
+                        - $otherExpenses,
+                    0
+                ), 2);
+                $plannedSavingsReserve = round($availableAfterReserves * $savingsAllocationPercent / 100, 2);
+
+                return [
+                    ...$day,
+                    'lens_sales' => round($day['lens_sales'], 2),
+                    'lens_cost' => $lensCost,
+                    'lens_profit' => round($day['lens_profit'], 2),
+                    'frame_sales' => round($day['frame_sales'], 2),
+                    'frame_cost' => $frameCost,
+                    'frame_profit' => round($day['frame_profit'], 2),
+                    'gross_collections' => round((float) ($day['gross_collections'] ?? 0), 2),
+                    'refund_reversals' => round((float) ($day['refund_reversals'] ?? 0), 2),
+                    'net_collections' => round((float) ($day['net_collections'] ?? 0), 2),
+                    'unpriced_lens_sales' => $unpricedLensSales,
+                    'unpriced_frame_sales' => $unpricedFrameSales,
+                    'unpriced_sales_held' => round($unpricedLensSales + $unpricedFrameSales, 2),
+                    'other_expenses' => $otherExpenses,
+                    'total_cost_to_set_aside' => round($lensCost + $frameCost, 2),
+                    'gross_profit_to_bank' => round($day['lens_profit'] + $day['frame_profit'], 2),
+                    'available_after_reserves' => $availableAfterReserves,
+                    'savings_allocation_percent' => round($savingsAllocationPercent, 2),
+                    'planned_savings_reserve' => $plannedSavingsReserve,
+                    'estimated_bank_deposit' => round(max($availableAfterReserves - $plannedSavingsReserve, 0), 2),
+                    'net_profit_to_bank' => round(max($availableAfterReserves - $plannedSavingsReserve, 0), 2),
+                ];
+            });
 
         $frameReserveBreakdown = collect();
         if (Schema::hasTable('frame_cost_reservations') && Schema::hasTable('billing_frames') && Schema::hasTable('products')) {
@@ -1992,6 +2217,11 @@ class FinanceController extends Controller
                 'message' => 'Lens cost expenses are controlled by Lens Tracker. Update the lens cost there instead.',
             ], 422);
         }
+        if ($this->isSalesAllocationSavingExpense($expenseId)) {
+            return response()->json([
+                'message' => 'Rent savings expenses are controlled by the Sales Allocation tracker. Record corrections there to preserve daily arrears.',
+            ], 422);
+        }
         $isFrameReservationExpense = $this->isLinkedFrameReservationExpense($current);
         $role = $request->user()?->normalized_role ?? $request->user()?->role;
         if ($isFrameReservationExpense && $role !== 'manager') {
@@ -2068,6 +2298,11 @@ class FinanceController extends Controller
             return response()->json([
                 'message' => 'Expense record not found for this branch.',
             ], 404);
+        }
+        if ($this->isSalesAllocationSavingExpense($expenseId)) {
+            return response()->json([
+                'message' => 'Rent savings expenses cannot be deleted from Expenses because they are linked to the daily arrears tracker.',
+            ], 422);
         }
 
         DB::transaction(function () use ($current, $expenseId, $branchId): void {
@@ -2265,6 +2500,13 @@ class FinanceController extends Controller
                 $join->on('s.billing_id', '=', 'b.id')
                     ->on('s.branch_id', '=', 'b.branch_id');
             });
+        $hasRefundLedger = Schema::hasTable('billing_refunds');
+        if ($hasRefundLedger) {
+            $transactionQuery->leftJoin('billing_refunds as br', function ($join): void {
+                $join->on('br.sale_id', '=', 's.id')
+                    ->on('br.branch_id', '=', 's.branch_id');
+            });
+        }
         $this->applyBranchScope($transactionQuery, 's.branch_id', $branchId);
 
         if ($dateFrom !== '') {
@@ -2324,6 +2566,13 @@ class FinanceController extends Controller
                 's.reference',
                 's.transaction_id',
                 's.created_at',
+                $hasRefundLedger ? 'br.id as refund_id' : DB::raw('NULL as refund_id'),
+                $hasRefundLedger ? 'br.amount as refund_amount' : DB::raw('NULL as refund_amount'),
+                $hasRefundLedger ? 'br.component as refund_component' : DB::raw('NULL as refund_component'),
+                $hasRefundLedger ? 'br.reason as refund_reason' : DB::raw('NULL as refund_reason'),
+                $hasRefundLedger ? 'br.authorized_by_name as refund_authorized_by_name' : DB::raw('NULL as refund_authorized_by_name'),
+                $hasRefundLedger ? 'br.authorized_role as refund_authorized_role' : DB::raw('NULL as refund_authorized_role'),
+                $hasRefundLedger ? 'br.refunded_at' : DB::raw('NULL as refunded_at'),
                 'b.name',
                 'b.receipt_number',
                 'b.total_amount',
@@ -3934,6 +4183,14 @@ class FinanceController extends Controller
             && (string) ($expense->source_type ?? '') === 'frame_reservation';
     }
 
+    private function isSalesAllocationSavingExpense(int $expenseId): bool
+    {
+        return Schema::hasTable('sales_allocation_savings_entries')
+            && DB::table('sales_allocation_savings_entries')
+                ->where('expense_id', $expenseId)
+                ->exists();
+    }
+
     private function canDeleteLinkedLensCostExpense(?object $user): bool
     {
         if (! $user) {
@@ -4124,6 +4381,24 @@ class FinanceController extends Controller
             })
             ->sortByDesc('amount')
             ->values();
+        $refundTotals = Schema::hasTable('billing_refunds')
+            ? tap(
+                DB::table('billing_refunds')->whereBetween(DB::raw('DATE(refunded_at)'), [$startDate, $endDate]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->selectRaw("
+                COALESCE(SUM(amount), 0) as total_refunded,
+                COALESCE(SUM(CASE WHEN component = 'consultation' THEN amount ELSE 0 END), 0) as consultation_refunds,
+                COALESCE(SUM(CASE WHEN component = 'frames' THEN amount ELSE 0 END), 0) as frame_refunds,
+                COALESCE(SUM(CASE WHEN component = 'lenses' THEN amount ELSE 0 END), 0) as lens_refunds,
+                COALESCE(SUM(CASE WHEN component = 'case' THEN amount ELSE 0 END), 0) as case_refunds
+            ")->first()
+            : (object) [
+                'total_refunded' => 0,
+                'consultation_refunds' => 0,
+                'frame_refunds' => 0,
+                'lens_refunds' => 0,
+                'case_refunds' => 0,
+            ];
 
         $cashTotal = 0.0;
         $mobileMoneyTotal = 0.0;
@@ -4149,14 +4424,18 @@ class FinanceController extends Controller
         $insurancePending = round((float) ($insuranceByStatus['pending'] ?? 0), 2);
         $grossBilled = round((float) ($billing->billed_total ?? 0), 2);
         $discountTotal = round((float) ($billing->discount_total ?? 0), 2);
-        $netBilled = max($grossBilled - $discountTotal, 0);
+        $netBilled = max($grossBilled - $discountTotal - (float) $refundTotals->total_refunded, 0);
         $totalCollections = round($cashTotal + $mobileMoneyTotal + $paystackTotal + $bankTransferTotal + $otherCollectionsTotal + $insurancePaid, 2);
         $totalExpenses = round((float) $expenseRows->sum('amount'), 2);
+        $refundExpenseTotal = Schema::hasColumn('expenses', 'source_type')
+            ? (float) (clone $expenseQuery)->where('source_type', 'billing_refund')->sum('amount')
+            : 0.0;
+        $operatingExpenses = max($totalExpenses - $refundExpenseTotal, 0);
         $lensExpenses = round((float) $expenseRows
             ->filter(fn ($row) => strtolower((string) ($row['description'] ?? '')) === 'lens')
             ->sum('amount'), 2);
-        $netOperating = round($totalCollections - $totalExpenses, 2);
-        $netBilledPosition = round($netBilled - $totalExpenses, 2);
+        $netOperating = round($totalCollections - $operatingExpenses, 2);
+        $netBilledPosition = round($netBilled - $operatingExpenses, 2);
 
         return [
             'branch_id' => $branchId,
@@ -4180,10 +4459,10 @@ class FinanceController extends Controller
                     'key' => 'revenue',
                     'title' => 'Revenue Composition',
                     'rows' => [
-                        ['key' => 'consultation_total', 'description' => 'Consultation Revenue', 'amount' => round((float) ($billing->consultation_total ?? 0), 2), 'note' => 'Billed consultation value for the month'],
-                        ['key' => 'frame_total', 'description' => 'Frame Revenue', 'amount' => round((float) ($billing->frame_total ?? 0), 2), 'note' => 'Billed frame value for the month'],
-                        ['key' => 'lens_total', 'description' => 'Lens Revenue', 'amount' => round((float) ($billing->lens_total ?? 0), 2), 'note' => 'Billed lens value for the month'],
-                        ['key' => 'case_total', 'description' => 'Case / Accessories Revenue', 'amount' => round((float) ($billing->case_total ?? 0), 2), 'note' => 'Billed accessory and case value for the month'],
+                        ['key' => 'consultation_total', 'description' => 'Consultation Revenue', 'amount' => round((float) ($billing->consultation_total ?? 0) - (float) $refundTotals->consultation_refunds, 2), 'note' => 'Billed consultation value less recorded refunds'],
+                        ['key' => 'frame_total', 'description' => 'Frame Revenue', 'amount' => round((float) ($billing->frame_total ?? 0) - (float) $refundTotals->frame_refunds, 2), 'note' => 'Billed frame value less recorded refunds'],
+                        ['key' => 'lens_total', 'description' => 'Lens Revenue', 'amount' => round((float) ($billing->lens_total ?? 0) - (float) $refundTotals->lens_refunds, 2), 'note' => 'Billed lens value less recorded refunds'],
+                        ['key' => 'case_total', 'description' => 'Case / Accessories Revenue', 'amount' => round((float) ($billing->case_total ?? 0) - (float) $refundTotals->case_refunds, 2), 'note' => 'Billed accessory and case value less recorded refunds'],
                         ['key' => 'discount_total', 'description' => 'Discounts Granted', 'amount' => $discountTotal, 'note' => 'Total monthly discounts recorded on billing'],
                         ['key' => 'gross_billed_total', 'description' => 'Gross Billed Revenue', 'amount' => $grossBilled, 'note' => 'Total billed amount before collection analysis'],
                         ['key' => 'net_billed_total', 'description' => 'Net Billed Revenue Less Discounts', 'amount' => $netBilled, 'note' => 'Gross billed revenue after discount deductions'],

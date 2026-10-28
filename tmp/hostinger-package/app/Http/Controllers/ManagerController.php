@@ -107,10 +107,18 @@ class ManagerController extends Controller
         }
 
         $monthlyExpenses = (float) tap(DB::table('expenses')->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount');
+        $monthlyRefundExpenses = Schema::hasColumn('expenses', 'source_type')
+            ? (float) tap(
+                DB::table('expenses')
+                    ->where('source_type', 'billing_refund')
+                    ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->sum('amount')
+            : 0.0;
 
-        $monthlyProfit = round($monthlySales - $monthlyExpenses, 2);
+        $monthlyProfit = round($monthlySales - ($monthlyExpenses - $monthlyRefundExpenses), 2);
         $monthlySalesWithInsurance = round($monthlySales + $monthlyInsuranceSales, 2);
-        $monthlyProfitWithInsurance = round($monthlySalesWithInsurance - $monthlyExpenses, 2);
+        $monthlyProfitWithInsurance = round($monthlySalesWithInsurance - ($monthlyExpenses - $monthlyRefundExpenses), 2);
 
         $previousSales = (float) tap(DB::table('sales')->where('payment_method', '!=', 'Insurance')->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount_paid');
 
@@ -119,9 +127,17 @@ class ManagerController extends Controller
         $previousPatients = (int) tap(DB::table('patient_records')->whereBetween(DB::raw('DATE(created_at)'), [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count();
 
         $previousExpenses = (float) tap(DB::table('expenses')->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->sum('amount');
+        $previousRefundExpenses = Schema::hasColumn('expenses', 'source_type')
+            ? (float) tap(
+                DB::table('expenses')
+                    ->where('source_type', 'billing_refund')
+                    ->whereBetween('date', [$previousMonthStart->toDateString(), $previousMonthEnd->toDateString()]),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->sum('amount')
+            : 0.0;
 
-        $previousProfit = round($previousSales - $previousExpenses, 2);
-        $previousProfitWithInsurance = round(($previousSales + $previousInsuranceSales) - $previousExpenses, 2);
+        $previousProfit = round($previousSales - ($previousExpenses - $previousRefundExpenses), 2);
+        $previousProfitWithInsurance = round(($previousSales + $previousInsuranceSales) - ($previousExpenses - $previousRefundExpenses), 2);
 
         $pendingAppointments = (int) tap(DB::table('appointments')->where('status', 'pending'), fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId))->count();
 

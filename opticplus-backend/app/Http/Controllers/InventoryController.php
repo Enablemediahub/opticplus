@@ -401,6 +401,14 @@ class InventoryController extends Controller
         $dateFrom = $request->string('date_from')->toString();
         $dateTo = $request->string('date_to')->toString();
         $reservationStatus = $validated['reservation_status'] ?? 'all';
+        $frameTotals = DB::table('billing_frames')
+            ->select('billing_id', 'branch_id', DB::raw('SUM(COALESCE(frame_price, 0)) as billing_frame_total'))
+            ->groupBy('billing_id', 'branch_id');
+        $refundTotals = Schema::hasTable('billing_refunds')
+            ? DB::table('billing_refunds')
+                ->select('billing_id', 'branch_id', DB::raw("SUM(CASE WHEN component = 'frames' THEN amount ELSE 0 END) as frame_refunds"))
+                ->groupBy('billing_id', 'branch_id')
+            : null;
 
         $records = DB::table('billing_frames as bf')
             ->join('billing as b', function ($join): void {
@@ -414,6 +422,16 @@ class InventoryController extends Controller
             ->leftJoin('frame_cost_reservations as fcr', function ($join): void {
                 $join->on('fcr.frame_sale_id', '=', 'bf.id')
                     ->on('fcr.branch_id', '=', 'bf.branch_id');
+            })
+            ->leftJoinSub($frameTotals, 'frame_totals', function ($join): void {
+                $join->on('frame_totals.billing_id', '=', 'bf.billing_id')
+                    ->on('frame_totals.branch_id', '=', 'bf.branch_id');
+            })
+            ->when($refundTotals, function ($query) use ($refundTotals): void {
+                $query->leftJoinSub($refundTotals, 'refund_totals', function ($join): void {
+                    $join->on('refund_totals.billing_id', '=', 'bf.billing_id')
+                        ->on('refund_totals.branch_id', '=', 'bf.branch_id');
+                });
             })
             ->whereIn(DB::raw('LOWER(p.category)'), ['frame', 'frames'])
             ->when($branchId > 0, fn ($query) => $query->where('bf.branch_id', $branchId))
@@ -446,6 +464,10 @@ class InventoryController extends Controller
                 'p.id as product_id',
                 'p.name as product_name',
                 'p.cost_price',
+                'frame_totals.billing_frame_total',
+                $refundTotals
+                    ? DB::raw('COALESCE(refund_totals.frame_refunds, 0) as frame_refunds')
+                    : DB::raw('0 as frame_refunds'),
                 'fcr.id as reservation_id',
                 'fcr.reserved_cost',
             ])
@@ -460,7 +482,19 @@ class InventoryController extends Controller
                 'product_id' => (int) $record->product_id,
                 'code' => $record->frame_code_id,
                 'name' => $record->product_name,
-                'selling_price' => round((float) $record->frame_price, 2),
+                'selling_price' => round(max(
+                    (float) $record->frame_price
+                        - ((float) ($record->billing_frame_total ?? 0) > 0
+                            ? (float) $record->frame_refunds * (float) $record->frame_price / (float) $record->billing_frame_total
+                            : 0),
+                    0
+                ), 2),
+                'refunded_amount' => round(
+                    (float) ($record->billing_frame_total ?? 0) > 0
+                        ? (float) $record->frame_refunds * (float) $record->frame_price / (float) $record->billing_frame_total
+                        : 0,
+                    2
+                ),
                 'cost_price' => $record->cost_price !== null ? round((float) $record->cost_price, 2) : null,
                 'reserved' => $record->reservation_id !== null,
                 'reserved_cost' => $record->reserved_cost !== null ? round((float) $record->reserved_cost, 2) : null,
@@ -799,8 +833,25 @@ class InventoryController extends Controller
         }
 
         if ($filteredProductIds !== []) {
+            $frameBillingTotals = DB::table('billing_frames')
+                ->select('billing_id', 'branch_id', DB::raw('SUM(COALESCE(frame_price, 0)) as billing_frame_total'))
+                ->groupBy('billing_id', 'branch_id');
+            $frameRefundTotals = Schema::hasTable('billing_refunds')
+                ? DB::table('billing_refunds')
+                    ->select('billing_id', 'branch_id', DB::raw("SUM(CASE WHEN component = 'frames' THEN amount ELSE 0 END) as frame_refunds"))
+                    ->groupBy('billing_id', 'branch_id')
+                : DB::query()->selectRaw('NULL as billing_id, NULL as branch_id, 0 as frame_refunds')->whereRaw('1 = 0');
+            $netFramePriceSql = 'CASE WHEN frame_totals.billing_frame_total > 0 THEN CASE WHEN COALESCE(bf.frame_price, 0) > COALESCE(refund_totals.frame_refunds, 0) * COALESCE(bf.frame_price, 0) / frame_totals.billing_frame_total THEN COALESCE(bf.frame_price, 0) - COALESCE(refund_totals.frame_refunds, 0) * COALESCE(bf.frame_price, 0) / frame_totals.billing_frame_total ELSE 0 END ELSE COALESCE(bf.frame_price, 0) END';
             $frameSalesRows = DB::table('billing_frames as bf')
                 ->join('billing as b', 'bf.billing_id', '=', 'b.id')
+                ->leftJoinSub($frameBillingTotals, 'frame_totals', function ($join): void {
+                    $join->on('frame_totals.billing_id', '=', 'bf.billing_id')
+                        ->on('frame_totals.branch_id', '=', 'bf.branch_id');
+                })
+                ->leftJoinSub($frameRefundTotals, 'refund_totals', function ($join): void {
+                    $join->on('refund_totals.billing_id', '=', 'bf.billing_id')
+                        ->on('refund_totals.branch_id', '=', 'bf.branch_id');
+                })
                 ->join('products as p', function ($join) use ($branchId): void {
                     $join->on('bf.frame_code_id', '=', 'p.code');
                     $join->on('p.branch_id', '=', 'b.branch_id');
@@ -826,9 +877,9 @@ class InventoryController extends Controller
                     'p.grade as product_grade',
                     'p.cost_price',
                     DB::raw('COUNT(*) as sold_count'),
-                    DB::raw('SUM(COALESCE(bf.frame_price, 0)) as sold_value'),
+                    DB::raw("SUM({$netFramePriceSql}) as sold_value"),
                     DB::raw('SUM(CASE WHEN p.cost_price IS NOT NULL THEN p.cost_price ELSE 0 END) as total_cost'),
-                    DB::raw('SUM(CASE WHEN p.cost_price IS NOT NULL THEN COALESCE(bf.frame_price, 0) - p.cost_price ELSE 0 END) as total_profit'),
+                    DB::raw("SUM(CASE WHEN p.cost_price IS NOT NULL THEN ({$netFramePriceSql}) - p.cost_price ELSE 0 END) as total_profit"),
                     DB::raw('SUM(CASE WHEN p.cost_price IS NULL THEN 1 ELSE 0 END) as missing_cost_count'),
                     DB::raw('MAX(b.date) as last_sold_at'),
                 ]);
@@ -935,6 +986,11 @@ class InventoryController extends Controller
         $search = trim($request->string('search')->toString());
         $tracking = $request->string('tracking')->toString() ?: 'all';
         $hasLensItemCount = Schema::hasColumn('billing', 'lens_item_count');
+        $lensRefundSummary = Schema::hasTable('billing_refunds')
+            ? DB::table('billing_refunds')
+                ->select('billing_id', 'branch_id', DB::raw("SUM(CASE WHEN component = 'lenses' THEN amount ELSE 0 END) as lens_refunds"))
+                ->groupBy('billing_id', 'branch_id')
+            : null;
 
         $lensCostSummary = DB::table('lens_costs as lc')
             ->select(
@@ -1006,6 +1062,12 @@ class InventoryController extends Controller
             ->leftJoinSub($insuranceSummary, 'ic', function ($join): void {
                 $join->on('b.id', '=', 'ic.billing_id');
             })
+            ->when($lensRefundSummary, function ($query) use ($lensRefundSummary): void {
+                $query->leftJoinSub($lensRefundSummary, 'lens_refunds', function ($join): void {
+                    $join->on('b.id', '=', 'lens_refunds.billing_id')
+                        ->on('b.branch_id', '=', 'lens_refunds.branch_id');
+                });
+            })
             ->leftJoin('products as p', function ($join) use ($branchId): void {
                 $join->on('bf.frame_code_id', '=', 'p.code');
                 if ($branchId > 0) {
@@ -1060,6 +1122,9 @@ class InventoryController extends Controller
                 'b.health_insurance',
                 'b.total_amount as total_bill_amount',
                 'b.lens_price as selling_price',
+                $lensRefundSummary
+                    ? DB::raw('COALESCE(lens_refunds.lens_refunds, 0) as refunded_lens_amount')
+                    : DB::raw('0 as refunded_lens_amount'),
                 DB::raw($hasLensItemCount ? 'b.lens_item_count as lens_item_count' : 'CASE WHEN b.lens_price > 0 THEN 1 ELSE 0 END as lens_item_count'),
                 'b.date as billing_date',
                 'b.receipt_number',
@@ -1104,6 +1169,8 @@ class InventoryController extends Controller
                 'ic.insurance_status',
             ])
             ->map(function ($record) {
+                $record->refunded_lens_amount = round((float) $record->refunded_lens_amount, 2);
+                $record->selling_price = round(max((float) $record->selling_price - $record->refunded_lens_amount, 0), 2);
                 $record->lens_item_count = max((int) ($record->lens_item_count ?? 0), (float) ($record->selling_price ?? 0) > 0 ? 1 : 0);
                 $record->tracked = $record->cost_record_id !== null;
                 $record->profit = $record->cost_price !== null
@@ -1247,6 +1314,8 @@ class InventoryController extends Controller
         $dateTo = $request->string('date_to')->toString();
         $search = trim($request->string('search')->toString());
         $pickupStatus = $request->string('pickup_status')->toString() ?: 'all';
+        $page = max((int) $request->integer('page', 1), 1);
+        $perPage = min(max((int) $request->integer('per_page', 15), 5), 100);
 
         if (($dateFrom === '' || $dateTo === '') && $month !== 'all') {
             [$dateFrom, $dateTo] = $this->lensOrdersDateRange($month);
@@ -1489,7 +1558,11 @@ class InventoryController extends Controller
             ->values();
 
         $orders = $combined->values();
+        $totalOrders = $orders->count();
         $readyOrders = $orders->filter(fn ($item) => (bool) ($item['ready_for_order'] ?? false));
+        $pageOrders = $orders
+            ->slice(($page - 1) * $perPage, $perPage)
+            ->values();
 
         return response()->json([
             'branch_id' => $branchId,
@@ -1512,7 +1585,13 @@ class InventoryController extends Controller
                     ->unique()
                     ->count(),
             ],
-            'orders' => $orders->values(),
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $totalOrders,
+                'total_pages' => (int) ceil($totalOrders / $perPage),
+            ],
+            'orders' => $pageOrders,
         ]);
     }
 

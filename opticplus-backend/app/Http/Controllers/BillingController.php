@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Schema\Blueprint;
@@ -213,6 +214,11 @@ class BillingController extends Controller
 
         $salesTotals = $this->alignedSalesTotalsQuery();
         $claimTotals = $this->alignedClaimTotalsQuery();
+        $refundTotals = Schema::hasTable('billing_refunds')
+            ? DB::table('billing_refunds')
+                ->select('billing_id', 'branch_id', DB::raw('SUM(amount) as total_refunded'))
+                ->groupBy('billing_id', 'branch_id')
+            : null;
         $latestPatientByFolder = DB::table('patient_records')
             ->select('branch_id', 'folder_id', DB::raw('MAX(id) as patient_id'))
             ->groupBy('branch_id', 'folder_id');
@@ -242,6 +248,12 @@ class BillingController extends Controller
             ->leftJoinSub($claimTotals, 'claim_totals', function ($join): void {
                 $join->on('b.id', '=', 'claim_totals.billing_id');
             });
+        if ($refundTotals) {
+            $baseQuery->leftJoinSub($refundTotals, 'refund_totals', function ($join): void {
+                $join->on('b.id', '=', 'refund_totals.billing_id')
+                    ->on('b.branch_id', '=', 'refund_totals.branch_id');
+            });
+        }
         $this->applyBranchScope($baseQuery, 'b.branch_id', $branchId);
 
         $this->applyBillingFilters($baseQuery, $request);
@@ -274,6 +286,9 @@ class BillingController extends Controller
                 DB::raw('COALESCE(sales_totals.total_sales_paid, 0) as sales_paid'),
                 DB::raw('COALESCE(claim_totals.insurance_claimed, 0) as insurance_claimed'),
                 DB::raw('COALESCE(sales_totals.total_sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0) as total_paid'),
+                $refundTotals
+                    ? DB::raw('COALESCE(refund_totals.total_refunded, 0) as total_refunded')
+                    : DB::raw('0 as total_refunded'),
                 DB::raw('COALESCE(b.balance, 0) as calculated_balance'),
             ])
             ->map(fn ($record) => $this->mapBillingRecord($record));
@@ -282,7 +297,9 @@ class BillingController extends Controller
         $filteredTotalAmount = (float) (clone $statsBase)->sum('b.total_amount');
         $filteredOutstandingAmount = (float) ((clone $statsBase)
             ->sum('b.balance') ?? 0);
-        $filteredCollectedAmount = max($filteredTotalAmount - $filteredOutstandingAmount, 0);
+        $filteredCollectedAmount = (float) (clone $statsBase)->sum(DB::raw(
+            'COALESCE(sales_totals.total_sales_paid, 0) + COALESCE(claim_totals.insurance_claimed, 0)'
+        ));
         $filteredPendingBills = (int) (clone $statsBase)
             ->whereIn('b.status', ['pending', 'partially_paid'])
             ->count('b.id');
@@ -631,7 +648,310 @@ class BillingController extends Controller
             ->where('branch_id', $current->branch_id)
             ->delete();
 
-        return response()->json(['message' => 'Billing record deleted successfully.']);
+        return response()->json(['message' => 'Billing record deleted successfully.'        ]);
+    }
+
+    public function refundOptions(Request $request, int $billingId): JsonResponse
+    {
+        if ($response = $this->ensureRefundWriteAccess($request)) {
+            return $response;
+        }
+
+        if (! Schema::hasTable('billing_refunds')) {
+            return response()->json(['message' => 'Refund tracking is not installed. Run the latest database migrations first.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $billingQuery = DB::table('billing')->where('id', $billingId);
+        $this->applyBranchScope($billingQuery, 'branch_id', $branchId);
+        $billing = $billingQuery->first([
+            'id', 'branch_id', 'patient_id', 'folder_id', 'name', 'receipt_number',
+            'consultation_price', 'frame_price', 'lens_price', 'case_price', 'total_amount',
+        ]);
+
+        if (! $billing) {
+            return response()->json(['message' => 'Billing record not found for this branch.'], 404);
+        }
+
+        return response()->json($this->buildRefundOptions($billing));
+    }
+
+    public function refund(Request $request, int $billingId): JsonResponse
+    {
+        if ($response = $this->ensureRefundWriteAccess($request)) {
+            return $response;
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        if (! Schema::hasTable('billing_refunds')) {
+            return response()->json(['message' => 'Refund tracking is not installed. Run the latest database migrations first.'], 503);
+        }
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'component' => ['required', 'in:consultation,frames,lenses,case,other'],
+            'refund_method' => ['required', 'string', 'max:100'],
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
+        $amount = round((float) $validated['amount'], 2);
+        $user = $request->user();
+
+        $this->ensureRefundExpenseSchema();
+
+        $result = DB::transaction(function () use ($request, $billingId, $branchId, $validated, $amount, $user) {
+            $billing = DB::table('billing')
+                ->where('id', $billingId)
+                ->where('branch_id', $branchId)
+                ->lockForUpdate()
+                ->first([
+                    'id', 'branch_id', 'patient_id', 'folder_id', 'name', 'receipt_number',
+                    'consultation_price', 'frame_price', 'lens_price', 'case_price', 'total_amount',
+                ]);
+
+            if (! $billing) {
+                return ['error' => 'Billing record not found for this branch.', 'status' => 404];
+            }
+
+            $options = $this->buildRefundOptions($billing);
+            $method = collect($options['refund_methods'])
+                ->first(fn (array $item) => $item['method'] === $validated['refund_method']);
+            $component = collect($options['components'])
+                ->first(fn (array $item) => $item['key'] === $validated['component']);
+            $available = min((float) ($method['available'] ?? 0), (float) ($component['available'] ?? 0));
+
+            if (! $method || ! $component || $amount > $available + 0.001) {
+                return [
+                    'error' => 'The refund amount exceeds the available paid amount for the selected payment method or billing item.',
+                    'status' => 422,
+                ];
+            }
+
+            $refundedAt = now();
+            $refundId = DB::table('billing_refunds')->insertGetId([
+                'billing_id' => $billing->id,
+                'branch_id' => $branchId,
+                'amount' => $amount,
+                'component' => $validated['component'],
+                'refund_method' => $validated['refund_method'],
+                'reason' => trim($validated['reason']),
+                'authorized_by' => $user->id,
+                'authorized_by_name' => $user->name,
+                'authorized_role' => $user->normalized_role ?? $user->role,
+                'refunded_at' => $refundedAt,
+                'created_at' => $refundedAt,
+                'updated_at' => $refundedAt,
+            ]);
+
+            $description = 'Refund for '.($billing->receipt_number ?: 'billing #'.$billing->id)
+                .' ('.ucfirst($validated['component']).'): '.trim($validated['reason']);
+            $saleId = DB::table('sales')->insertGetId([
+                'date' => $refundedAt->toDateString(),
+                'amount_paid' => -$amount,
+                'description' => $description,
+                'billing_id' => $billing->id,
+                'patient_id' => $billing->patient_id,
+                'transaction_id' => 'REFUND-'.$refundId,
+                'reference' => 'Refund #'.$refundId,
+                'folder_id' => $billing->folder_id ?? '',
+                'payment_method' => $validated['refund_method'],
+                'customer_id' => null,
+                'branch_id' => $branchId,
+                'created_at' => $refundedAt,
+                'updated_at' => $refundedAt,
+            ]);
+
+            $expense = [
+                'description' => mb_substr($description, 0, 255),
+                'amount' => $amount,
+                'date' => $refundedAt->toDateString(),
+                'category' => 'Refunds',
+                'branch_id' => $branchId,
+                'created_by' => $user->id,
+                'source_type' => 'billing_refund',
+                'source_id' => $refundId,
+            ];
+            if (Schema::hasColumn('expenses', 'created_at')) {
+                $expense['created_at'] = $refundedAt;
+            }
+            if (Schema::hasColumn('expenses', 'updated_at')) {
+                $expense['updated_at'] = $refundedAt;
+            }
+            if (Schema::hasColumn('expenses', 'receipt_unavailable')) {
+                $expense['receipt_unavailable'] = true;
+            }
+            $expenseId = DB::table('expenses')->insertGetId($expense, 'expense_id');
+
+            DB::table('billing_refunds')->where('id', $refundId)->update([
+                'sale_id' => $saleId,
+                'expense_id' => $expenseId,
+                'updated_at' => $refundedAt,
+            ]);
+
+            AuditLog::logManual($request, 'create', 'billing_refund', 'billing_id: '.$billing->id, [
+                'refund_id' => $refundId,
+                'amount' => $amount,
+                'component' => $validated['component'],
+                'refund_method' => $validated['refund_method'],
+                'reason' => trim($validated['reason']),
+                'expense_id' => $expenseId,
+            ]);
+
+            return [
+                'refund_id' => $refundId,
+                'sale_id' => $saleId,
+                'expense_id' => $expenseId,
+                'amount' => $amount,
+                'authorized_by' => $user->name,
+                'message' => 'Refund recorded as a payment reversal and Refunds expense.',
+            ];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], $result['status']);
+        }
+
+        return response()->json($result, 201);
+    }
+
+    private function buildRefundOptions(object $billing): array
+    {
+        $branchId = (int) $billing->branch_id;
+        $sales = DB::table('sales')
+            ->where('billing_id', $billing->id)
+            ->where('branch_id', $branchId)
+            ->where('amount_paid', '>', 0)
+            ->where('payment_method', '!=', 'Insurance')
+            ->select('payment_method', DB::raw('SUM(amount_paid) as paid'))
+            ->groupBy('payment_method')
+            ->get()
+            ->keyBy('payment_method');
+        $refundedByMethod = DB::table('billing_refunds')
+            ->where('billing_id', $billing->id)
+            ->where('branch_id', $branchId)
+            ->select('refund_method', DB::raw('SUM(amount) as refunded'))
+            ->groupBy('refund_method')
+            ->pluck('refunded', 'refund_method');
+        $refundMethods = $sales
+            ->map(fn ($sale, $method) => [
+                'method' => (string) $method,
+                'available' => round(max((float) $sale->paid - (float) ($refundedByMethod[$method] ?? 0), 0), 2),
+            ])
+            ->filter(fn (array $method) => $method['available'] > 0.005)
+            ->values();
+        $componentCaps = $this->refundComponentCaps($billing);
+        $refundedByComponent = DB::table('billing_refunds')
+            ->where('billing_id', $billing->id)
+            ->where('branch_id', $branchId)
+            ->select('component', DB::raw('SUM(amount) as refunded'))
+            ->groupBy('component')
+            ->pluck('refunded', 'component');
+        $components = collect($componentCaps)
+            ->map(fn ($cap, $key) => [
+                'key' => $key,
+                'label' => ucfirst($key),
+                'available' => round(max($cap - (float) ($refundedByComponent[$key] ?? 0), 0), 2),
+            ])
+            ->filter(fn (array $component) => $component['available'] > 0.005)
+            ->values();
+        $refunds = DB::table('billing_refunds')
+            ->where('billing_id', $billing->id)
+            ->where('branch_id', $branchId)
+            ->orderByDesc('refunded_at')
+            ->get([
+                'id', 'amount', 'component', 'refund_method', 'reason',
+                'authorized_by_name', 'authorized_role', 'refunded_at',
+            ]);
+
+        return [
+            'billing_id' => (int) $billing->id,
+            'patient_name' => $billing->name,
+            'receipt_number' => $billing->receipt_number,
+            'total_refunded' => round((float) $refunds->sum('amount'), 2),
+            'refund_methods' => $refundMethods,
+            'components' => $components,
+            'refunds' => $refunds,
+        ];
+    }
+
+    private function refundComponentCaps(object $billing): array
+    {
+        $items = [
+            'consultation' => max((float) ($billing->consultation_price ?? 0), 0),
+            'frames' => max((float) ($billing->frame_price ?? 0), 0),
+            'lenses' => max((float) ($billing->lens_price ?? 0), 0),
+            'case' => max((float) ($billing->case_price ?? 0), 0),
+        ];
+        $total = max((float) ($billing->total_amount ?? 0), 0);
+        $itemTotal = array_sum($items);
+
+        if ($itemTotal <= 0) {
+            return ['other' => round($total, 2)];
+        }
+
+        foreach ($items as $key => $itemAmount) {
+            $items[$key] = round($total * ($itemAmount / $itemTotal), 2);
+        }
+
+        $difference = round($total - array_sum($items), 2);
+        if (abs($difference) >= 0.01) {
+            $lastKey = array_key_last($items);
+            $items[$lastKey] = round(max($items[$lastKey] + $difference, 0), 2);
+        }
+
+        return $items;
+    }
+
+    private function ensureRefundExpenseSchema(): void
+    {
+        if (! Schema::hasTable('expenses')) {
+            abort(response()->json(['message' => 'The expenses table is not available on this database.'], 503));
+        }
+
+        if (! Schema::hasColumn('expenses', 'branch_id')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unsignedInteger('branch_id')->default(1)->index();
+            });
+        }
+        if (! Schema::hasColumn('expenses', 'created_by')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unsignedBigInteger('created_by')->nullable()->index();
+            });
+        }
+        if (! Schema::hasColumn('expenses', 'source_type')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->string('source_type', 50)->nullable()->index();
+            });
+        }
+        if (! Schema::hasColumn('expenses', 'source_id')) {
+            Schema::table('expenses', function (Blueprint $table): void {
+                $table->unsignedBigInteger('source_id')->nullable()->index();
+            });
+        }
+
+        if (Schema::hasTable('expense_categories')) {
+            DB::table('expense_categories')->updateOrInsert(
+                ['name' => 'Refunds'],
+                array_filter([
+                    'is_active' => true,
+                    'created_at' => Schema::hasColumn('expense_categories', 'created_at') ? now() : null,
+                    'updated_at' => Schema::hasColumn('expense_categories', 'updated_at') ? now() : null,
+                ], fn ($value) => $value !== null)
+            );
+        }
+    }
+
+    private function ensureRefundWriteAccess(Request $request): ?JsonResponse
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if (! in_array($role, ['accountant', 'manager'], true)) {
+            return response()->json(['message' => 'Only an Accountant or General Manager can authorize billing refunds.'], 403);
+        }
+
+        return null;
     }
 
     public function export(Request $request): JsonResponse
@@ -762,6 +1082,7 @@ class BillingController extends Controller
             'lens_price' => ['required', 'numeric', 'min:0'],
             'lens_items' => ['nullable', 'array'],
             'lens_items.*.amount' => ['nullable', 'numeric', 'min:0'],
+            'lens_items.*.lens_item_index' => ['nullable', 'integer', 'min:0'],
             'case_price' => ['required', 'numeric', 'min:0'],
             'discount' => ['nullable', 'numeric', 'min:0'],
             'health_insurance' => ['required', 'string', 'max:50'],
@@ -826,12 +1147,13 @@ class BillingController extends Controller
         }
 
         $consultationPrice = $this->money($validated['consultation_price']);
-        $lensItems = collect($validated['lens_items'] ?? [])
-            ->map(fn ($item) => $this->money($item['amount'] ?? 0))
-            ->filter(fn ($amount) => $amount > 0)
+        $rawLensItems = collect($validated['lens_items'] ?? []);
+        $lensItems = $rawLensItems
+            ->map(fn ($item, $index) => ['amount' => $this->money($item['amount'] ?? 0), 'source_index' => (int) ($item['lens_item_index'] ?? $index)])
+            ->filter(fn ($item) => $item['amount'] > 0)
             ->values();
         $lensPrice = $lensItems->isNotEmpty()
-            ? $this->money($lensItems->sum())
+            ? $this->money($lensItems->sum('amount'))
             : $this->money($validated['lens_price']);
         $lensItemCount = $lensItems->isNotEmpty()
             ? $lensItems->count()
@@ -864,7 +1186,7 @@ class BillingController extends Controller
             $nhil,
             $getfund,
             $vat,
-            $totalAmount
+            $totalAmount,
         ) {
             $billingId = DB::table('billing')->insertGetId([
                 'patient_id' => $validated['patient_id'] ?? null,
@@ -1160,6 +1482,7 @@ class BillingController extends Controller
             'discount' => (float) ($record->discount ?? 0),
             'total_amount' => (float) ($record->total_amount ?? 0),
             'total_paid' => (float) ($record->total_paid ?? 0),
+            'total_refunded' => (float) ($record->total_refunded ?? 0),
             'insurance_claimed' => (float) ($record->insurance_claimed ?? 0),
             'calculated_balance' => (float) ($record->calculated_balance ?? 0),
             'entered_by' => $record->entered_by,

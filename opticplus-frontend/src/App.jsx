@@ -99,7 +99,7 @@ const managerNavSections = [
       { label: 'Sales', navLabel: 'Daily Sales', icon: 'money' },
       { label: 'Expenses', navLabel: 'Expenses', icon: 'alert' },
       { label: 'Working Capital Liabilities', navLabel: 'Working Capital Entries', icon: 'finance' },
-      { label: 'Debts', navLabel: 'Company Debts', icon: 'receipt' },
+      { label: 'Debts', navLabel: 'Debt Management', icon: 'receipt' },
       { label: 'Bank Deposits', navLabel: 'Bank Deposits', icon: 'finance' },
     ],
   },
@@ -545,6 +545,8 @@ const defaultLensOrdersFilters = () => ({
   date_to: '',
   search: '',
   pickup_status: 'all',
+  page: 1,
+  per_page: 15,
 })
 
 const defaultCustomerServiceFilters = () => ({
@@ -635,6 +637,7 @@ function App() {
   const [session, setSession] = useState(null)
   const [dashboard, setDashboard] = useState(null)
   const [activeView, setActiveView] = useState(getInitialView)
+  const [requestedProductTrackerTab, setRequestedProductTrackerTab] = useState(null)
   const [isBooting, setIsBooting] = useState(true)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(false)
@@ -893,7 +896,10 @@ function App() {
 
   function buildReceiptPreview(receipt, billing = null) {
     const branchName = financePayments?.branch_name || session?.branch_name || 'Active branch'
-    const amountPaid = Number(receipt?.amount_paid ?? 0)
+    const isRefundReceipt = Boolean(receipt?.is_refund_receipt)
+    const amountPaid = isRefundReceipt
+      ? Math.abs(Number(receipt?.refund_amount ?? receipt?.amount_paid ?? 0))
+      : Number(receipt?.amount_paid ?? 0)
     const totalAmount = Number(billing?.total_amount ?? receipt?.total_amount ?? 0)
     const discount = Number(billing?.discount ?? receipt?.discount ?? 0)
     const balance = Number(billing?.calculated_balance ?? billing?.balance ?? receipt?.balance ?? 0)
@@ -923,6 +929,13 @@ function App() {
       payment_date: receipt?.date || billing?.date || 'N/A',
       payment_method: receipt?.payment_method || 'Cash',
       amount_paid: amountPaid,
+      is_refund_receipt: isRefundReceipt,
+      refund_amount: Number(receipt?.refund_amount ?? 0),
+      refund_component: receipt?.refund_component || '',
+      refund_reason: receipt?.refund_reason || '',
+      refund_authorized_by_name: receipt?.refund_authorized_by_name || '',
+      refund_authorized_role: receipt?.refund_authorized_role || '',
+      refunded_at: receipt?.refunded_at || '',
       total_amount: totalAmount,
       discount,
       outstanding_balance: balance,
@@ -974,7 +987,10 @@ function App() {
     }
 
     const safe = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-    const amount = currency.format(Number(receiptData?.amount_paid ?? 0))
+    const isRefundReceipt = Boolean(receiptData?.is_refund_receipt)
+    const amount = currency.format(isRefundReceipt
+      ? Math.abs(Number(receiptData?.refund_amount ?? receiptData?.amount_paid ?? 0))
+      : Number(receiptData?.amount_paid ?? 0))
     const total = currency.format(Number(receiptData?.total_amount ?? 0))
     const discount = currency.format(Number(receiptData?.discount ?? 0))
     const balance = currency.format(Number(receiptData?.outstanding_balance ?? 0))
@@ -992,7 +1008,7 @@ function App() {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Thermal Receipt ${safe(receiptData?.receipt_number || receiptData?.id)}</title>
+          <title>${isRefundReceipt ? 'Refund Receipt' : 'Thermal Receipt'} ${safe(receiptData?.receipt_number || receiptData?.id)}</title>
           <style>
             :root { color-scheme: light; }
             * { box-sizing: border-box; }
@@ -1149,18 +1165,23 @@ function App() {
               </div>
               <div class="divider"></div>
               <div class="center">
-                <div class="kicker">Thermal Receipt</div>
+                <div class="kicker">${isRefundReceipt ? 'Refund Receipt' : 'Thermal Receipt'}</div>
                 <div class="amount">${safe(amount)}</div>
-                <div class="meta">${safe(receiptData?.payment_method)} payment</div>
+                <div class="meta">${isRefundReceipt ? 'Refund issued via' : ''} ${safe(receiptData?.payment_method)}${isRefundReceipt ? '' : ' payment'}</div>
               </div>
               <div class="summary">
-                <div class="row"><span>Total bill</span><strong>${safe(total)}</strong></div>
-                <div class="row"><span>Discount</span><strong>${safe(discount)}</strong></div>
-                <div class="row"><span>Amount paid</span><strong>${safe(amount)}</strong></div>
-                <div class="row total-row"><span>Balance after payment</span><strong>${safe(balance)}</strong></div>
+                ${isRefundReceipt ? `
+                  <div class="row"><span>Refunded item</span><strong>${safe(receiptData?.refund_component)}</strong></div>
+                  <div class="row total-row"><span>Refund amount</span><strong>${safe(amount)}</strong></div>
+                ` : `
+                  <div class="row"><span>Total bill</span><strong>${safe(total)}</strong></div>
+                  <div class="row"><span>Discount</span><strong>${safe(discount)}</strong></div>
+                  <div class="row"><span>Amount paid</span><strong>${safe(amount)}</strong></div>
+                  <div class="row total-row"><span>Balance after payment</span><strong>${safe(balance)}</strong></div>
+                `}
               </div>
               <div class="divider"></div>
-              ${receiptData?.pricing_breakdown?.length ? `
+              ${!isRefundReceipt && receiptData?.pricing_breakdown?.length ? `
                 <div class="tax-box">
                   <div class="kicker">Services Breakdown</div>
                   ${pricingRows}
@@ -1174,16 +1195,20 @@ function App() {
                 <div class="row"><span>Receipt No.</span><strong>${safe(receiptData?.receipt_number)}</strong></div>
                 <div class="row"><span>Date</span><strong>${safe(receiptData?.payment_date)}</strong></div>
                 <div class="row"><span>Reference</span><strong>${safe(receiptData?.reference)}</strong></div>
+                ${isRefundReceipt ? `
+                  <div class="row"><span>Authorized by</span><strong>${safe(receiptData?.refund_authorized_by_name)} (${safe(receiptData?.refund_authorized_role)})</strong></div>
+                  <div class="row"><span>Reason</span><strong>${safe(receiptData?.refund_reason)}</strong></div>
+                ` : ''}
                 <div class="row"><span>Printed</span><strong>${safe(receiptData?.printed_at)}</strong></div>
               </div>
-              ${receiptData?.tax_breakdown?.length ? `
+              ${!isRefundReceipt && receiptData?.tax_breakdown?.length ? `
                 <div class="tax-box">
                   <div class="kicker">Tax Breakdown</div>
                   ${taxRows}
                   <div class="row total-row"><span>Total tax</span><strong>${safe(taxTotal)}</strong></div>
                 </div>
               ` : ''}
-              <div class="status">Thank you for your payment</div>
+              <div class="status">${isRefundReceipt ? 'Refund processed' : 'Thank you for your payment'}</div>
               <div class="footnote">
                 ${safe(receiptData?.company_phone_primary || '')}${receiptData?.company_phone_secondary ? ` | ${safe(receiptData.company_phone_secondary)}` : ''}<br />
                 ${safe(receiptData?.company_email || '')}<br />
@@ -2320,6 +2345,8 @@ function App() {
           date_from: query.date_from,
           date_to: query.date_to,
           pickup_status: query.pickup_status,
+          page: String(query.page),
+          per_page: String(query.per_page),
         })
         if (query.search) params.set('search', query.search)
         const response = await apiFetch(`/inventory/lens-orders?${params.toString()}`, { token })
@@ -2382,7 +2409,9 @@ function App() {
           current.date_from === nextQuery.date_from &&
           current.date_to === nextQuery.date_to &&
           current.search === nextQuery.search &&
-          current.pickup_status === nextQuery.pickup_status
+          current.pickup_status === nextQuery.pickup_status &&
+          current.page === nextQuery.page &&
+          current.per_page === nextQuery.per_page
         ) {
           return current
         }
@@ -2424,8 +2453,17 @@ function App() {
     }
 
     loadCustomerService()
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') loadCustomerService()
+    }
+    const intervalId = window.setInterval(refreshIfVisible, 30_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
     return () => {
       cancelled = true
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
     }
   }, [activeView, customerServiceQuery, selectedBranchId, session, token])
 
@@ -2986,13 +3024,16 @@ function App() {
 
   const dashboardStats = useMemo(() => {
     if (!dashboard) return []
-    return [
+    const stats = [
       { label: 'Revenue', value: currency.format(Number(dashboard.stats.revenue_today ?? 0)), note: 'Non-insurance sales collected today' },
       { label: 'Expenses', value: currency.format(Number(dashboard.stats.expenses_today ?? 0)), note: 'Branch expenses recorded today' },
       { label: 'Insurance Revenue', value: currency.format(Number(dashboard.stats.insurance_revenue_today ?? 0)), note: 'Sales paid using insurance today' },
       { label: 'Patients Today', value: dashboard.stats.patients_today, note: 'Unique billed patients for today' },
     ]
-  }, [dashboard])
+    if (session?.role === 'receptionist') {
+    }
+    return stats
+  }, [currency, dashboard, session?.role])
 
   const patientStats = useMemo(() => {
     if (!patientData) return []
@@ -3698,6 +3739,38 @@ function App() {
       setBillingError(error.message)
     } finally {
       setIsSavingBill(false)
+    }
+  }
+
+  async function fetchBillingRefundOptions(billingId) {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/billing/${billingId}/refund-options?branch_id=${branchId}`, { token })
+  }
+
+  async function refundBillingRecord(billingId, refund) {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    setBillingError('')
+    setBillingSuccess('')
+
+    try {
+      const response = await apiFetch(`/billing/${billingId}/refunds?branch_id=${branchId}`, {
+        method: 'POST',
+        token,
+        body: refund,
+      })
+      setBillingSuccess(response.message || 'Refund recorded successfully.')
+      setBillingQuery((current) => ({ ...current }))
+
+      try {
+        const paymentResponse = await apiFetch(`/finance/payments/${billingId}?branch_id=${branchId}`, { token })
+        setPaymentDetail(paymentResponse)
+      } catch (error) {
+        setBillingError(`Refund recorded, but the billing summary could not be refreshed: ${error.message}`)
+      }
+      return response
+    } catch (error) {
+      setBillingError(error.message || 'Unable to record this refund.')
+      return null
     }
   }
 
@@ -4658,11 +4731,13 @@ function App() {
 
   async function updatePickupStatus(billingIdOrIds, action) {
     const pickupIds = normalizePickupIds(billingIdOrIds)
-    if (!pickupIds.length) return
+    if (!pickupIds.length) return false
 
     setPickupBusyIds(pickupIds)
     setCustomerServiceError('')
     setCustomerServiceSuccess('')
+    setLensOrdersError('')
+    setLensOrdersSuccess('')
 
     try {
       const branchId = session.is_admin ? selectedBranchId : session.branch_id
@@ -4702,23 +4777,35 @@ function App() {
             ? (plural ? 'Selected records marked as not ready.' : 'Marked as not ready.')
             : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
       )
-          setLensOrdersSuccess(
-            action === 'ready'
-              ? (plural ? 'Selected lens orders marked as ready for pickup.' : 'Lens order marked as ready for pickup.')
-              : action === 'not-ready'
+      setLensOrdersSuccess(
+        action === 'ready'
+          ? (plural ? 'Selected lens orders marked as ready for pickup.' : 'Lens order marked as ready for pickup.')
+          : action === 'not-ready'
             ? (plural ? 'Selected lens orders marked as not ready.' : 'Lens order marked as not ready.')
             : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
-          )
+      )
       setCustomerServiceQuery((current) => ({ ...current }))
+      return true
     } catch (error) {
       setCustomerServiceError(error.message)
+      setLensOrdersError(error.message)
+      return false
     } finally {
       setPickupBusyIds([])
     }
   }
 
-  async function printFinanceReceipt(receipt) {
+  async function printFinanceReceipt(receipt, asRefundReceipt = false) {
     setFinanceError('')
+
+    if (asRefundReceipt && receipt?.refund_id) {
+      openReceiptPreview({
+        ...receipt,
+        is_refund_receipt: true,
+        amount_paid: Math.abs(Number(receipt.refund_amount ?? receipt.amount_paid ?? 0)),
+      }, receipt)
+      return
+    }
 
     try {
       if (receipt?.billing_id) {
@@ -5029,7 +5116,9 @@ function App() {
                       <button
                         key={item.label}
                         type="button"
-                        className={item.label === activeView || (isGeneralManager && item.label === 'Lens Orders' && activeView === 'Place Lens Order') ? 'nav-item active' : 'nav-item'}
+                        className={item.label === activeView || (isGeneralManager && item.label === 'Lens Orders' && activeView === 'Place Lens Order')
+                          ? 'nav-item active'
+                          : (item.label === 'Debts' && (isGeneralManager || isAccountant) ? 'nav-item nav-item-debt-attention' : 'nav-item')}
                         onClick={() => handleSidebarNavigation(item.label)}
                       >
                         <PortalIcon name={item.icon} className="nav-icon" />
@@ -5362,6 +5451,9 @@ function App() {
             {activeView === 'Billing' ? (
               <BillingSection
                 session={session}
+                apiFetch={apiFetch}
+                token={token}
+                branchId={scopedBranchId}
                 billingMeta={billingMeta}
                 billingData={billingData}
                 dailyPayments={dailyPayments}
@@ -5375,6 +5467,8 @@ function App() {
                 billingForm={billingForm}
                 setBillingForm={setBillingForm}
                 saveBillingRecord={saveBillingRecord}
+                fetchBillingRefundOptions={fetchBillingRefundOptions}
+                refundBillingRecord={refundBillingRecord}
                 updateBillingRecord={updateBillingRecord}
                 deleteBillingRecord={deleteBillingRecord}
                 isSavingBill={isSavingBill}
@@ -5401,6 +5495,10 @@ function App() {
                 token={token}
                 selectedBranchId={selectedBranchId}
                 session={session}
+                onOpenTracker={(tab) => {
+                  setRequestedProductTrackerTab(tab)
+                  setActiveView('Product Tracker')
+                }}
               />
             ) : null}
 
@@ -5833,8 +5931,10 @@ function App() {
             {activeView === 'Lens Tracker' || activeView === 'Product Tracker' ? (
               <InventorySection
                 initialTab="Lens Tracker & Lens Spec"
+                requestedTab={requestedProductTrackerTab}
                 showTabs={activeView === 'Product Tracker'}
                 productTrackerMode={activeView === 'Product Tracker'}
+                dailyProductCosts={dashboard?.stats}
                 inventoryData={inventoryData}
                 inventoryStocktakeProducts={inventoryStocktakeProducts}
                 isLoadingInventoryStocktakeProducts={isLoadingInventoryStocktakeProducts}
@@ -6153,7 +6253,7 @@ function App() {
           <article className="modal-panel thermal-modal" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">Thermal Receipt</p>
+                <p className="eyebrow">{receiptPreview.is_refund_receipt ? 'Refund Receipt' : 'Thermal Receipt'}</p>
                 <h3>{receiptPreview.receipt_number}</h3>
               </div>
               <div className="modal-actions">
@@ -6233,7 +6333,7 @@ function normalizeBillingFrameItemsForApi(items, legacyCode = '', legacyPrice = 
 function normalizeBillingLensItemsForApi(items, legacyLensPrice = '0.00') {
   const normalized = Array.isArray(items)
     ? items
-        .map((item) => ({ amount: formatMoneyInput(item?.amount) }))
+        .map((item, index) => ({ amount: formatMoneyInput(item?.amount), lens_item_index: index }))
         .filter((item) => Number(item.amount) > 0)
     : []
 
@@ -6268,6 +6368,11 @@ function AppCreditFooter() {
 }
 
 function ThermalReceiptPreview({ receipt }) {
+  const isRefundReceipt = Boolean(receipt.is_refund_receipt)
+  const amount = isRefundReceipt
+    ? Math.abs(Number(receipt.refund_amount ?? receipt.amount_paid ?? 0))
+    : Number(receipt.amount_paid ?? 0)
+
   return (
     <div className="thermal-preview-shell">
       <section className="thermal-preview-paper">
@@ -6281,33 +6386,42 @@ function ThermalReceiptPreview({ receipt }) {
         <div className="thermal-preview-divider" />
 
         <section className="thermal-preview-center">
-          <p>Thermal Receipt</p>
-          <strong>{currency.format(Number(receipt.amount_paid ?? 0))}</strong>
-          <span>{receipt.payment_method} payment</span>
+          <p>{isRefundReceipt ? 'Refund Receipt' : 'Thermal Receipt'}</p>
+          <strong>{currency.format(amount)}</strong>
+          <span>{isRefundReceipt ? 'Refund issued via' : ''} {receipt.payment_method}{isRefundReceipt ? '' : ' payment'}</span>
         </section>
 
         <div className="thermal-preview-summary">
-          <div>
-            <span>Total bill</span>
-            <strong>{currency.format(Number(receipt.total_amount ?? 0))}</strong>
-          </div>
-          <div>
-            <span>Discount</span>
-            <strong>{currency.format(Number(receipt.discount ?? 0))}</strong>
-          </div>
-          <div>
-            <span>Amount paid</span>
-            <strong>{currency.format(Number(receipt.amount_paid ?? 0))}</strong>
-          </div>
-          <div className="thermal-preview-balance">
-            <span>Balance after payment</span>
-            <strong>{currency.format(Number(receipt.outstanding_balance ?? 0))}</strong>
-          </div>
+          {isRefundReceipt ? (
+            <>
+              <div><span>Refunded item</span><strong>{receipt.refund_component}</strong></div>
+              <div className="thermal-preview-balance"><span>Refund amount</span><strong>{currency.format(amount)}</strong></div>
+            </>
+          ) : (
+            <>
+              <div>
+                <span>Total bill</span>
+                <strong>{currency.format(Number(receipt.total_amount ?? 0))}</strong>
+              </div>
+              <div>
+                <span>Discount</span>
+                <strong>{currency.format(Number(receipt.discount ?? 0))}</strong>
+              </div>
+              <div>
+                <span>Amount paid</span>
+                <strong>{currency.format(Number(receipt.amount_paid ?? 0))}</strong>
+              </div>
+              <div className="thermal-preview-balance">
+                <span>Balance after payment</span>
+                <strong>{currency.format(Number(receipt.outstanding_balance ?? 0))}</strong>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="thermal-preview-divider" />
 
-        {receipt.pricing_breakdown?.length ? (
+        {!isRefundReceipt && receipt.pricing_breakdown?.length ? (
           <div className="thermal-preview-meta">
             <div><span>Services Breakdown</span></div>
             {receipt.pricing_breakdown.map(([label, amount]) => (
@@ -6324,10 +6438,16 @@ function ThermalReceiptPreview({ receipt }) {
           <div><span>Receipt No.</span><strong>{receipt.receipt_number}</strong></div>
           <div><span>Date</span><strong>{receipt.payment_date}</strong></div>
           <div><span>Reference</span><strong>{receipt.reference}</strong></div>
+          {isRefundReceipt ? (
+            <>
+              <div><span>Authorized by</span><strong>{receipt.refund_authorized_by_name} ({receipt.refund_authorized_role})</strong></div>
+              <div><span>Reason</span><strong>{receipt.refund_reason}</strong></div>
+            </>
+          ) : null}
           <div><span>Printed</span><strong>{receipt.printed_at}</strong></div>
         </div>
 
-        {receipt.tax_breakdown?.length ? (
+        {!isRefundReceipt && receipt.tax_breakdown?.length ? (
           <div className="thermal-preview-meta">
             <div><span>Tax Breakdown</span><strong>{currency.format(Number(receipt.tax_total ?? 0))}</strong></div>
             {receipt.tax_breakdown.map(([label, amount]) => (
@@ -6339,7 +6459,7 @@ function ThermalReceiptPreview({ receipt }) {
         <footer className="thermal-preview-foot">
           <span>{receipt.company_phone_primary}{receipt.company_phone_secondary ? ` | ${receipt.company_phone_secondary}` : ''}</span>
           <span>{receipt.company_email}</span>
-          <span>Thank you for your payment.</span>
+          <span>{isRefundReceipt ? 'Refund processed.' : 'Thank you for your payment.'}</span>
           <span>Designed and Developed by Dale Quist (Enable Technologies)</span>
         </footer>
       </section>

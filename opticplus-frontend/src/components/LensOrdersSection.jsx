@@ -31,6 +31,7 @@ export default function LensOrdersSection(props) {
   const [prescriptionReferenceSearch, setPrescriptionReferenceSearch] = useState('')
   const [isLoadingPrescriptionReferences, setIsLoadingPrescriptionReferences] = useState(false)
   const displayOrders = useMemo(() => groupOrdersForDisplay(orders), [orders])
+  const pagination = props.lensOrdersData?.pagination
 
   const selectedOrders = useMemo(
     () => displayOrders
@@ -67,6 +68,10 @@ export default function LensOrdersSection(props) {
     window.localStorage.setItem(COMMENT_STORAGE_KEY, JSON.stringify(commentMap))
   }, [commentMap])
 
+  useEffect(() => {
+    setSelectedOrderKeys([])
+  }, [pagination?.page])
+
   const isTodayPreset = filters.date_from === today && filters.date_to === today
   const rangeLabel = useMemo(() => (isTodayPreset ? 'Today' : formatRangeLabel(filters.date_from, filters.date_to)), [filters.date_from, filters.date_to, isTodayPreset])
 
@@ -74,6 +79,7 @@ export default function LensOrdersSection(props) {
     props.setLensOrdersFilters((current) => ({
       ...current,
       ...next,
+      ...(next.page === undefined ? { page: 1 } : {}),
     }))
   }
 
@@ -139,7 +145,7 @@ export default function LensOrdersSection(props) {
     })
   }
 
-  function handleBulkPickupStatus(action) {
+  async function handleBulkPickupStatus(action) {
     const pickupIds = selectedOrders
       .map((order, index) => getPickupOrderId(order, index))
       .filter(Boolean)
@@ -149,12 +155,26 @@ export default function LensOrdersSection(props) {
       return
     }
 
-    props.updatePickupStatus?.(pickupIds, action)
     const nextStatus = action === 'ready' ? 'ready' : 'not_ready'
+    const previousOverrides = Object.fromEntries(selectedOrders.map((order, index) => {
+      const orderKey = getOrderKey(order, index)
+      return [orderKey, pickupStatusOverrides[orderKey]]
+    }))
     setPickupStatusOverrides((current) => selectedOrders.reduce((next, order, index) => ({
       ...next,
       [getOrderKey(order, index)]: nextStatus,
     }), current))
+    const succeeded = await props.updatePickupStatus?.(pickupIds, action)
+    if (succeeded === false) {
+      setPickupStatusOverrides((current) => {
+        const restored = { ...current }
+        for (const [orderKey, previousStatus] of Object.entries(previousOverrides)) {
+          if (previousStatus === undefined) delete restored[orderKey]
+          else restored[orderKey] = previousStatus
+        }
+        return restored
+      })
+    }
   }
 
   function getOrderKey(order, index = 0) {
@@ -318,7 +338,7 @@ export default function LensOrdersSection(props) {
             <button type="button" className="ghost-button" onClick={openPrescriptionReference}>
               All Prescriptions
             </button>
-            <span className="panel-tag">{orders.length} rows</span>
+            <span className="panel-tag">{pagination?.total ?? orders.length} rows</span>
           </div>
         </div>
 
@@ -483,10 +503,21 @@ export default function LensOrdersSection(props) {
                     <td>
                       <select
                         value={pickupStatus}
-                        onChange={(event) => {
+                        onChange={async (event) => {
                           const nextStatus = event.target.value
+                          const previousStatus = pickupStatusOverrides[orderKey] ?? order.pickup_status ?? 'pending'
                           setPickupStatusOverrides((current) => ({ ...current, [orderKey]: nextStatus }))
-                          props.updatePickupStatus?.(pickupOrderId, nextStatus === 'ready' ? 'ready' : 'not-ready')
+                          const succeeded = await props.updatePickupStatus?.(pickupOrderId, nextStatus === 'ready' ? 'ready' : 'not-ready')
+                          if (succeeded === false) {
+                            setPickupStatusOverrides((current) => {
+                              if (previousStatus === order.pickup_status || (previousStatus === 'pending' && !order.pickup_status)) {
+                                const restored = { ...current }
+                                delete restored[orderKey]
+                                return restored
+                              }
+                              return { ...current, [orderKey]: previousStatus }
+                            })
+                          }
                         }}
                         disabled={props.pickupBusyIds?.includes(pickupOrderId) || order.pickup_status === 'picked_up'}
                       >
@@ -510,6 +541,12 @@ export default function LensOrdersSection(props) {
             </tbody>
           </table>
         </div>
+
+        <LensOrdersPagination
+          pagination={pagination}
+          onPageChange={(page) => updateFilters({ page })}
+          onPerPageChange={(per_page) => updateFilters({ per_page, page: 1 })}
+        />
 
         <div className="lens-orders-signoff">
           <div className="lens-signoff-block">
@@ -590,6 +627,60 @@ export default function LensOrdersSection(props) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+function LensOrdersPagination({ pagination, onPageChange, onPerPageChange }) {
+  if (!pagination) return null
+
+  const totalPages = Math.max(Number(pagination.total_pages ?? 0), 1)
+  const currentPage = Math.min(Math.max(Number(pagination.page ?? 1), 1), totalPages)
+  const pageNumbers = [...new Set([1, currentPage - 1, currentPage, currentPage + 1, totalPages]
+    .filter((page) => page >= 1 && page <= totalPages))]
+    .sort((left, right) => left - right)
+    .reduce((items, page, index, pages) => {
+      if (index > 0 && page - pages[index - 1] > 1) items.push(null)
+      items.push(page)
+      return items
+    }, [])
+
+  return (
+    <div className="pagination-bar pagination-bar-numbered lens-orders-pagination">
+      <div className="pagination-summary">
+        <span className="muted-copy">Page {currentPage} of {totalPages} · {pagination.total ?? 0} orders</span>
+        <label className="pagination-size-control">
+          Rows per page
+          <select value={pagination.per_page ?? 15} onChange={(event) => onPerPageChange(Number(event.target.value))}>
+            <option value="15">15</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+      </div>
+      <div className="pagination-actions">
+        <button type="button" className="mini-action" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)}>Previous</button>
+        <div className="pagination-number-list" aria-label="Lens order pages">
+          {pageNumbers.map((page, index) => (
+            page === null
+              ? <span key={`ellipsis-${index}`} className="pagination-ellipsis" aria-hidden="true">…</span>
+              : (
+                <button
+                  key={page}
+                  type="button"
+                  className={currentPage === page ? 'pagination-number is-current' : 'pagination-number'}
+                  aria-current={currentPage === page ? 'page' : undefined}
+                  aria-label={`Page ${page}`}
+                  onClick={() => onPageChange(page)}
+                >
+                  {page}
+                </button>
+              )
+          ))}
+        </div>
+        <button type="button" className="mini-action" disabled={currentPage >= totalPages} onClick={() => onPageChange(currentPage + 1)}>Next</button>
+      </div>
+    </div>
   )
 }
 

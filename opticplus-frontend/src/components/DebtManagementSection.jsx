@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import WorkspaceTabs from './WorkspaceTabs.jsx'
+import SalesAllocationWorkspace from './SalesAllocationWorkspace.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
@@ -73,6 +75,21 @@ export default function DebtManagementSection(props) {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [isRestructureOpen, setIsRestructureOpen] = useState(false)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [activeWorkspace, setActiveWorkspace] = useState(() => {
+    try {
+      return window.localStorage.getItem('opticplus:debts-workspace') === 'allocations' ? 'allocations' : 'debts'
+    } catch {
+      return 'debts'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('opticplus:debts-workspace', activeWorkspace)
+    } catch {
+      // Keep workspace switching usable when browser storage is unavailable.
+    }
+  }, [activeWorkspace])
 
   const branchId = props.session?.is_admin ? props.selectedBranchId : props.session?.branch_id
   const debtServicingReadOnly = branchId === 0
@@ -292,15 +309,33 @@ export default function DebtManagementSection(props) {
     <section className="finance-section debt-management-section">
       <div className="patients-header">
         <div>
-          <p className="eyebrow">Debt Management</p>
-          <h3>Track loans, credit lines, and company payment schedules</h3>
-          <p className="header-copy">Built from the legacy debt management page and connected to the company debt database.</p>
+          <p className="eyebrow">{activeWorkspace === 'debts' ? 'Debt Management' : 'Sales Allocation'}</p>
+          <h3>{activeWorkspace === 'debts' ? 'Track loans, credit lines, and company payment schedules' : 'Plan how collected sales support branch obligations'}</h3>
+          <p className="header-copy">{activeWorkspace === 'debts'
+            ? 'Built from the legacy debt management page and connected to the company debt database.'
+            : 'Set flexible percentages for savings, payroll, suppliers, rent, and the bank.'}</p>
         </div>
-        <div className="header-actions">
-          <button type="button" className="primary-button" onClick={() => setIsCreateOpen(true)}>Add new debt</button>
-        </div>
+        {activeWorkspace === 'debts' ? (
+          <div className="header-actions">
+            <button type="button" className="primary-button" onClick={() => setIsCreateOpen(true)}>Add new debt</button>
+          </div>
+        ) : null}
       </div>
 
+      <WorkspaceTabs
+        tabs={[
+          { id: 'debts', label: 'Debt Register', description: 'Loans, balances, and repayment schedules', icon: 'D' },
+          { id: 'allocations', label: 'Sales Allocation', description: 'Plan savings reserves and bank transfers', icon: '%' },
+        ]}
+        activeTab={activeWorkspace}
+        onChange={setActiveWorkspace}
+        ariaLabel="Debt and sales allocation workspaces"
+        heading="Choose a finance workspace"
+        description="Switch between company debt servicing and branch sales planning."
+      />
+
+      {activeWorkspace === 'debts' ? (
+        <>
       {error ? <div className="message-banner error">{error}</div> : null}
       {success ? <div className="message-banner success">{success}</div> : null}
 
@@ -515,8 +550,18 @@ export default function DebtManagementSection(props) {
           </div>
         </article>
       </section>
+        </>
+      ) : (
+        <SalesAllocationWorkspace
+          apiFetch={props.apiFetch}
+          token={props.token}
+          branchId={branchId}
+          branchName={debtMeta?.branch_name ?? 'Selected branch'}
+          isMerged={Number(branchId) === 0}
+        />
+      )}
 
-      {isCreateOpen ? (
+      {activeWorkspace === 'debts' && isCreateOpen ? (
         <div className="modal-overlay" onClick={() => setIsCreateOpen(false)}>
           <article className="modal-panel debt-modal-panel" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
@@ -548,7 +593,7 @@ export default function DebtManagementSection(props) {
         </div>
       ) : null}
 
-      {isEditOpen ? (
+      {activeWorkspace === 'debts' && isEditOpen ? (
         <div className="modal-overlay" onClick={() => setIsEditOpen(false)}>
           <article className="modal-panel debt-modal-panel" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
@@ -580,7 +625,7 @@ export default function DebtManagementSection(props) {
         </div>
       ) : null}
 
-      {isPaymentOpen ? (
+      {activeWorkspace === 'debts' && isPaymentOpen ? (
         <div className="modal-overlay" onClick={() => setIsPaymentOpen(false)}>
           <article className="modal-panel debt-modal-panel" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
@@ -609,7 +654,7 @@ export default function DebtManagementSection(props) {
         </div>
       ) : null}
 
-      {isRestructureOpen ? (
+      {activeWorkspace === 'debts' && isRestructureOpen ? (
         <div className="modal-overlay" onClick={() => setIsRestructureOpen(false)}>
           <article className="modal-panel debt-modal-panel" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
@@ -626,7 +671,7 @@ export default function DebtManagementSection(props) {
         </div>
       ) : null}
 
-      {isDetailOpen ? (
+      {activeWorkspace === 'debts' && isDetailOpen ? (
         <div className="modal-overlay" onClick={() => setIsDetailOpen(false)}>
           <article className="modal-panel debt-modal-panel debt-details-modal" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">

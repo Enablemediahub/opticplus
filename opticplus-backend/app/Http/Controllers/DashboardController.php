@@ -42,6 +42,7 @@ class DashboardController extends Controller
         $todayExpenses = (float) (clone $expensesQuery)
             ->whereDate('date', $today)
             ->sum('amount');
+        $todayProductCosts = $this->dailyProductCosts($branchId, $today);
         $todayPaymentMix = (clone $salesQuery)
             ->whereDate('date', $today)
             ->selectRaw("
@@ -70,6 +71,10 @@ class DashboardController extends Controller
                 'revenue_today' => $todayRevenue,
                 'expenses_today' => $todayExpenses,
                 'insurance_revenue_today' => $todayInsuranceRevenue,
+                'lens_cost_to_set_aside_today' => $todayProductCosts['lens_cost'],
+                'frame_cost_to_set_aside_today' => $todayProductCosts['frame_cost'],
+                'unpriced_lens_sales_today' => $todayProductCosts['unpriced_lens_sales'],
+                'unpriced_frame_sales_today' => $todayProductCosts['unpriced_frame_sales'],
                 'appointments_today' => (int) (clone $appointmentsQuery)
                     ->whereDate('appointment_date', $today)
                     ->count(),
@@ -127,6 +132,73 @@ class DashboardController extends Controller
                     'date',
                 ]),
         ]);
+    }
+
+    private function dailyProductCosts(int $branchId, string $date): array
+    {
+        $totals = [
+            'lens_cost' => 0.0,
+            'frame_cost' => 0.0,
+            'unpriced_lens_sales' => 0.0,
+            'unpriced_frame_sales' => 0.0,
+        ];
+
+        if (
+            Schema::hasTable('billing')
+            && Schema::hasTable('lens_costs')
+            && Schema::hasColumn('billing', 'lens_price')
+            && Schema::hasColumn('lens_costs', 'billing_id')
+            && Schema::hasColumn('lens_costs', 'branch_id')
+            && Schema::hasColumn('lens_costs', 'cost_price')
+        ) {
+            $lensCosts = tap(
+                DB::table('billing as b')
+                    ->leftJoin('lens_costs as lc', function ($join): void {
+                        $join->on('lc.billing_id', '=', 'b.id')
+                            ->on('lc.branch_id', '=', 'b.branch_id');
+                    })
+                    ->whereDate('b.date', $date)
+                    ->where('b.lens_price', '>', 0),
+                fn ($query) => $this->applyBranchScope($query, 'b.branch_id', $branchId)
+            )->selectRaw('
+                SUM(CASE WHEN lc.cost_price IS NOT NULL THEN lc.cost_price ELSE 0 END) as known_cost,
+                SUM(CASE WHEN lc.cost_price IS NULL THEN b.lens_price ELSE 0 END) as unpriced_sales
+            ')->first();
+
+            $totals['lens_cost'] = round((float) ($lensCosts->known_cost ?? 0), 2);
+            $totals['unpriced_lens_sales'] = round((float) ($lensCosts->unpriced_sales ?? 0), 2);
+        }
+
+        if (
+            Schema::hasTable('billing')
+            && Schema::hasTable('billing_frames')
+            && Schema::hasTable('products')
+            && Schema::hasColumn('billing_frames', 'billing_id')
+            && Schema::hasColumn('billing_frames', 'frame_code_id')
+            && Schema::hasColumn('billing_frames', 'frame_price')
+            && Schema::hasColumn('products', 'code')
+            && Schema::hasColumn('products', 'branch_id')
+            && Schema::hasColumn('products', 'cost_price')
+        ) {
+            $frameCosts = tap(
+                DB::table('billing_frames as bf')
+                    ->join('billing as b', 'bf.billing_id', '=', 'b.id')
+                    ->leftJoin('products as p', function ($join): void {
+                        $join->on('p.code', '=', 'bf.frame_code_id')
+                            ->on('p.branch_id', '=', 'b.branch_id');
+                    })
+                    ->whereDate('b.date', $date),
+                fn ($query) => $this->applyBranchScope($query, 'b.branch_id', $branchId)
+            )->selectRaw('
+                SUM(CASE WHEN p.cost_price IS NOT NULL THEN p.cost_price ELSE 0 END) as known_cost,
+                SUM(CASE WHEN p.cost_price IS NULL THEN COALESCE(bf.frame_price, 0) ELSE 0 END) as unpriced_sales
+            ')->first();
+
+            $totals['frame_cost'] = round((float) ($frameCosts->known_cost ?? 0), 2);
+            $totals['unpriced_frame_sales'] = round((float) ($frameCosts->unpriced_sales ?? 0), 2);
+        }
+
+        return $totals;
     }
 
     private function attendanceRate($query, string $today): float

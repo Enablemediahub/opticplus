@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DebtController extends Controller
 {
@@ -23,6 +24,587 @@ class DebtController extends Controller
             'payment_frequencies' => ['monthly', 'quarterly', 'annually', 'one-time'],
             'payment_methods' => ['cash', 'bank_transfer', 'cheque', 'mobile_money', 'other'],
         ]);
+    }
+
+    public function salesAllocation(Request $request): JsonResponse
+    {
+        if (! Schema::hasTable('sales_allocation_items')) {
+            return response()->json(['message' => 'Sales allocation is not installed. Run the latest database migration first.'], 503);
+        }
+        if (! Schema::hasTable('sales_allocation_savings_entries')) {
+            return response()->json(['message' => 'Savings tracking is not installed. Run the latest database migration first.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $validated = $request->validate([
+            'date_from' => ['sometimes', 'date'],
+            'date_to' => ['sometimes', 'date', 'after_or_equal:date_from'],
+        ]);
+        $dateFrom = $validated['date_from'] ?? now()->startOfMonth()->toDateString();
+        $dateTo = $validated['date_to'] ?? now()->toDateString();
+
+        $items = tap(
+            DB::table('sales_allocation_items')->where('is_active', true),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        )
+            ->orderBy('treatment')
+            ->orderBy('name')
+            ->get([
+                'id',
+                'branch_id',
+                'name',
+                'allocation_percent',
+                'target_amount',
+                'target_start_date',
+                'target_date',
+                'treatment',
+                'created_at',
+            ]);
+
+        $scheduleStartDates = $items
+            ->where('treatment', 'savings')
+            ->pluck('target_start_date')
+            ->filter()
+            ->all();
+        $scheduleEndDates = $items
+            ->where('treatment', 'savings')
+            ->pluck('target_date')
+            ->filter()
+            ->all();
+        $financialRangeStart = min([$dateFrom, ...$scheduleStartDates]);
+        $financialRangeEnd = max([$dateTo, ...$scheduleEndDates]);
+        $productCostTrackingAvailable = Schema::hasTable('billing')
+            && Schema::hasColumn('billing', 'lens_price')
+            && Schema::hasTable('billing_frames')
+            && Schema::hasColumn('billing_frames', 'frame_price')
+            && Schema::hasTable('products')
+            && Schema::hasColumn('products', 'cost_price')
+            && Schema::hasTable('lens_costs')
+            && Schema::hasColumn('lens_costs', 'cost_price');
+        $dailyCollections = tap(
+            DB::table('sales')
+                ->whereBetween('date', [$financialRangeStart, $financialRangeEnd])
+                ->whereNotNull('payment_method')
+                ->whereRaw('LOWER(payment_method) NOT LIKE ?', ['%insurance%']),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        )
+            ->selectRaw('date, SUM(amount_paid) as collected')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+        $dailyProductCosts = $this->dailyProductCostReserves($branchId, $financialRangeStart, $financialRangeEnd);
+        $dailyExpenses = Schema::hasTable('expenses')
+            && Schema::hasColumn('expenses', 'date')
+            && Schema::hasColumn('expenses', 'category')
+            && Schema::hasColumn('expenses', 'amount')
+            ? tap(
+                DB::table('expenses')
+                    ->whereBetween('date', [$financialRangeStart, $financialRangeEnd])
+                    ->whereDate('date', '<=', now()->toDateString()),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )
+                ->when(Schema::hasColumn('expenses', 'source_type'), fn ($query) => $query
+                    ->where(fn ($sourceQuery) => $sourceQuery
+                        ->whereNull('source_type')
+                        ->orWhere('source_type', '!=', 'billing_refund')))
+                ->selectRaw('date, SUM(amount) as total')
+                ->groupBy('date')
+                ->get()
+                ->keyBy('date')
+            : collect();
+
+        $collectionQuery = tap(
+            DB::table('sales')
+                ->whereBetween('date', [$dateFrom, $dateTo])
+                ->whereNotNull('payment_method')
+                ->whereRaw('LOWER(payment_method) NOT LIKE ?', ['%insurance%']),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        );
+        $grossCollections = (float) (clone $collectionQuery)->where('amount_paid', '>', 0)->sum('amount_paid');
+        $refundReversals = abs((float) (clone $collectionQuery)->where('amount_paid', '<', 0)->sum('amount_paid'));
+        $netCollections = $grossCollections - $refundReversals;
+        $periodProductCosts = $dailyProductCosts
+            ->filter(fn ($cost, $date) => $date >= $dateFrom && $date <= $dateTo);
+        $knownProductCostToSetAside = round((float) $periodProductCosts->sum(
+            fn ($cost) => ($cost['lens_cost'] ?? 0) + ($cost['frame_cost'] ?? 0)
+        ), 2);
+        $unpricedProductSales = round((float) $periodProductCosts->sum(
+            fn ($cost) => ($cost['unpriced_lens_sales'] ?? 0) + ($cost['unpriced_frame_sales'] ?? 0)
+        ), 2);
+        $periodExpenses = round((float) $dailyExpenses
+            ->filter(fn ($expense, $date) => $date >= $dateFrom && $date <= $dateTo)
+            ->sum('total'), 2);
+        $allocationBase = $productCostTrackingAvailable
+            ? max($netCollections - $knownProductCostToSetAside - $unpricedProductSales - $periodExpenses, 0)
+            : 0.0;
+        $expenseContributions = Schema::hasTable('expenses')
+            && Schema::hasColumn('expenses', 'category')
+            && Schema::hasColumn('expenses', 'date')
+            ? tap(
+                DB::table('expenses')
+                    ->whereDate('date', '<=', now()->toDateString())
+                    ->selectRaw('LOWER(TRIM(category)) as normalized_category, date as contribution_date, SUM(amount) as daily_amount, COUNT(*) as daily_count')
+                    ->groupByRaw('LOWER(TRIM(category)), date')
+                    ->orderBy('date'),
+                fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+            )->get()
+                ->groupBy('normalized_category')
+                ->map(fn ($entries) => (object) [
+                    'contribution_total' => $entries->sum('daily_amount'),
+                    'contribution_count' => $entries->sum('daily_count'),
+                    'daily_contributions' => $entries->map(fn ($entry) => [
+                        'date' => $entry->contribution_date,
+                        'amount' => round((float) $entry->daily_amount, 2),
+                        'entry_count' => (int) $entry->daily_count,
+                    ])->values(),
+                ])
+            : collect();
+        $recordedSavingsByDay = DB::table('sales_allocation_savings_entries')
+            ->whereBetween('target_date', [$financialRangeStart, $financialRangeEnd])
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->selectRaw('allocation_item_id, target_date, SUM(amount) as saved_amount')
+            ->groupBy('allocation_item_id', 'target_date')
+            ->get()
+            ->groupBy('allocation_item_id')
+            ->map(fn ($entries) => $entries->keyBy('target_date'));
+        $savingsEntryDetails = DB::table('sales_allocation_savings_entries as se')
+            ->join('expenses as e', 'e.expense_id', '=', 'se.expense_id')
+            ->whereBetween('se.target_date', [$financialRangeStart, $financialRangeEnd])
+            ->when($branchId > 0, fn ($query) => $query->where('se.branch_id', $branchId))
+            ->orderBy('se.set_aside_date')
+            ->orderBy('se.id')
+            ->get([
+                'se.allocation_item_id',
+                'se.target_date',
+                'se.set_aside_date',
+                'se.amount',
+                'se.expense_id',
+            ])
+            ->groupBy('allocation_item_id')
+            ->map(fn ($entries) => $entries->groupBy('target_date'));
+        $savingsItems = $items->where('treatment', 'savings');
+        $bankItems = $items->where('treatment', 'bank');
+        $savingsAmount = round($savingsItems->sum(
+            fn ($item) => $allocationBase * (float) $item->allocation_percent / 100
+        ), 2);
+        $bankAllocatedAmount = round($bankItems->sum(
+            fn ($item) => $allocationBase * (float) $item->allocation_percent / 100
+        ), 2);
+        $bankTransferAmount = round(max($allocationBase - $savingsAmount, 0), 2);
+        $unallocatedBankAmount = round(max($bankTransferAmount - $bankAllocatedAmount, 0), 2);
+        $totalPercent = round((float) $items->sum('allocation_percent'), 2);
+        $savingsPercent = (float) $savingsItems->sum('allocation_percent');
+
+        $existingSetAsideAmount = 0.0;
+        $items = $items->map(function ($item) use ($allocationBase, $dailyCollections, $dailyProductCosts, $dailyExpenses, $savingsPercent, $expenseContributions, $productCostTrackingAvailable, $recordedSavingsByDay, $savingsEntryDetails, &$existingSetAsideAmount): array {
+            $periodAllocation = round($allocationBase * (float) $item->allocation_percent / 100, 2);
+            $target = $item->target_amount !== null ? (float) $item->target_amount : null;
+            $normalizedCategory = mb_strtolower(trim((string) $item->name));
+            $contribution = $expenseContributions->get($normalizedCategory);
+            $existingSetAside = $item->treatment === 'savings'
+                ? round((float) ($contribution->contribution_total ?? 0), 2)
+                : 0.0;
+            $existingSetAsideAmount += $existingSetAside;
+            $projectedTotal = $existingSetAside;
+            $targetStartDate = $item->target_start_date;
+            $targetDate = $item->target_date;
+            $remainingToTarget = $target !== null ? round(max($target - $existingSetAside, 0), 2) : null;
+            $today = now()->startOfDay();
+            $planStart = $targetStartDate !== null
+                ? Carbon::parse($targetStartDate)->startOfDay()
+                : $today->copy();
+            $scheduleStart = $planStart->copy()->max($today);
+            $targetDeadline = $targetDate !== null
+                ? Carbon::parse($targetDate)->startOfDay()
+                : null;
+            $scheduleEnd = $targetDeadline?->copy()->subDay();
+            $workingDates = [];
+            $allWorkingDates = [];
+            if ($item->treatment === 'savings' && $remainingToTarget > 0 && $scheduleEnd && ! $planStart->isAfter($scheduleEnd)) {
+                for ($date = $planStart->copy(); ! $date->isAfter($scheduleEnd); $date->addDay()) {
+                    if ($date->dayOfWeek !== Carbon::SUNDAY) {
+                        $allWorkingDates[] = $date->toDateString();
+                        if (! $date->isBefore($scheduleStart)) {
+                            $workingDates[] = $date->toDateString();
+                        }
+                    }
+                }
+            }
+            $workingDaysRemaining = count($workingDates);
+            $requiredDailySavings = $workingDaysRemaining > 0
+                ? ceil(($remainingToTarget / $workingDaysRemaining) * 100) / 100
+                : null;
+            $targetDeadlinePassed = $targetDeadline !== null && $targetDeadline->isBefore($today);
+            $dailySchedule = collect($allWorkingDates)->map(function (string $date) use ($item, $dailyCollections, $dailyProductCosts, $dailyExpenses, $savingsPercent, $requiredDailySavings, $productCostTrackingAvailable, $recordedSavingsByDay, $savingsEntryDetails, $today): array {
+                $costs = $dailyProductCosts->get($date, []);
+                $collected = round((float) ($dailyCollections->get($date)->collected ?? 0), 2);
+                $lensCost = round((float) ($costs['lens_cost'] ?? 0), 2);
+                $frameCost = round((float) ($costs['frame_cost'] ?? 0), 2);
+                $unpricedSales = round((float) ($costs['unpriced_lens_sales'] ?? 0) + (float) ($costs['unpriced_frame_sales'] ?? 0), 2);
+                $dailyExpenseAmount = round((float) ($dailyExpenses->get($date)->total ?? 0), 2);
+                $salesRecorded = $date <= now()->toDateString();
+                $availableAfterCosts = $productCostTrackingAvailable && $salesRecorded
+                    ? round(max($collected - $lensCost - $frameCost - $unpricedSales, 0), 2)
+                    : null;
+                $availableForAllocations = $availableAfterCosts !== null
+                    ? round(max($availableAfterCosts - $dailyExpenseAmount, 0), 2)
+                    : null;
+                $estimatedBankDeposit = $availableForAllocations !== null
+                    ? round(max($availableForAllocations * (1 - $savingsPercent / 100), 0), 2)
+                    : null;
+                $savedEntry = $recordedSavingsByDay->get((int) $item->id)?->get($date);
+                $saved = round((float) ($savedEntry->saved_amount ?? 0), 2);
+                $remainingForDay = round(max((float) $requiredDailySavings - $saved, 0), 2);
+                $isDue = Carbon::parse($date)->startOfDay()->lessThanOrEqualTo($today);
+                $arrears = $isDue ? $remainingForDay : 0.0;
+                $entryDetails = ($savingsEntryDetails->get((int) $item->id)?->get($date) ?? collect())
+                    ->map(fn ($entry) => [
+                        'set_aside_date' => $entry->set_aside_date,
+                        'amount' => round((float) $entry->amount, 2),
+                        'expense_id' => (int) $entry->expense_id,
+                    ])
+                    ->values();
+
+                return [
+                    'date' => $date,
+                    'eligible_collections' => $collected,
+                    'lens_cost_to_set_aside' => $lensCost,
+                    'frame_cost_to_set_aside' => $frameCost,
+                    'known_costs_to_set_aside' => round($lensCost + $frameCost, 2),
+                    'recorded_expenses' => $dailyExpenseAmount,
+                    'unpriced_lens_sales' => round((float) ($costs['unpriced_lens_sales'] ?? 0), 2),
+                    'unpriced_frame_sales' => round((float) ($costs['unpriced_frame_sales'] ?? 0), 2),
+                    'missing_lens_cost_count' => (int) ($costs['missing_lens_cost_count'] ?? 0),
+                    'missing_frame_cost_count' => (int) ($costs['missing_frame_cost_count'] ?? 0),
+                    'sales_recorded' => $salesRecorded,
+                    'cost_tracking_available' => $productCostTrackingAvailable,
+                    'available_after_costs' => $availableAfterCosts,
+                    'available_for_allocations' => $availableForAllocations,
+                    'estimated_bank_deposit' => $estimatedBankDeposit,
+                    'required_rent_savings' => $requiredDailySavings,
+                    'required_share_percent' => $availableForAllocations !== null && $availableForAllocations > 0
+                        ? round($requiredDailySavings / $availableForAllocations * 100, 2)
+                        : null,
+                    'actual_rent_saved' => $saved,
+                    'remaining_for_day' => $remainingForDay,
+                    'arrears_amount' => $arrears,
+                    'is_due' => $isDue,
+                    'saving_entries' => $entryDetails,
+                    'shortfall_after_costs' => $productCostTrackingAvailable && $salesRecorded && $requiredDailySavings !== null
+                        ? round(max($requiredDailySavings - $availableForAllocations, 0), 2)
+                        : null,
+                ];
+            })->values();
+
+            return [
+                'id' => (int) $item->id,
+                'branch_id' => (int) $item->branch_id,
+                'name' => $item->name,
+                'allocation_percent' => (float) $item->allocation_percent,
+                'target_amount' => $target,
+                'target_start_date' => $targetStartDate,
+                'target_date' => $targetDate,
+                'treatment' => $item->treatment,
+                'period_allocation' => $periodAllocation,
+                'existing_set_aside_amount' => $existingSetAside,
+                'existing_set_aside_count' => $item->treatment === 'savings'
+                    ? (int) ($contribution->contribution_count ?? 0)
+                    : 0,
+                'daily_contributions' => $item->treatment === 'savings'
+                    ? ($contribution->daily_contributions ?? collect())->values()
+                    : collect(),
+                'projected_total' => round($projectedTotal, 2),
+                'remaining_to_target' => $remainingToTarget,
+                'target_progress_percent' => $target !== null && $target > 0
+                    ? round(min($projectedTotal / $target * 100, 100), 2)
+                    : null,
+                'working_days_remaining' => $workingDaysRemaining,
+                'required_daily_savings' => $requiredDailySavings,
+                'arrears_total' => round((float) $dailySchedule->sum('arrears_amount'), 2),
+                'target_deadline_passed' => $targetDeadlinePassed,
+                'daily_savings_schedule' => $dailySchedule,
+                'created_at' => $item->created_at,
+            ];
+        })->values();
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'filters' => ['date_from' => $dateFrom, 'date_to' => $dateTo],
+            'summary' => [
+                'gross_collections' => round($grossCollections, 2),
+                'refund_reversals' => round($refundReversals, 2),
+                'net_collections' => round($netCollections, 2),
+                'known_product_costs_to_set_aside' => $knownProductCostToSetAside,
+                'lens_costs_to_set_aside' => round((float) $periodProductCosts->sum(fn ($cost) => $cost['lens_cost'] ?? 0), 2),
+                'frame_costs_to_set_aside' => round((float) $periodProductCosts->sum(fn ($cost) => $cost['frame_cost'] ?? 0), 2),
+                'unpriced_product_sales_held' => $unpricedProductSales,
+                'recorded_expenses' => $periodExpenses,
+                'product_cost_tracking_available' => $productCostTrackingAvailable,
+                'allocation_base' => round($allocationBase, 2),
+                'total_percent' => $totalPercent,
+                'existing_set_aside_amount' => round($existingSetAsideAmount, 2),
+                'savings_amount' => $savingsAmount,
+                'projected_savings_amount' => round($existingSetAsideAmount + $savingsAmount, 2),
+                'bank_allocated_amount' => $bankAllocatedAmount,
+                'bank_transfer_amount' => $bankTransferAmount,
+                'unallocated_bank_amount' => $unallocatedBankAmount,
+            ],
+            'items' => $items,
+        ]);
+    }
+
+    public function recordSalesAllocationSaving(Request $request, int $allocationId): JsonResponse
+    {
+        if (! Schema::hasTable('sales_allocation_savings_entries')) {
+            return response()->json(['message' => 'Savings tracking is not installed. Run the latest database migration first.'], 503);
+        }
+        if (! Schema::hasTable('expenses')) {
+            return response()->json(['message' => 'Expense tracking is not available on this database.'], 503);
+        }
+
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if ($role !== 'manager' && ! $user?->isAdmin()) {
+            return response()->json(['message' => 'Only the General Manager can record savings directly as an expense.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'target_date' => ['required', 'date'],
+            'set_aside_date' => ['required', 'date', 'before_or_equal:today'],
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01'],
+        ]);
+        $targetDay = Carbon::parse($validated['target_date'])->startOfDay();
+        if ($targetDay->dayOfWeek === Carbon::SUNDAY) {
+            return response()->json(['message' => 'Savings targets are not scheduled for Sundays.'], 422);
+        }
+
+        $item = DB::table('sales_allocation_items')
+            ->where('id', $allocationId)
+            ->where('branch_id', $branchId)
+            ->where('is_active', true)
+            ->where('treatment', 'savings')
+            ->first();
+        if (! $item || $item->target_amount === null || $item->target_start_date === null || $item->target_date === null) {
+            return response()->json(['message' => 'A savings goal with a start date and deadline is required.'], 404);
+        }
+
+        if (
+            $targetDay->toDateString() < $item->target_start_date
+            || $targetDay->toDateString() >= $item->target_date
+        ) {
+            return response()->json(['message' => 'The target day must fall within the savings plan dates and before the due date.'], 422);
+        }
+
+        foreach (['expense_id', 'description', 'amount', 'date', 'category', 'branch_id'] as $requiredColumn) {
+            if (! Schema::hasColumn('expenses', $requiredColumn)) {
+                return response()->json(['message' => 'The expense table is missing required fields for recording savings.'], 503);
+            }
+        }
+
+        $expenseId = DB::transaction(function () use ($item, $branchId, $validated, $user): int {
+            DB::table('sales_allocation_items')
+                ->where('id', $item->id)
+                ->where('branch_id', $branchId)
+                ->lockForUpdate()
+                ->first();
+
+            $existingSaved = (float) DB::table('sales_allocation_savings_entries')
+                ->where('allocation_item_id', $item->id)
+                ->where('branch_id', $branchId)
+                ->whereDate('target_date', $validated['target_date'])
+                ->sum('amount');
+
+            $contributedSoFar = (float) DB::table('expenses')
+                ->where('branch_id', $branchId)
+                ->whereRaw('LOWER(TRIM(category)) = ?', [mb_strtolower(trim((string) $item->name))])
+                ->whereDate('date', '<=', now()->toDateString())
+                ->sum('amount');
+            $remainingToTarget = max((float) $item->target_amount - $contributedSoFar, 0);
+            $targetStart = Carbon::parse($item->target_start_date)->startOfDay()->max(now()->startOfDay());
+            $deadline = Carbon::parse($item->target_date)->startOfDay()->subDay();
+            $workingDays = 0;
+            if (! $targetStart->isAfter($deadline)) {
+                for ($date = $targetStart->copy(); ! $date->isAfter($deadline); $date->addDay()) {
+                    if ($date->dayOfWeek !== Carbon::SUNDAY) {
+                        $workingDays++;
+                    }
+                }
+            }
+            $dailyTarget = $workingDays > 0
+                ? ceil(($remainingToTarget / $workingDays) * 100) / 100
+                : 0.0;
+            $arrears = max($dailyTarget - $existingSaved, 0);
+            $amount = round((float) $validated['amount'], 2);
+            if ($amount > $arrears + 0.0001) {
+                abort(response()->json([
+                    'message' => 'The amount cannot exceed this day’s remaining savings target of GH₵'.number_format($arrears, 2).'.',
+                ], 422));
+            }
+
+            $entryId = DB::table('sales_allocation_savings_entries')->insertGetId([
+                'branch_id' => $branchId,
+                'allocation_item_id' => $item->id,
+                'target_date' => $validated['target_date'],
+                'set_aside_date' => $validated['set_aside_date'],
+                'amount' => $amount,
+                'recorded_by' => $user?->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $expenseData = [
+                'description' => trim((string) $item->name).' savings for '.$validated['target_date'],
+                'amount' => $amount,
+                'date' => $validated['set_aside_date'],
+                'category' => trim((string) $item->name),
+                'branch_id' => $branchId,
+            ];
+            if (Schema::hasColumn('expenses', 'created_by')) {
+                $expenseData['created_by'] = $user?->id;
+            }
+            if (Schema::hasColumn('expenses', 'created_at')) {
+                $expenseData['created_at'] = now();
+            }
+            if (Schema::hasColumn('expenses', 'updated_at')) {
+                $expenseData['updated_at'] = now();
+            }
+            if (Schema::hasColumn('expenses', 'source_type')) {
+                $expenseData['source_type'] = 'sales_allocation_saving';
+            }
+            if (Schema::hasColumn('expenses', 'source_id')) {
+                $expenseData['source_id'] = $entryId;
+            }
+
+            $createdExpenseId = DB::table('expenses')->insertGetId($expenseData, 'expense_id');
+            DB::table('sales_allocation_savings_entries')
+                ->where('id', $entryId)
+                ->update(['expense_id' => $createdExpenseId, 'updated_at' => now()]);
+
+            return (int) $createdExpenseId;
+        });
+
+        return response()->json([
+            'message' => trim((string) $item->name).' savings recorded as an expense.',
+            'expense_id' => $expenseId,
+        ], 201);
+    }
+
+    public function storeSalesAllocation(Request $request): JsonResponse
+    {
+        if (! Schema::hasTable('sales_allocation_items')) {
+            return response()->json(['message' => 'Sales allocation is not installed. Run the latest database migration first.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'allocation_percent' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:100'],
+            'target_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01'],
+            'target_start_date' => ['nullable', 'date'],
+            'target_date' => ['nullable', 'date'],
+            'treatment' => ['required', 'in:bank,savings'],
+        ]);
+        $this->validateAllocationDates($validated);
+        $this->ensureAllocationPercentTotal($branchId, (float) $validated['allocation_percent']);
+        $now = now();
+        $id = DB::table('sales_allocation_items')->insertGetId([
+            'branch_id' => $branchId,
+            'name' => trim($validated['name']),
+            'allocation_percent' => $validated['allocation_percent'],
+            'target_amount' => $validated['target_amount'] ?? null,
+            'target_start_date' => $validated['target_start_date'] ?? null,
+            'target_date' => $validated['target_date'] ?? null,
+            'treatment' => $validated['treatment'],
+            'is_active' => true,
+            'created_by' => $request->user()?->id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        return response()->json([
+            'message' => 'Sales allocation item added.',
+            'id' => $id,
+        ], 201);
+    }
+
+    public function updateSalesAllocation(Request $request, int $allocationId): JsonResponse
+    {
+        if (! Schema::hasTable('sales_allocation_items')) {
+            return response()->json(['message' => 'Sales allocation is not installed. Run the latest database migration first.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'allocation_percent' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:100'],
+            'target_amount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0.01'],
+            'target_start_date' => ['nullable', 'date'],
+            'target_date' => ['nullable', 'date'],
+            'treatment' => ['required', 'in:bank,savings'],
+        ]);
+        $this->validateAllocationDates($validated);
+        $item = DB::table('sales_allocation_items')
+            ->where('id', $allocationId)
+            ->where('branch_id', $branchId)
+            ->where('is_active', true)
+            ->first();
+        if (! $item) {
+            return response()->json(['message' => 'Sales allocation item not found for this branch.'], 404);
+        }
+
+        $this->ensureAllocationPercentTotal($branchId, (float) $validated['allocation_percent'], $allocationId);
+        DB::table('sales_allocation_items')
+            ->where('id', $allocationId)
+            ->where('branch_id', $branchId)
+            ->update([
+                'name' => trim($validated['name']),
+                'allocation_percent' => $validated['allocation_percent'],
+                'target_amount' => $validated['target_amount'] ?? null,
+                'target_start_date' => $validated['target_start_date'] ?? null,
+                'target_date' => $validated['target_date'] ?? null,
+                'treatment' => $validated['treatment'],
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['message' => 'Sales allocation item updated.']);
+    }
+
+    public function deleteSalesAllocation(Request $request, int $allocationId): JsonResponse
+    {
+        if (! Schema::hasTable('sales_allocation_items')) {
+            return response()->json(['message' => 'Sales allocation is not installed. Run the latest database migration first.'], 503);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $updated = DB::table('sales_allocation_items')
+            ->where('id', $allocationId)
+            ->where('branch_id', $branchId)
+            ->where('is_active', true)
+            ->update(['is_active' => false, 'updated_at' => now()]);
+
+        if (! $updated) {
+            return response()->json(['message' => 'Sales allocation item not found for this branch.'], 404);
+        }
+
+        return response()->json(['message' => 'Sales allocation item removed.']);
     }
 
     public function index(Request $request): JsonResponse
@@ -737,6 +1319,85 @@ class DebtController extends Controller
         return $date->addMonth()->toDateString();
     }
 
+    private function dailyProductCostReserves(int $branchId, string $dateFrom, string $dateTo)
+    {
+        $daily = collect();
+        if (
+            Schema::hasTable('billing')
+            && Schema::hasTable('lens_costs')
+            && Schema::hasColumn('lens_costs', 'billing_id')
+            && Schema::hasColumn('lens_costs', 'branch_id')
+            && Schema::hasColumn('lens_costs', 'cost_price')
+        ) {
+            $lensRows = tap(
+                DB::table('billing as b')
+                    ->leftJoin('lens_costs as lc', function ($join): void {
+                        $join->on('lc.billing_id', '=', 'b.id')
+                            ->on('lc.branch_id', '=', 'b.branch_id');
+                    })
+                    ->whereBetween('b.date', [$dateFrom, $dateTo])
+                    ->where('b.lens_price', '>', 0),
+                fn ($query) => $this->applyBranchScope($query, 'b.branch_id', $branchId)
+            )
+                ->selectRaw('
+                    DATE(b.date) as sale_date,
+                    SUM(CASE WHEN lc.cost_price IS NOT NULL THEN lc.cost_price ELSE 0 END) as known_cost,
+                    SUM(CASE WHEN lc.cost_price IS NULL THEN b.lens_price ELSE 0 END) as unpriced_sales,
+                    SUM(CASE WHEN lc.cost_price IS NULL THEN 1 ELSE 0 END) as missing_count
+                ')
+                ->groupByRaw('DATE(b.date)')
+                ->get();
+
+            foreach ($lensRows as $row) {
+                $date = (string) $row->sale_date;
+                $daily[$date] = array_merge($daily->get($date, []), [
+                    'lens_cost' => round((float) $row->known_cost, 2),
+                    'unpriced_lens_sales' => round((float) $row->unpriced_sales, 2),
+                    'missing_lens_cost_count' => (int) $row->missing_count,
+                ]);
+            }
+        }
+
+        if (
+            Schema::hasTable('billing')
+            && Schema::hasTable('billing_frames')
+            && Schema::hasTable('products')
+            && Schema::hasColumn('products', 'code')
+            && Schema::hasColumn('products', 'branch_id')
+            && Schema::hasColumn('products', 'cost_price')
+        ) {
+            $frameRows = tap(
+                DB::table('billing_frames as bf')
+                    ->join('billing as b', 'bf.billing_id', '=', 'b.id')
+                    ->leftJoin('products as p', function ($join): void {
+                        $join->on('p.code', '=', 'bf.frame_code_id')
+                            ->on('p.branch_id', '=', 'b.branch_id');
+                    })
+                    ->whereBetween('b.date', [$dateFrom, $dateTo]),
+                fn ($query) => $this->applyBranchScope($query, 'b.branch_id', $branchId)
+            )
+                ->selectRaw('
+                    DATE(b.date) as sale_date,
+                    SUM(CASE WHEN p.cost_price IS NOT NULL THEN p.cost_price ELSE 0 END) as known_cost,
+                    SUM(CASE WHEN p.cost_price IS NULL THEN COALESCE(bf.frame_price, 0) ELSE 0 END) as unpriced_sales,
+                    SUM(CASE WHEN p.cost_price IS NULL THEN 1 ELSE 0 END) as missing_count
+                ')
+                ->groupByRaw('DATE(b.date)')
+                ->get();
+
+            foreach ($frameRows as $row) {
+                $date = (string) $row->sale_date;
+                $daily[$date] = array_merge($daily->get($date, []), [
+                    'frame_cost' => round((float) $row->known_cost, 2),
+                    'unpriced_frame_sales' => round((float) $row->unpriced_sales, 2),
+                    'missing_frame_cost_count' => (int) $row->missing_count,
+                ]);
+            }
+        }
+
+        return $daily;
+    }
+
     private function createReminder(int $debtId, int $branchId, string $reminderDate, string $type, string $message): void
     {
         DB::table('debt_reminders')->insert([
@@ -804,5 +1465,33 @@ class DebtController extends Controller
         return response()->json([
             'message' => 'Merged mode is read-only. Switch to a branch before recording or updating debt records.',
         ], 422);
+    }
+
+    private function ensureAllocationPercentTotal(int $branchId, float $requestedPercent, ?int $excludeId = null): void
+    {
+        $existingPercent = (float) tap(
+            DB::table('sales_allocation_items')
+                ->where('is_active', true)
+                ->when($excludeId !== null, fn ($query) => $query->where('id', '!=', $excludeId)),
+            fn ($query) => $this->applyBranchScope($query, 'branch_id', $branchId)
+        )->sum('allocation_percent');
+
+        if ($existingPercent + $requestedPercent > 100.0001) {
+            abort(response()->json([
+                'message' => 'Combined allocation percentages cannot exceed 100%. Current active total: '.round($existingPercent, 2).'%.',
+            ], 422));
+        }
+    }
+
+    private function validateAllocationDates(array $validated): void
+    {
+        $startDate = $validated['target_start_date'] ?? null;
+        $targetDate = $validated['target_date'] ?? null;
+
+        if ($startDate !== null && $targetDate !== null && $targetDate <= $startDate) {
+            abort(response()->json([
+                'message' => 'The target date must be after the savings start date.',
+            ], 422));
+        }
     }
 }

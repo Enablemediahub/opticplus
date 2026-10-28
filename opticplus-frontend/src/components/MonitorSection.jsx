@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
+import PortalIcon from './PortalIcon.jsx'
 import BankBalanceCards from './BankBalanceCards.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 2 })
@@ -105,15 +106,19 @@ function workbookXml(report) {
   const extractionTotal = (key) => total(extractionRows.map((row) => row[key]))
   const rows = [
     ['DAILY CAPITAL EXTRACTION', `${data.branch_name || 'Branch'}`],
-    ['DATE', 'LENS SALES', 'LENS COST TO SET ASIDE', 'LENS PROFIT', 'LENS COSTS MISSING', 'FRAMES SOLD', 'FRAME SALES', 'FRAME COST TO SET ASIDE', 'FRAME PROFIT', 'FRAME COSTS MISSING', 'TOTAL COST TO SET ASIDE', 'GROSS PROFIT TO BANK'],
+    ['DATE', 'NET COLLECTED', 'REFUNDS', 'LENS SALES', 'LENS COST TO SET ASIDE', 'LENS PROFIT (BILLED)', 'LENS COSTS MISSING', 'UNPRICED LENS SALES HELD', 'FRAMES SOLD', 'FRAME SALES', 'FRAME COST TO SET ASIDE', 'FRAME PROFIT (BILLED)', 'FRAME COSTS MISSING', 'UNPRICED FRAME SALES HELD', 'TOTAL COST TO SET ASIDE', 'PRODUCT PROFIT (BILLED BASIS)', 'OTHER EXPENSES', 'PLANNED SAVINGS RESERVE', 'ESTIMATED BANK DEPOSIT'],
     ...extractionRows.map((row) => [
-      row.date, value(row.lens_sales), value(row.lens_cost), value(row.lens_profit), value(row.lens_missing_cost_count),
+      row.date, value(row.net_collections), value(row.refund_reversals),
+      value(row.lens_sales), value(row.lens_cost), value(row.lens_profit), value(row.lens_missing_cost_count), value(row.unpriced_lens_sales),
       value(row.frames_sold_count), value(row.frame_sales), value(row.frame_cost), value(row.frame_profit),
-      value(row.frame_missing_cost_count), value(row.total_cost_to_set_aside), value(row.gross_profit_to_bank),
+      value(row.frame_missing_cost_count), value(row.unpriced_frame_sales), value(row.total_cost_to_set_aside),
+      value(row.gross_profit_to_bank), value(row.other_expenses), value(row.planned_savings_reserve), value(row.estimated_bank_deposit),
     ]),
-    ['TOTAL', extractionTotal('lens_sales'), extractionTotal('lens_cost'), extractionTotal('lens_profit'), extractionTotal('lens_missing_cost_count'),
+    ['TOTAL', extractionTotal('net_collections'), extractionTotal('refund_reversals'),
+      extractionTotal('lens_sales'), extractionTotal('lens_cost'), extractionTotal('lens_profit'), extractionTotal('lens_missing_cost_count'), extractionTotal('unpriced_lens_sales'),
       extractionTotal('frames_sold_count'), extractionTotal('frame_sales'), extractionTotal('frame_cost'), extractionTotal('frame_profit'),
-      extractionTotal('frame_missing_cost_count'), extractionTotal('total_cost_to_set_aside'), extractionTotal('gross_profit_to_bank')],
+      extractionTotal('frame_missing_cost_count'), extractionTotal('unpriced_frame_sales'), extractionTotal('total_cost_to_set_aside'),
+      extractionTotal('gross_profit_to_bank'), extractionTotal('other_expenses'), extractionTotal('planned_savings_reserve'), extractionTotal('estimated_bank_deposit')],
   ]
   const worksheet = `<Worksheet ss:Name="Daily Extraction"><Table>${rows.map((row) => {
     const kind = row[0] === 'DAILY CAPITAL EXTRACTION' ? 'section'
@@ -130,7 +135,7 @@ function formatDailyDate(date) {
   return year && month && day ? `${day}/${month}/${year}` : String(date || '')
 }
 
-function DailyExtractionSheet({ report, loading, periodLabel }) {
+function DailyExtractionSheet({ report, loading, periodLabel, onOpenTracker }) {
   const rows = report?.daily_extraction || []
   const summed = (key) => total(rows.map((row) => row[key]))
   const frameReserveRows = report?.frame_reserve_breakdown ?? []
@@ -140,13 +145,28 @@ function DailyExtractionSheet({ report, loading, periodLabel }) {
   const monthLabels = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
   return <div className="monitor-sheet-stack">
+    <section className="product-tracker-reserve-grid monitor-reserve-widgets" aria-label="Product costs to set aside">
+      <button type="button" className="stat-card patient-stat-card product-tracker-reserve-card frame-reserve-card" onClick={() => onOpenTracker?.('Frames Tracker')} aria-label="Open Frames Tracker">
+        <div className="stat-card-icon"><PortalIcon name="inventory" className="widget-icon" /></div>
+        <span>Frame money to set aside</span>
+        <strong>{money(summed('frame_cost'))}</strong>
+        <p>{summed('frame_missing_cost_count')} frame sales without tracked costs · {periodLabel}</p>
+      </button>
+      <button type="button" className="stat-card patient-stat-card product-tracker-reserve-card lens-reserve-card" onClick={() => onOpenTracker?.('Lens Tracker & Lens Spec')} aria-label="Open Lens Tracker">
+        <div className="stat-card-icon"><PortalIcon name="glasses" className="widget-icon" /></div>
+        <span>Lens money to set aside</span>
+        <strong>{money(summed('lens_cost'))}</strong>
+        <p>{summed('lens_missing_cost_count')} lens sales without tracked costs · {periodLabel}</p>
+      </button>
+    </section>
     <section className="stats-grid dashboard-stats-grid monitor-dashboard-widgets">
       <StatWidget label="Frame reserve recorded" value={money(report?.frame_reserve_total)} note="All recorded Frame Tracker reservations" icon="inventory" className="seen" />
-      <StatWidget label="Frame costs to set aside" value={money(summed('frame_cost'))} note={`Known cost of frames sold • ${periodLabel}`} icon="money" className="total" />
-      <StatWidget label="Frame profit to bank" value={money(summed('frame_profit'))} note={`Frame sales less known costs • ${periodLabel}`} icon="finance" className="today" />
+      <StatWidget label="Frame product profit" value={money(summed('frame_profit'))} note={`Billed frame sales less known cost • ${periodLabel}`} icon="finance" className="today" />
       <StatWidget label="Rent recorded this year" value={money(rentTotal)} note={`Expense category RENT • ${report?.year ?? new Date().getFullYear()}`} icon="receipt" className="pending" />
-      <StatWidget label="Lens costs to set aside" value={money(summed('lens_cost'))} note={`Known lens costs • ${periodLabel}`} icon="glasses" className="total" />
-      <StatWidget label="Gross profit to bank" value={money(summed('gross_profit_to_bank'))} note={`Lens and frame sales less known costs • ${periodLabel}`} icon="finance" className="seen" />
+      <StatWidget label="Product profit (billed basis)" value={money(summed('gross_profit_to_bank'))} note={`Billed lens and frame values less known costs and refunds • ${periodLabel}`} icon="finance" className="seen" />
+      <StatWidget label="Other expenses" value={money(summed('other_expenses'))} note={`Recorded Other expenses • ${periodLabel}`} icon="receipt" className="pending" />
+      <StatWidget label="Net collections" value={money(summed('net_collections'))} note={`Non-insurance payments after refunds • ${periodLabel}`} icon="money" className="total" />
+      <StatWidget label="Estimated bank deposit" value={money(summed('estimated_bank_deposit'))} note={`Net collections less product reserves, Other expenses, and planned savings • ${periodLabel}`} icon="finance" className="today" />
       <StatWidget label="Lens costs missing" value={summed('lens_missing_cost_count')} note={`Lens bills without a cost entry • ${periodLabel}`} icon="alert" className="pending" />
       <StatWidget label="Frame costs missing" value={summed('frame_missing_cost_count')} note={`Sold frames without a product cost • ${periodLabel}`} icon="alert" className="pending" />
     </section>
@@ -188,58 +208,79 @@ function DailyExtractionSheet({ report, loading, periodLabel }) {
         <span className="monitor-live-dot">Live data</span>
       </div>
       <p className="monitor-extraction-note">
-        Set aside the known lens and frame costs from these sales before banking the gross profit. Missing cost entries are excluded from profit until completed.
+        Product profit uses billed lens/frame values. The estimated bank deposit instead starts with payments actually collected (after refunds), then subtracts known and unpriced product reserves, recorded Other expenses, and the planned savings allocation. It is an estimate, not a confirmed bank deposit.
       </p>
       <div className="monitor-table-scroll">
         <table className="monitor-table daily-extraction-table">
           <thead>
             <tr>
               <th>Date</th>
+              <th>Net Collected</th>
+              <th>Refunds</th>
               <th>Lens Sales</th>
               <th>Lens Cost to Set Aside</th>
               <th>Lens Profit</th>
               <th>Missing Lens Costs</th>
+              <th>Unpriced Lens Sales Held</th>
               <th>Frames Sold</th>
               <th>Frame Sales</th>
               <th>Frame Cost to Set Aside</th>
               <th>Frame Profit</th>
               <th>Missing Frame Costs</th>
+              <th>Unpriced Frame Sales Held</th>
               <th>Total Cost to Set Aside</th>
-              <th>Gross Profit to Bank</th>
+              <th>Product Profit (Billed Basis)</th>
+              <th>Other Expenses</th>
+              <th>Planned Savings Reserve</th>
+              <th>Estimated Bank Deposit</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.date}>
                 <td>{formatDailyDate(row.date)}</td>
+                <td>{money(row.net_collections)}</td>
+                <td>{money(row.refund_reversals)}</td>
                 <td>{money(row.lens_sales)}</td>
                 <td>{money(row.lens_cost)}</td>
                 <td>{money(row.lens_profit)}</td>
                 <td>{row.lens_missing_cost_count}</td>
+                <td>{money(row.unpriced_lens_sales)}</td>
                 <td>{row.frames_sold_count}</td>
                 <td>{money(row.frame_sales)}</td>
                 <td>{money(row.frame_cost)}</td>
                 <td>{money(row.frame_profit)}</td>
                 <td>{row.frame_missing_cost_count}</td>
+                <td>{money(row.unpriced_frame_sales)}</td>
                 <td className="monitor-total">{money(row.total_cost_to_set_aside)}</td>
                 <td className="monitor-total">{money(row.gross_profit_to_bank)}</td>
+                <td>{money(row.other_expenses)}</td>
+                <td>{money(row.planned_savings_reserve)}</td>
+                <td className="monitor-total">{money(row.estimated_bank_deposit)}</td>
               </tr>
             ))}
-            {!rows.length ? <tr><td colSpan="12" className="daily-sales-empty">{loading ? 'Loading lens and frame sales...' : `No lens or frame sales were recorded for ${periodLabel.toLowerCase()}.`}</td></tr> : null}
+            {!rows.length ? <tr><td colSpan="19" className="daily-sales-empty">{loading ? 'Loading daily collections and product sales...' : `No collections or lens/frame sales were recorded for ${periodLabel.toLowerCase()}.`}</td></tr> : null}
           </tbody>
           {rows.length ? <tfoot><tr>
             <td>Total</td>
+            <td>{money(summed('net_collections'))}</td>
+            <td>{money(summed('refund_reversals'))}</td>
             <td>{money(summed('lens_sales'))}</td>
             <td>{money(summed('lens_cost'))}</td>
             <td>{money(summed('lens_profit'))}</td>
             <td>{summed('lens_missing_cost_count')}</td>
+            <td>{money(summed('unpriced_lens_sales'))}</td>
             <td>{summed('frames_sold_count')}</td>
             <td>{money(summed('frame_sales'))}</td>
             <td>{money(summed('frame_cost'))}</td>
             <td>{money(summed('frame_profit'))}</td>
             <td>{summed('frame_missing_cost_count')}</td>
+            <td>{money(summed('unpriced_frame_sales'))}</td>
             <td>{money(summed('total_cost_to_set_aside'))}</td>
             <td>{money(summed('gross_profit_to_bank'))}</td>
+            <td>{money(summed('other_expenses'))}</td>
+            <td>{money(summed('planned_savings_reserve'))}</td>
+            <td>{money(summed('estimated_bank_deposit'))}</td>
           </tr></tfoot> : null}
         </table>
       </div>
@@ -247,7 +288,7 @@ function DailyExtractionSheet({ report, loading, periodLabel }) {
   </div>
 }
 
-export default function MonitorSection({ apiFetch, token, selectedBranchId, session }) {
+export default function MonitorSection({ apiFetch, token, selectedBranchId, session, onOpenTracker }) {
   const canViewMonitor = ['manager', 'accountant'].includes(session?.role)
   const [branchSelection, setBranchSelection] = useState(() => ({
     source: selectedBranchId,
@@ -346,6 +387,7 @@ export default function MonitorSection({ apiFetch, token, selectedBranchId, sess
     <DailyExtractionSheet
       report={report}
       loading={loading}
+      onOpenTracker={onOpenTracker}
       periodLabel={appliedExtractionRange.from === appliedExtractionRange.to
         ? formatDailyDate(appliedExtractionRange.from)
         : `${formatDailyDate(appliedExtractionRange.from)} – ${formatDailyDate(appliedExtractionRange.to)}`}
