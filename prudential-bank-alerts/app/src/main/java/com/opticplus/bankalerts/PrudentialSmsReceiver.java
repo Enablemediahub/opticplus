@@ -19,7 +19,7 @@ final class PrudentialSmsReceiver extends BroadcastReceiver {
         }
 
         String sender = messages[0].getOriginatingAddress();
-        if (sender == null || !"PRUDENTIAL".equalsIgnoreCase(sender.trim())) {
+        if (sender == null) {
             return;
         }
 

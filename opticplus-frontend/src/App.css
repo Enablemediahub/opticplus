@@ -7886,6 +7886,56 @@
   min-width: 0;
 }
 
+.bank-account-card-clickable {
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.bank-account-card-clickable:hover,
+.bank-account-card-clickable:focus-visible {
+  border-color: var(--accent, #3977d5);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.bank-history-card-hint {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.bank-alert-history-overlay {
+  z-index: 70;
+}
+
+.bank-alert-history-modal {
+  width: min(1280px, 100%);
+}
+
+.bank-history-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 220px)) minmax(0, 1fr);
+  align-items: end;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.bank-history-filters label {
+  display: grid;
+  gap: 8px;
+}
+
+.bank-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  color: var(--text-muted);
+}
+
 .bank-card-heading {
   display: flex;
   min-height: 152px;
@@ -7928,6 +7978,15 @@
 }
 
 @media (max-width: 560px) {
+  .bank-history-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bank-history-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .bank-card-heading {
     min-height: 112px;
     gap: 10px;

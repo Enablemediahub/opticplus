@@ -1,39 +1,36 @@
 Hostinger FileZilla sync manifest
-Generated: 2026-10-27 23:20 GMT
-Update: Frame and lens daily set-aside widgets, tracker navigation, and current platform fixes.
+Generated: 2026-10-29
+Update: Five-minute best-effort phone refresh requests plus MTN MoMo payment received, payment made, and cash-out SMS support.
 Package: tmp/hostinger-package
 Remote destination: Laravel application root; preserve relative paths.
 
+DATABASE STEP — BEFORE UPLOADING BACKEND FILES
+  Run tmp/hostinger-package/database/schema/add_bank_sms_sync_request_versions.mysql.sql once in Hostinger phpMyAdmin.
+  This adds the two refresh-request version columns to bank_sms_devices. Do not run it twice.
+
 UPLOAD FRONTEND
   public/index.html
-  public/assets/index-CsPSDMcL.js
-  public/assets/index-oJ9f2Cp-.css
+  public/assets/index-BEhNQBhZ.js
+  public/assets/index-DoZxMNff.css
+  public/images/banks/mtn-momo.jpeg
 
 UPLOAD BACKEND
-  app/Http/Controllers/DashboardController.php
-  app/Http/Controllers/FinanceController.php
-  app/Http/Controllers/InventoryController.php
-  app/Http/Controllers/DebtController.php
-  app/Http/Controllers/BillingController.php
+  app/Http/Controllers/BankAlertController.php
   routes/api.php
-  database/migrations/2026_10_11_000001_add_cost_price_to_products_table.php
-  database/migrations/2026_10_13_000001_create_frame_cost_reservations_table.php
-  database/migrations/2026_10_26_000001_create_billing_refunds_table.php
-  database/migrations/2026_10_26_000002_create_sales_allocation_items_table.php
-  database/migrations/2026_10_26_000003_seed_madina_rent_allocation.php
-  database/migrations/2026_10_26_000004_add_sales_allocation_target_dates.php
-  database/migrations/2026_10_26_000005_add_sales_allocation_start_dates.php
-  database/migrations/2026_10_26_000006_create_sales_allocation_savings_entries_table.php
+  database/migrations/2026_10_28_000001_add_bank_sms_sync_request_versions.php
 
 DELETE OLD FRONTEND ASSETS ON HOSTINGER AFTER UPLOAD
+  public/assets/index-z3gNipzk.js
+  public/assets/index-bAeVrGqp.js
+  public/assets/index-CsPSDMcL.js
   public/assets/index-C7DhpXqF.js
-  public/assets/index-D7F9Cq4z.css
   public/assets/index-2IDxmqCP.js
+  public/assets/index-CRATZBhV.js
+  public/assets/index-d3FUpwMd.js
+  public/assets/index-oJ9f2Cp-.css
+  public/assets/index-D7F9Cq4z.css
   public/assets/index-LLBSSCFS.css
   public/assets/index-Beej20LZ.css
-  public/assets/index-CRATZBhV.js
   public/assets/index-D6Ru9Zq2.css
-  public/assets/index-d3FUpwMd.js
 
-The package contains the current frontend build and backend source. The local .env is excluded.
-Upload the backend migrations before or together with the corresponding PHP files. Do not upload the local .env.
+The expanded MTN message parsing needs no additional Hostinger file or database changes; the upload list above remains for the OpticPlus five-minute refresh feature. Install the updated Android build from prudential-bank-alerts/app/build/outputs/apk/debug/app-debug.apk on each branch phone. It handles payment received, payment made, and cash-out alerts; cash-outs use the SMS current balance when no available balance is included. Grant SMS monitoring and background inbox refresh permissions in the app. Phone refresh checks run about every five minutes when online; Android may delay background work. The local .env is excluded.

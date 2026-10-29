@@ -2,12 +2,14 @@ package com.opticplus.bankalerts;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Telephony;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -27,6 +29,8 @@ public final class MainActivity extends Activity {
     private TextView permissionStatus;
     private TextView testStatus;
     private TextView syncStatus;
+    private Button smsPermissionButton;
+    private Button inboxRefreshPermissionButton;
     private EditText serverUrlInput;
     private EditText deviceTokenInput;
 
@@ -36,6 +40,7 @@ public final class MainActivity extends Activity {
         database = new AlertDatabase(this);
         buildScreen();
         updateScreen();
+        startAutomaticSyncIfConfigured();
         requestSmsPermissionIfNeeded();
     }
 
@@ -64,7 +69,7 @@ public final class MainActivity extends Activity {
 
         TextView title = text("OpticPlus Bank Alerts", 26, 0xFF102A56, true);
         root.addView(title);
-        TextView subtitle = text("Prudential Bank • SMS pilot", 15, 0xFF52647D, false);
+        TextView subtitle = text("Prudential Bank and MTN MoMo • SMS pilot", 15, 0xFF52647D, false);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -82,9 +87,31 @@ public final class MainActivity extends Activity {
         statusParams.topMargin = dp(20);
         root.addView(permissionStatus, statusParams);
 
+        smsPermissionButton = new Button(this);
+        smsPermissionButton.setText("Enable SMS monitoring");
+        smsPermissionButton.setOnClickListener(view -> openSmsPermissionSettings());
+        LinearLayout.LayoutParams permissionButtonParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        permissionButtonParams.topMargin = dp(8);
+        root.addView(smsPermissionButton, permissionButtonParams);
+
+        inboxRefreshPermissionButton = new Button(this);
+        inboxRefreshPermissionButton.setText("Enable background inbox refresh");
+        inboxRefreshPermissionButton.setOnClickListener(view -> requestInboxRefreshPermission());
+        LinearLayout.LayoutParams inboxPermissionButtonParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        inboxPermissionButtonParams.topMargin = dp(6);
+        root.addView(inboxRefreshPermissionButton, inboxPermissionButtonParams);
+
         TextView privacyNote = text(
-                "Only messages from the exact sender ID PRUDENTIAL are checked. " +
-                        "The app stores parsed transaction details and the last four account digits only; " +
+                "Only supported Prudential and MTN MoMo sender IDs and message formats are checked. " +
+                        "A manager can request a refresh from OpticPlus; the phone checks for it about every five minutes. " +
+                        "Background inbox refresh scans only recent supported sender messages and requires inbox permission. " +
+                        "The app stores parsed transaction details only; " +
                         "it does not save the original SMS or change bank balances. Verify alerts against " +
                         "the bank because sender IDs can be spoofed.",
                 13,
@@ -99,7 +126,7 @@ public final class MainActivity extends Activity {
         root.addView(privacyNote, noteParams);
 
         Button testLatestMessage = new Button(this);
-        testLatestMessage.setText("Test latest PRUDENTIAL SMS");
+        testLatestMessage.setText("Test latest supported bank / MTN SMS");
         testLatestMessage.setOnClickListener(view -> requestLatestMessageTest());
         LinearLayout.LayoutParams testButtonParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -109,7 +136,7 @@ public final class MainActivity extends Activity {
         root.addView(testLatestMessage, testButtonParams);
 
         testStatus = text(
-                "One-time test: reads only the newest inbox message from PRUDENTIAL. " +
+                "One-time test: checks recent messages from supported bank and MTN sender IDs. " +
                         "The SMS text is not saved.",
                 13,
                 0xFF52647D,
@@ -193,8 +220,16 @@ public final class MainActivity extends Activity {
     private void updateScreen() {
         boolean granted = checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
         permissionStatus.setText(granted
-                ? "SMS monitoring is enabled for PRUDENTIAL alerts."
-                : "Allow SMS access to receive Prudential bank alerts.");
+                ? "SMS monitoring is enabled for Prudential and MTN MoMo alerts."
+                : "Allow SMS access to receive bank and MTN MoMo alerts.");
+        if (smsPermissionButton != null) {
+            smsPermissionButton.setText(granted ? "SMS permission settings" : "Enable SMS monitoring");
+        }
+        if (inboxRefreshPermissionButton != null) {
+            inboxRefreshPermissionButton.setText(checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                    ? "SMS inbox refresh permission settings"
+                    : "Enable background inbox refresh");
+        }
         if (syncStatus != null) {
             syncStatus.setText(SecureSettings.lastSyncStatus(this));
         }
@@ -258,15 +293,44 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void openSmsPermissionSettings() {
+        if (checkSelfPermission(Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED
+                && shouldShowRequestPermissionRationale(Manifest.permission.RECEIVE_SMS)) {
+            requestPermissions(
+                    new String[] { Manifest.permission.RECEIVE_SMS },
+                    RECEIVE_SMS_PERMISSION_REQUEST
+            );
+            return;
+        }
+
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.fromParts("package", getPackageName(), null));
+        startActivity(intent);
+    }
+
+    private void requestInboxRefreshPermission() {
+        if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[] { Manifest.permission.READ_SMS },
+                    READ_SMS_PERMISSION_REQUEST
+            );
+            return;
+        }
+
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.fromParts("package", getPackageName(), null));
+        startActivity(intent);
+    }
+
     private void requestLatestMessageTest() {
         if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) {
-            readLatestPrudentialMessage();
+            readLatestSupportedMessage();
             return;
         }
         requestPermissions(new String[] { Manifest.permission.READ_SMS }, READ_SMS_PERMISSION_REQUEST);
     }
 
-    private void readLatestPrudentialMessage() {
+    private void readLatestSupportedMessage() {
         Uri inboxUri = Telephony.Sms.Inbox.CONTENT_URI;
         String[] projection = {
                 Telephony.Sms.ADDRESS,
@@ -277,24 +341,20 @@ public final class MainActivity extends Activity {
         try (Cursor cursor = getContentResolver().query(
                 inboxUri,
                 projection,
-                Telephony.Sms.ADDRESS + " = ?",
-                new String[] { "PRUDENTIAL" },
-                Telephony.Sms.DATE + " DESC LIMIT 1"
+                "(" + Telephony.Sms.ADDRESS + " = ? OR " + Telephony.Sms.ADDRESS + " = ? OR " + Telephony.Sms.ADDRESS + " = ? OR " + Telephony.Sms.ADDRESS + " LIKE ?)",
+                new String[] { "PRUDENTIAL", "170", "MobileMoney", "MTN%" },
+                Telephony.Sms.DATE + " DESC LIMIT 20"
         )) {
             if (cursor == null || !cursor.moveToFirst()) {
-                testStatus.setText("No inbox message from PRUDENTIAL was found.");
+                testStatus.setText("No recent inbox messages from supported bank or MTN sender IDs were found.");
                 return;
             }
-
-            String sender = cursor.getString(0);
-            String body = cursor.getString(1);
-            long receivedAt = cursor.getLong(2);
-            BankAlert alert = BankSmsParser.parse(sender, body, receivedAt);
+            BankAlert alert = null;
+            do {
+                alert = BankSmsParser.parse(cursor.getString(0), cursor.getString(1), cursor.getLong(2));
+            } while (alert == null && cursor.moveToNext());
             if (alert == null) {
-                testStatus.setText(
-                        "The newest PRUDENTIAL message did not match the supported alert format. " +
-                                "No SMS text was saved."
-                );
+                testStatus.setText("No recent supported bank or MTN message matched. SMS text was not saved.");
                 return;
             }
 
@@ -304,8 +364,8 @@ public final class MainActivity extends Activity {
                 BankAlertSync.enqueue(this);
             }
             testStatus.setText(added
-                    ? "Latest PRUDENTIAL alert parsed and added to the local review list. SMS text was not saved."
-                    : "Latest PRUDENTIAL alert was already on the local review list.");
+                    ? "Latest supported alert parsed and added to the local review list. SMS text was not saved."
+                    : "Latest supported alert was already on the local review list.");
         } catch (SecurityException exception) {
             testStatus.setText(
                     "Android did not allow inbox access. Grant SMS reading permission in app settings, then try again."
@@ -337,6 +397,18 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void startAutomaticSyncIfConfigured() {
+        try {
+            if (!SecureSettings.serverUrl(this).isEmpty() && !SecureSettings.deviceToken(this).isEmpty()) {
+                BankAlertSync.schedulePeriodic(this);
+                BankAlertSync.ensureRefreshPollScheduled(this);
+                BankAlertSync.enqueue(this);
+            }
+        } catch (Exception exception) {
+            syncStatus.setText("Could not read encrypted sync settings. Re-enter the API URL and pairing token.");
+        }
+    }
+
     private void saveConnection() {
         String serverUrl = serverUrlInput.getText().toString().trim();
         String deviceToken = deviceTokenInput.getText().toString().trim();
@@ -356,6 +428,8 @@ public final class MainActivity extends Activity {
             deviceTokenInput.setText("");
             deviceTokenInput.setHint("Token saved securely; enter again to replace");
             syncStatus.setText("Connection saved in Android Keystore. Starting alert sync.");
+            BankAlertSync.schedulePeriodic(this);
+            BankAlertSync.ensureRefreshPollScheduled(this);
             BankAlertSync.enqueue(this);
         } catch (Exception exception) {
             syncStatus.setText("Could not securely save the connection settings. Please try again.");
@@ -382,7 +456,7 @@ public final class MainActivity extends Activity {
             updateScreen();
         } else if (requestCode == READ_SMS_PERMISSION_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                readLatestPrudentialMessage();
+                readLatestSupportedMessage();
             } else {
                 testStatus.setText(
                         "SMS reading permission was not granted. Background monitoring remains separate."

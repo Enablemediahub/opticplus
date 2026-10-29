@@ -30,11 +30,12 @@ const bankBrands = [
   { name: 'Ecobank', logo: '/images/banks/ecobank.jpg' },
   { name: 'Prudential Bank', logo: '/images/banks/prudential-bank.png' },
   { name: 'GTBank', logo: '/images/banks/gt-bank.png' },
+  { name: 'MTN MoMo', logo: '/images/banks/mtn-momo.jpeg' },
 ]
 
 function latestBankBalanceAccount(accounts) {
   return accounts
-    .filter((account) => account.is_active && account.reported_balance != null && account.reported_balance_at)
+    .filter((account) => account.is_active && account.bank_name !== 'MTN MoMo' && account.reported_balance != null && account.reported_balance_at)
     .sort((left, right) => Date.parse(right.reported_balance_at) - Date.parse(left.reported_balance_at))[0] ?? null
 }
 
@@ -56,6 +57,13 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [isSavingBalance, setIsSavingBalance] = useState(false)
   const [isSavingAccount, setIsSavingAccount] = useState(false)
   const [isPairingDevice, setIsPairingDevice] = useState(false)
+  const [isRequestingPhoneRefresh, setIsRequestingPhoneRefresh] = useState(false)
+  const [historyDialog, setHistoryDialog] = useState(null)
+  const [historyFilters, setHistoryFilters] = useState({ start_date: '', end_date: '' })
+  const [historyData, setHistoryData] = useState({ items: [], current_page: 1, last_page: 1, total: 0 })
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const historyRequestId = useRef(0)
 
   const loadRegister = useCallback(async ({ silent = false } = {}) => {
     if (!token || !session || refreshInProgress.current) return
@@ -227,7 +235,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         method: 'POST',
         token,
         body: {
-          label: 'Prudential Android phone',
+          label: 'Bank and MTN MoMo SMS phone',
           branch_id: branchId > 0 ? branchId : accountForm.branch_id,
         },
       })
@@ -238,6 +246,27 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       setError(pairError.message)
     } finally {
       setIsPairingDevice(false)
+    }
+  }
+
+  async function requestPhoneRefresh() {
+    if (!bankAlerts.device?.id) return
+    setIsRequestingPhoneRefresh(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await apiFetch(`/bank-alerts/devices/${bankAlerts.device.id}/sync-request?branch_id=${branchId}`, {
+        method: 'POST',
+        token,
+        body: {},
+      })
+      setSuccess(response.message || 'Phone refresh requested.')
+      await loadRegister()
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setIsRequestingPhoneRefresh(false)
     }
   }
 
@@ -256,6 +285,45 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
     } catch (reviewError) {
       setError(reviewError.message)
     }
+  }
+
+  async function loadAlertHistory(context, page = 1, filters = historyFilters) {
+    if (!context || !token) return
+
+    const requestId = ++historyRequestId.current
+    const params = new URLSearchParams({
+      bank_name: context.bankName,
+      branch_id: String(context.branchId),
+      page: String(page),
+    })
+    if (filters.start_date) params.set('start_date', filters.start_date)
+    if (filters.end_date) params.set('end_date', filters.end_date)
+    setIsLoadingHistory(true)
+    setHistoryError('')
+
+    try {
+      const response = await apiFetch(`/bank-alerts/history?${params.toString()}`, { token })
+      if (requestId === historyRequestId.current) setHistoryData(response)
+    } catch (historyLoadError) {
+      if (requestId === historyRequestId.current) setHistoryError(historyLoadError.message)
+    } finally {
+      if (requestId === historyRequestId.current) setIsLoadingHistory(false)
+    }
+  }
+
+  function openAlertHistory(bankName) {
+    const context = { bankName, branchId: Number(branchId ?? 0) }
+    const filters = { start_date: '', end_date: '' }
+    setHistoryDialog(context)
+    setHistoryFilters(filters)
+    setHistoryData({ items: [], current_page: 1, last_page: 1, total: 0 })
+    loadAlertHistory(context, 1, filters)
+  }
+
+  function closeAlertHistory() {
+    historyRequestId.current += 1
+    setHistoryDialog(null)
+    setHistoryError('')
   }
 
   return (
@@ -303,13 +371,26 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
           <div>
             <p className="eyebrow">Connected Bank Accounts</p>
             <h3>Branches, bank balances, and SMS alerts</h3>
-            <p className="header-copy">SMS balances are reported by the bank. They remain separate from the branch ledger until a manager approves a transaction.</p>
+            <p className="header-copy">Click a bank or MoMo card to browse its synced SMS alerts. Original SMS text is not stored.</p>
           </div>
-          <span className="panel-tag">{Number(branchId) === 0 ? 'All 3 banks' : `${bankCards.length} banks`}</span>
+          <span className="panel-tag">{Number(branchId) === 0 ? 'All banks and wallets' : `${bankCards.length} accounts`}</span>
         </div>
         <div className="bank-account-grid">
           {bankCards.map((bank) => (
-            <article className="panel bank-account-card" key={bank.name}>
+            <article
+              className="panel bank-account-card bank-account-card-clickable"
+              key={bank.name}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${bank.name} SMS history`}
+              onClick={() => openAlertHistory(bank.name)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  openAlertHistory(bank.name)
+                }
+              }}
+            >
               <div className="bank-card-heading">
                 <div className="bank-card-title">
                   <p className="eyebrow">{Number(branchId) === 0 ? 'Merged branches' : branchName(branchId)}</p>
@@ -335,6 +416,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
               )) : (
                 <p className="muted-copy bank-account-empty">No account is configured for this bank yet.</p>
               )}
+              <p className="bank-history-card-hint">Click to view SMS history</p>
             </article>
           ))}
           {!bankCards.length ? (
@@ -397,18 +479,23 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Android SMS Connection</p>
-            <h3>{bankAlerts.device ? `${branchName(bankAlerts.device.branch_id)} phone connection is paired` : 'Connect the Prudential Android phone'}</h3>
+            <h3>{bankAlerts.device ? `${branchName(bankAlerts.device.branch_id)} phone connection is paired` : 'Connect the bank / MTN MoMo Android phone'}</h3>
             <p className="header-copy">
               {bankAlerts.device
-                ? `${bankAlerts.device.label} • token ending ${bankAlerts.device.token_hint}${bankAlerts.device.last_used_at ? ` • last synced ${formatDateTime(bankAlerts.device.last_used_at)}` : ' • waiting for first sync'}`
-                : 'The app will upload parsed Prudential alerts over HTTPS. The original SMS is not sent.'}
+                ? `${bankAlerts.device.label} • token ending ${bankAlerts.device.token_hint}${bankAlerts.device.last_used_at ? ` • last phone check ${formatDateTime(bankAlerts.device.last_used_at)}` : ' • waiting for first check'}${Number(bankAlerts.device.sync_request_version ?? 0) > Number(bankAlerts.device.sync_completed_version ?? 0) ? ' • refresh requested; waiting for phone' : ''}`
+                : 'The app uploads supported Prudential and MTN MoMo transaction details over HTTPS. Original SMS text is not sent.'}
             </p>
           </div>
-          {isGeneralManager ? (
+          {isGeneralManager ? <div className="modal-actions">
+            {bankAlerts.device ? (
+              <button type="button" className="ghost-button" disabled={isRequestingPhoneRefresh} onClick={requestPhoneRefresh}>
+                {isRequestingPhoneRefresh ? 'Requesting...' : 'Request Phone SMS Refresh'}
+              </button>
+            ) : null}
             <button type="button" className="ghost-button" disabled={isPairingDevice} onClick={pairDevice}>
               {isPairingDevice ? 'Pairing...' : bankAlerts.device ? 'Create New Pairing Token' : 'Create Pairing Token'}
             </button>
-          ) : null}
+          </div> : null}
         </div>
         {deviceToken ? (
           <div className="message-banner warning">
@@ -419,7 +506,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         ) : null}
         <p className="muted-copy">
           {apiBase?.startsWith('https://')
-            ? `Phone API URL: ${apiBase}`
+            ? `Phone API URL: ${apiBase}. Remote refresh checks run about every five minutes when the phone is online; Android may delay them. The phone needs SMS inbox permission to recover messages missed by the live receiver.`
             : 'Configure a public HTTPS API URL before pairing the Android phone. Localhost URLs are not reachable from the phone.'}
         </p>
       </section> : null}
@@ -428,8 +515,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         <div className="panel-heading">
           <div>
             <p className="eyebrow">SMS Review Queue</p>
-            <h3>Prudential alerts awaiting approval</h3>
-            <p className="header-copy">Approving posts the signed amount to the branch ledger. Rejecting leaves the ledger unchanged.</p>
+            <h3>Bank and MTN MoMo alerts awaiting approval</h3>
+            <p className="header-copy">Approving Prudential alerts posts them to the bank register. MTN MoMo approvals only confirm the separate wallet balance; they do not change the bank register.</p>
           </div>
           <span className="panel-tag">{bankAlerts.alerts.filter((alert) => alert.status === 'pending').length} pending</span>
         </div>
@@ -460,7 +547,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                   ) : null}
                 </tr>
               )) : (
-                <tr><td colSpan={isGeneralManager ? 8 : 7}>No Prudential alerts are waiting for review.</td></tr>
+                <tr><td colSpan={isGeneralManager ? 8 : 7}>No bank or MTN MoMo alerts are waiting for review.</td></tr>
               )}
             </tbody>
           </table>
@@ -577,6 +664,73 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
           </table>
         </div>
       </article>
+
+      {historyDialog ? (
+        <div className="modal-overlay bank-alert-history-overlay" onClick={closeAlertHistory}>
+          <article
+            className="modal-panel bank-alert-history-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bank-alert-history-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Synced SMS History</p>
+                <h3 id="bank-alert-history-title">{historyDialog.bankName} alerts</h3>
+                <p className="header-copy">{historyData.total} parsed alerts · Original SMS messages are not retained.</p>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="ghost-button" onClick={() => loadAlertHistory(historyDialog, historyData.current_page)}>Refresh</button>
+                <button type="button" className="ghost-button" onClick={closeAlertHistory}>Close</button>
+              </div>
+            </div>
+
+            <form className="bank-history-filters" onSubmit={(event) => {
+              event.preventDefault()
+              loadAlertHistory(historyDialog, 1, historyFilters)
+            }}>
+              <label>From<input type="date" value={historyFilters.start_date} onChange={(event) => setHistoryFilters((current) => ({ ...current, start_date: event.target.value }))} /></label>
+              <label>To<input type="date" value={historyFilters.end_date} onChange={(event) => setHistoryFilters((current) => ({ ...current, end_date: event.target.value }))} /></label>
+              <div className="filter-actions-row">
+                <button type="submit" className="primary-button" disabled={isLoadingHistory}>Filter</button>
+                <button type="button" className="ghost-button" onClick={() => {
+                  const filters = { start_date: '', end_date: '' }
+                  setHistoryFilters(filters)
+                  loadAlertHistory(historyDialog, 1, filters)
+                }}>Clear dates</button>
+              </div>
+            </form>
+
+            {historyError ? <div className="message-banner error">{historyError}</div> : null}
+            <div className="table-shell">
+              <table className="portal-table">
+                <thead><tr><th>Received</th><th>Branch / wallet</th><th>Type</th><th>Amount</th><th>Available balance</th><th>Transaction ID</th><th>Status</th></tr></thead>
+                <tbody>
+                  {isLoadingHistory ? <tr><td colSpan="7">Loading SMS history...</td></tr> : historyData.items.length ? historyData.items.map((alert) => (
+                    <tr key={alert.id}>
+                      <td>{formatDateTime(alert.received_at)}</td>
+                      <td>{branchName(alert.branch_id)} · {alert.bank_name || historyDialog.bankName} •••• {alert.account_suffix}</td>
+                      <td>{titleize(alert.direction)}</td>
+                      <td>{currency.format(Number(alert.amount) * (alert.direction === 'debited' ? -1 : 1))}</td>
+                      <td>{currency.format(Number(alert.available_balance))}</td>
+                      <td>{alert.transaction_reference}</td>
+                      <td><span className={`bank-ledger-badge ${alert.status}`}>{titleize(alert.status)}</span></td>
+                    </tr>
+                  )) : <tr><td colSpan="7">No synced SMS alerts found for this provider and date range.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="bank-history-pagination">
+              <span>Page {historyData.current_page} of {historyData.last_page}</span>
+              <div className="modal-actions">
+                <button type="button" className="ghost-button" disabled={isLoadingHistory || historyData.current_page <= 1} onClick={() => loadAlertHistory(historyDialog, historyData.current_page - 1)}>Previous</button>
+                <button type="button" className="ghost-button" disabled={isLoadingHistory || historyData.current_page >= historyData.last_page} onClick={() => loadAlertHistory(historyDialog, historyData.current_page + 1)}>Next</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      ) : null}
     </section>
   )
 }

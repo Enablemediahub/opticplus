@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS `bank_sms_devices` (
   `created_by` BIGINT UNSIGNED NULL,
   `last_used_at` TIMESTAMP NULL DEFAULT NULL,
   `revoked_at` TIMESTAMP NULL DEFAULT NULL,
+  `sync_request_version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `sync_completed_version` BIGINT UNSIGNED NOT NULL DEFAULT 0,
   `created_at` TIMESTAMP NULL DEFAULT NULL,
   `updated_at` TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (`id`),

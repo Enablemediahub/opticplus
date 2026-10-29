@@ -33,6 +33,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
     Route::get('/company-profile', [CompanyProfileController::class, 'show']);
     Route::post('/bank-alerts/ingest', [BankAlertController::class, 'ingest'])
         ->middleware(['auth.bank-alert-device', 'throttle:60,1']);
+    Route::get('/bank-alerts/device-sync-request', [BankAlertController::class, 'deviceSyncRequest'])
+        ->middleware(['auth.bank-alert-device', 'throttle:30,1']);
+    Route::post('/bank-alerts/device-sync-request/complete', [BankAlertController::class, 'completeDeviceSyncRequest'])
+        ->middleware(['auth.bank-alert-device', 'throttle:30,1']);
 
     Route::middleware(['auth.token', 'audit.mutations'])->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
@@ -43,8 +47,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/dashboard', [DashboardController::class, 'show']);
         Route::get('/bank-alerts', [BankAlertController::class, 'index']);
+        Route::get('/bank-alerts/history', [BankAlertController::class, 'history']);
         Route::post('/bank-alerts/accounts', [BankAlertController::class, 'storeAccount']);
         Route::post('/bank-alerts/devices', [BankAlertController::class, 'issueDevice']);
+        Route::post('/bank-alerts/devices/{deviceId}/sync-request', [BankAlertController::class, 'requestDeviceSync']);
         Route::post('/bank-alerts/{alertId}/review', [BankAlertController::class, 'review']);
         Route::get('/patients', [PatientRecordController::class, 'index']);
         Route::get('/patients/meta', [PatientRecordController::class, 'meta']);

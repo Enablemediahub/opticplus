@@ -10,6 +10,7 @@ const banks = [
   { name: 'Ecobank', logo: '/images/banks/ecobank.jpg' },
   { name: 'Prudential Bank', logo: '/images/banks/prudential-bank.png' },
   { name: 'GTBank', logo: '/images/banks/gt-bank.png' },
+  { name: 'MTN MoMo', logo: '/images/banks/mtn-momo.jpeg' },
 ]
 
 export default function BankBalanceCards({ apiFetch, token, branchId }) {

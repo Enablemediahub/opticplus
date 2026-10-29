@@ -125,14 +125,14 @@ final class AlertDatabase extends SQLiteOpenHelper {
         return alerts;
     }
 
-    void markSynced(String accountSuffix, String transactionReference) {
+    void markSynced(String sender, String accountSuffix, String transactionReference) {
         ContentValues values = new ContentValues();
         values.put("synced", 1);
         getWritableDatabase().update(
                         "alerts",
                         values,
                         "sender = ? AND account_suffix = ? AND transaction_reference = ?",
-                        new String[] { "PRUDENTIAL", accountSuffix, transactionReference }
+                        new String[] { sender, accountSuffix, transactionReference }
         );
     }
 }
