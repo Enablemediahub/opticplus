@@ -1,36 +1,73 @@
 Hostinger FileZilla sync manifest
-Generated: 2026-10-29
-Update: Five-minute best-effort phone refresh requests plus MTN MoMo payment received, payment made, and cash-out SMS support.
+Generated: 2026-10-30
+Update: Selling Pricelist changes, multi-phone SMS pairing, and manager account removal with history preservation.
 Package: tmp/hostinger-package
 Remote destination: Laravel application root; preserve relative paths.
 
 DATABASE STEP — BEFORE UPLOADING BACKEND FILES
-  Run tmp/hostinger-package/database/schema/add_bank_sms_sync_request_versions.mysql.sql once in Hostinger phpMyAdmin.
-  This adds the two refresh-request version columns to bank_sms_devices. Do not run it twice.
+  If Laravel migrations cannot be run on Hostinger, open phpMyAdmin,
+  select the OpticPlus database, and run this SQL file once:
+    database/schema/lens_selling_pricelist_hostinger.sql
+  Then import the approved local rules from:
+    database/schema/lens_selling_pricelist_seed.sql
+  The hostinger SQL also adds the receptionist_override_allowed column
+  when the rules table already exists and creates the branch-wide override settings table.
+  If the rules table was already created and the full SQL reports an error,
+  import database/schema/lens_selling_pricelist_override_only.sql instead.
+  The script uses CREATE TABLE IF NOT EXISTS and is safe to re-run.
+  Run the seed file once only; importing it again will create duplicate rules.
+  Do not run the Laravel migrations after the SQL script has created the tables.
+  For the Android SMS remote-refresh button, check whether bank_sms_devices
+  already has sync_request_version and sync_completed_version. If either is
+  missing, run database/schema/add_bank_sms_sync_request_versions.mysql.sql
+  once before uploading the SMS API. Do not run it again when both columns exist.
 
 UPLOAD FRONTEND
   public/index.html
-  public/assets/index-BEhNQBhZ.js
-  public/assets/index-DoZxMNff.css
-  public/images/banks/mtn-momo.jpeg
+  public/assets/index-Db-Fqh82.js
+  public/assets/index-DeSasqZ_.css
 
 UPLOAD BACKEND
+  app/Http/Controllers/BillingController.php
   app/Http/Controllers/BankAlertController.php
   routes/api.php
+  database/schema/lens_selling_pricelist_hostinger.sql
+  database/schema/lens_selling_pricelist_seed.sql
+  database/schema/lens_selling_pricelist_override_only.sql
+  database/schema/lens_selling_pricelist_settings.sql
+  database/schema/lens_selling_pricelist_catalogue_update.sql
+  database/migrations/2026_10_29_000001_create_lens_selling_price_requests_table.php
+  database/migrations/2026_10_29_000002_create_lens_selling_price_rules_table.php
+  database/migrations/2026_10_29_000003_add_receptionist_override_to_lens_selling_price_rules.php
+  database/migrations/2026_10_29_000004_create_lens_selling_price_settings_table.php
+  database/migrations/2026_10_29_000005_expand_lens_catalogue.php
+  database/migrations/2026_10_29_000006_add_prescription_count_to_lens_selling_price_rules.php
   database/migrations/2026_10_28_000001_add_bank_sms_sync_request_versions.php
 
 DELETE OLD FRONTEND ASSETS ON HOSTINGER AFTER UPLOAD
-  public/assets/index-z3gNipzk.js
-  public/assets/index-bAeVrGqp.js
+  public/assets/index-Dp6JuHzK.js
+  public/assets/index-CPmlukew.css
+  public/assets/index-DjUzBtlh.js
+  public/assets/index-DYrbnmRE.css
+  public/assets/index-Da37dAYn.js
+  public/assets/index-BEhNQBhZ.js
+  public/assets/index-DoZxMNff.css
   public/assets/index-CsPSDMcL.js
-  public/assets/index-C7DhpXqF.js
-  public/assets/index-2IDxmqCP.js
-  public/assets/index-CRATZBhV.js
-  public/assets/index-d3FUpwMd.js
+  public/assets/index-bAeVrGqp.js
+  public/assets/index-BPCptOmM.js
+  public/assets/index-DZsZP3pc.css
+  public/assets/index-mahMnzhi.js
+  public/assets/index-CRy98pff.css
+  public/assets/index-z3gNipzk.js
   public/assets/index-oJ9f2Cp-.css
   public/assets/index-D7F9Cq4z.css
   public/assets/index-LLBSSCFS.css
   public/assets/index-Beej20LZ.css
   public/assets/index-D6Ru9Zq2.css
+  public/assets/index-C4eBlPsF.js
+  public/assets/index-SCdfOE30.js
+  public/assets/index-BXqIliDE.css
+  public/assets/index-C_VDoLP2.js
+  public/assets/index-GvEhf6uW.css
 
-The expanded MTN message parsing needs no additional Hostinger file or database changes; the upload list above remains for the OpticPlus five-minute refresh feature. Install the updated Android build from prudential-bank-alerts/app/build/outputs/apk/debug/app-debug.apk on each branch phone. It handles payment received, payment made, and cash-out alerts; cash-outs use the SMS current balance when no available balance is included. Grant SMS monitoring and background inbox refresh permissions in the app. Phone refresh checks run about every five minutes when online; Android may delay background work. The local .env is excluded.
+The new bundle includes the Selling Pricelist catalogue, priced/unpriced filtering, inline price editing, category row headers, prescription counts, automatic catalogue population for new prescriptions, approval queue actions, success feedback, and one branch-wide GM control for receptionist price overrides. It also lists multiple SMS phones per branch with separate refresh buttons and lets a manager label each phone. Managers can now delete a connected bank or MoMo account from its card; the account setup and reported balance are removed, SMS history and posted bank-register activity are preserved, and pending alerts are archived. No database migration is needed for either multiple phones or account removal. The existing SMS refresh columns are still required for remote inbox refreshes. After uploading, pair any phone whose token was revoked by the old one-phone-per-branch behavior; keep the currently active phone's token. Pair phones one at a time and save each token before generating the next. Use the HTTPS API URL and tokens shown on the Hostinger site, not a local 127.0.0.1 URL or token from the local development page. The APK itself does not need an update for these management changes; pending alerts retry on the phone's roughly five-minute online check, and Android may delay background work. The phone needs SMS monitoring permission for automatic incoming alerts and inbox permission for requested refreshes. The local .env is excluded.

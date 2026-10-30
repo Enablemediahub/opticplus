@@ -80,6 +80,7 @@ final class BankSmsParser {
                 "MTN_MOMO",
                 direction,
                 amount,
+                // The SMS has no wallet suffix; the server maps this to the paired branch's configured wallet.
                 "0000",
                 transactionIdMatcher.group(1),
                 transactionDate,

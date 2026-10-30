@@ -43,11 +43,13 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
   const isGeneralManager = (session?.normalized_role ?? session?.role) === 'manager'
   const [data, setData] = useState(null)
-  const [bankAlerts, setBankAlerts] = useState({ accounts: [], alerts: [], device: null, banks: [] })
+  const [bankAlerts, setBankAlerts] = useState({ accounts: [], alerts: [], device: null, devices: [], banks: [] })
   const [depositForm, setDepositForm] = useState(defaultDepositForm())
   const [balanceForm, setBalanceForm] = useState(defaultBalanceForm())
   const [accountForm, setAccountForm] = useState(() => defaultAccountForm(branchId))
   const [deviceToken, setDeviceToken] = useState('')
+  const [smsDeviceLabel, setSmsDeviceLabel] = useState('')
+  const [tokenDeviceLabel, setTokenDeviceLabel] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -56,8 +58,10 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [isSavingDeposit, setIsSavingDeposit] = useState(false)
   const [isSavingBalance, setIsSavingBalance] = useState(false)
   const [isSavingAccount, setIsSavingAccount] = useState(false)
+  const [deletingAccountId, setDeletingAccountId] = useState(null)
   const [isPairingDevice, setIsPairingDevice] = useState(false)
   const [isRequestingPhoneRefresh, setIsRequestingPhoneRefresh] = useState(false)
+  const [phoneRefreshFeedback, setPhoneRefreshFeedback] = useState(null)
   const [historyDialog, setHistoryDialog] = useState(null)
   const [historyFilters, setHistoryFilters] = useState({ start_date: '', end_date: '' })
   const [historyData, setHistoryData] = useState({ items: [], current_page: 1, last_page: 1, total: 0 })
@@ -78,7 +82,12 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         apiFetch(`/bank-alerts?branch_id=${branchId}`, { token }),
       ])
       setData(response)
-      setBankAlerts(alertResponse)
+      setBankAlerts({
+        ...alertResponse,
+        devices: Array.isArray(alertResponse.devices)
+          ? alertResponse.devices
+          : (alertResponse.device ? [alertResponse.device] : []),
+      })
       setLastRefreshedAt(new Date())
       setDepositForm((current) => ({
         ...current,
@@ -224,7 +233,32 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
     }
   }
 
+  async function removeAccount(account) {
+    const accountTitle = `${branchName(account.branch_id)} ${account.bank_name} •••• ${account.account_suffix}`
+    const confirmed = window.confirm(
+      `Remove ${accountTitle}? Its configured balance will be cleared. SMS history and posted bank-register activity will be kept; pending alerts for this account will be archived.`
+    )
+    if (!confirmed) return
+
+    setDeletingAccountId(account.id)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch(`/bank-alerts/accounts/${account.id}?branch_id=${branchId}`, {
+        method: 'DELETE',
+        token,
+      })
+      setSuccess(response.message || 'Connected account removed.')
+      await loadRegister()
+    } catch (deleteError) {
+      setError(deleteError.message)
+    } finally {
+      setDeletingAccountId(null)
+    }
+  }
+
   async function pairDevice() {
+    const label = smsDeviceLabel.trim() || 'Bank and MTN MoMo SMS phone'
     setIsPairingDevice(true)
     setError('')
     setSuccess('')
@@ -235,11 +269,13 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         method: 'POST',
         token,
         body: {
-          label: 'Bank and MTN MoMo SMS phone',
+          label,
           branch_id: branchId > 0 ? branchId : accountForm.branch_id,
         },
       })
       setDeviceToken(response.token)
+      setTokenDeviceLabel(label)
+      setSmsDeviceLabel('')
       setSuccess(response.message || 'Android phone paired.')
       await loadRegister()
     } catch (pairError) {
@@ -249,21 +285,27 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
     }
   }
 
-  async function requestPhoneRefresh() {
-    if (!bankAlerts.device?.id) return
+  async function requestPhoneRefresh(device) {
+    if (!device?.id) return
     setIsRequestingPhoneRefresh(true)
+    setPhoneRefreshFeedback({ type: 'warning', message: 'Sending refresh request to the paired phone…' })
     setError('')
     setSuccess('')
 
     try {
-      const response = await apiFetch(`/bank-alerts/devices/${bankAlerts.device.id}/sync-request?branch_id=${branchId}`, {
+      const response = await apiFetch(`/bank-alerts/devices/${device.id}/sync-request?branch_id=${branchId}`, {
         method: 'POST',
         token,
         body: {},
       })
+      setPhoneRefreshFeedback({
+        type: 'success',
+        message: response.message || 'Refresh request queued. The phone checks about every five minutes while online.',
+      })
       setSuccess(response.message || 'Phone refresh requested.')
       await loadRegister()
     } catch (requestError) {
+      setPhoneRefreshFeedback({ type: 'error', message: requestError.message || 'The refresh request could not be queued.' })
       setError(requestError.message)
     } finally {
       setIsRequestingPhoneRefresh(false)
@@ -326,6 +368,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
     setHistoryError('')
   }
 
+  const pairedDevices = bankAlerts.devices ?? (bankAlerts.device ? [bankAlerts.device] : [])
+
   return (
     <section className="finance-section">
       <div className="patients-header">
@@ -377,20 +421,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         </div>
         <div className="bank-account-grid">
           {bankCards.map((bank) => (
-            <article
-              className="panel bank-account-card bank-account-card-clickable"
-              key={bank.name}
-              role="button"
-              tabIndex={0}
-              aria-label={`View ${bank.name} SMS history`}
-              onClick={() => openAlertHistory(bank.name)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  openAlertHistory(bank.name)
-                }
-              }}
-            >
+            <article className="panel bank-account-card" key={bank.name}>
               <div className="bank-card-heading">
                 <div className="bank-card-title">
                   <p className="eyebrow">{Number(branchId) === 0 ? 'Merged branches' : branchName(branchId)}</p>
@@ -412,11 +443,23 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                       ? `Last SMS balance: ${formatDateTime(account.reported_balance_at)}`
                       : 'Available balance will appear after a matching bank alert.'}
                   </p>
+                  {isGeneralManager ? (
+                    <button
+                      type="button"
+                      className="ghost-button danger-button bank-account-delete-button"
+                      disabled={deletingAccountId === account.id}
+                      onClick={() => removeAccount(account)}
+                    >
+                      {deletingAccountId === account.id ? 'Removing...' : 'Delete account'}
+                    </button>
+                  ) : null}
                 </div>
               )) : (
                 <p className="muted-copy bank-account-empty">No account is configured for this bank yet.</p>
               )}
-              <p className="bank-history-card-hint">Click to view SMS history</p>
+              <button type="button" className="bank-history-card-hint" onClick={() => openAlertHistory(bank.name)}>
+                View {bank.name} SMS history
+              </button>
             </article>
           ))}
           {!bankCards.length ? (
@@ -479,29 +522,53 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Android SMS Connection</p>
-            <h3>{bankAlerts.device ? `${branchName(bankAlerts.device.branch_id)} phone connection is paired` : 'Connect the bank / MTN MoMo Android phone'}</h3>
-            <p className="header-copy">
-              {bankAlerts.device
-                ? `${bankAlerts.device.label} • token ending ${bankAlerts.device.token_hint}${bankAlerts.device.last_used_at ? ` • last phone check ${formatDateTime(bankAlerts.device.last_used_at)}` : ' • waiting for first check'}${Number(bankAlerts.device.sync_request_version ?? 0) > Number(bankAlerts.device.sync_completed_version ?? 0) ? ' • refresh requested; waiting for phone' : ''}`
-                : 'The app uploads supported Prudential and MTN MoMo transaction details over HTTPS. Original SMS text is not sent.'}
-            </p>
+            <h3>{pairedDevices.length ? `${pairedDevices.length} SMS phone${pairedDevices.length === 1 ? '' : 's'} paired` : 'Connect bank / MTN MoMo SMS phones'}</h3>
+            <p className="header-copy">Each phone that receives bank or MoMo SMS can have its own token. Pair the phones one at a time and assign each to the correct branch.</p>
           </div>
-          {isGeneralManager ? <div className="modal-actions">
-            {bankAlerts.device ? (
-              <button type="button" className="ghost-button" disabled={isRequestingPhoneRefresh} onClick={requestPhoneRefresh}>
-                {isRequestingPhoneRefresh ? 'Requesting...' : 'Request Phone SMS Refresh'}
-              </button>
-            ) : null}
-            <button type="button" className="ghost-button" disabled={isPairingDevice} onClick={pairDevice}>
-              {isPairingDevice ? 'Pairing...' : bankAlerts.device ? 'Create New Pairing Token' : 'Create Pairing Token'}
-            </button>
-          </div> : null}
+        </div>
+        {pairedDevices.length ? (
+          <div className="sms-device-list">
+            {pairedDevices.map((device) => (
+              <article className="sms-device-row" key={device.id}>
+                <div>
+                  <strong>{device.label}</strong>
+                  <p className="muted-copy">
+                    {branchName(device.branch_id)} • token ending {device.token_hint}
+                    {device.last_used_at ? ` • last phone check ${formatDateTime(device.last_used_at)}` : ' • waiting for first check'}
+                    {Number(device.sync_request_version ?? 0) > Number(device.sync_completed_version ?? 0) ? ' • refresh requested; waiting for phone' : ''}
+                  </p>
+                </div>
+                <button type="button" className="ghost-button" disabled={isRequestingPhoneRefresh} onClick={() => requestPhoneRefresh(device)}>
+                  {isRequestingPhoneRefresh ? 'Requesting...' : 'Request Phone SMS Refresh'}
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : null}
+        {phoneRefreshFeedback ? (
+          <div className={`message-banner ${phoneRefreshFeedback.type}`} role="status" aria-live="polite">
+            {phoneRefreshFeedback.message}
+          </div>
+        ) : null}
+        <div className="sms-device-pairing-row">
+          <label>
+            Phone label
+            <input
+              value={smsDeviceLabel}
+              maxLength={100}
+              onChange={(event) => setSmsDeviceLabel(event.target.value)}
+              placeholder="e.g. Madina MoMo SIM phone"
+            />
+          </label>
+          <button type="button" className="ghost-button" disabled={isPairingDevice} onClick={pairDevice}>
+            {isPairingDevice ? 'Pairing...' : pairedDevices.length ? 'Pair Another Phone' : 'Create Pairing Token'}
+          </button>
         </div>
         {deviceToken ? (
           <div className="message-banner warning">
-            <strong>Copy this token into the phone now. It is shown only once.</strong>
+            <strong>Copy this one-time token into {tokenDeviceLabel} now.</strong>
             <input aria-label="One-time Android pairing token" readOnly value={deviceToken} onFocus={(event) => event.target.select()} />
-            <p>Use API URL <code>{apiBase}</code>. Only enter this URL if it uses HTTPS. Creating a new token revokes the previous device token.</p>
+            <p>Use API URL <code>{apiBase}</code>. Only enter this URL if it uses HTTPS. Other paired phones for the branch stay active.</p>
           </div>
         ) : null}
         <p className="muted-copy">

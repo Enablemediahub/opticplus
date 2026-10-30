@@ -34,12 +34,16 @@ final class PrudentialSmsReceiver extends BroadcastReceiver {
         }
 
         AlertDatabase database = new AlertDatabase(context);
+        boolean inserted = false;
         try {
-            if (database.insertIfNew(alert)) {
-                BankAlertSync.enqueue(context);
-            }
+            inserted = database.insertIfNew(alert);
         } finally {
             database.close();
+        }
+        if (inserted) {
+            context.sendBroadcast(new Intent(MainActivity.ACTION_ALERT_STORED)
+                    .setPackage(context.getPackageName()));
+            BankAlertSync.enqueue(context);
         }
     }
 }

@@ -2,11 +2,15 @@ package com.opticplus.bankalerts;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Telephony;
 import android.provider.Settings;
@@ -22,6 +26,7 @@ import android.widget.TextView;
 import java.util.List;
 
 public final class MainActivity extends Activity {
+    static final String ACTION_ALERT_STORED = "com.opticplus.bankalerts.ALERT_STORED";
     private static final int RECEIVE_SMS_PERMISSION_REQUEST = 41;
     private static final int READ_SMS_PERMISSION_REQUEST = 42;
     private AlertDatabase database;
@@ -33,6 +38,13 @@ public final class MainActivity extends Activity {
     private Button inboxRefreshPermissionButton;
     private EditText serverUrlInput;
     private EditText deviceTokenInput;
+    private boolean alertStoredReceiverRegistered;
+    private final BroadcastReceiver alertStoredReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            updateScreen();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,8 +60,26 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (alertList != null) {
+            if (!alertStoredReceiverRegistered) {
+                IntentFilter filter = new IntentFilter(ACTION_ALERT_STORED);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(alertStoredReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+                } else {
+                    registerReceiver(alertStoredReceiver, filter);
+                }
+                alertStoredReceiverRegistered = true;
+            }
             updateScreen();
         }
+    }
+
+    @Override
+    protected void onPause() {
+        if (alertStoredReceiverRegistered) {
+            unregisterReceiver(alertStoredReceiver);
+            alertStoredReceiverRegistered = false;
+        }
+        super.onPause();
     }
 
     @Override
@@ -264,7 +294,8 @@ public final class MainActivity extends Activity {
         String movement = alert.direction.equals("credited") ? "Credit" : "Debit";
         card.addView(text(movement + " • GHS " + alert.amount, 17, 0xFF102A56, true));
         card.addView(text(
-                "Account ending " + alert.accountSuffix + "  •  " + alert.transactionDate,
+                ("MTN_MOMO".equals(alert.sender) ? "MTN MoMo wallet" : "Account ending " + alert.accountSuffix)
+                        + "  •  " + alert.transactionDate,
                 13,
                 0xFF52647D,
                 false
@@ -341,7 +372,10 @@ public final class MainActivity extends Activity {
         try (Cursor cursor = getContentResolver().query(
                 inboxUri,
                 projection,
-                "(" + Telephony.Sms.ADDRESS + " = ? OR " + Telephony.Sms.ADDRESS + " = ? OR " + Telephony.Sms.ADDRESS + " = ? OR " + Telephony.Sms.ADDRESS + " LIKE ?)",
+                "(" + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
+                        + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
+                        + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
+                        + Telephony.Sms.ADDRESS + " LIKE ? COLLATE NOCASE)",
                 new String[] { "PRUDENTIAL", "170", "MobileMoney", "MTN%" },
                 Telephony.Sms.DATE + " DESC LIMIT 20"
         )) {
@@ -459,7 +493,7 @@ public final class MainActivity extends Activity {
                 readLatestSupportedMessage();
             } else {
                 testStatus.setText(
-                        "SMS reading permission was not granted. Background monitoring remains separate."
+                        "SMS inbox permission was denied. Allow it with Enable background inbox refresh, then run this check again."
                 );
             }
         }

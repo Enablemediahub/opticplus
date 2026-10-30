@@ -28,6 +28,91 @@ function billingStatusLabel(record) {
   return 'Pending'
 }
 
+function formatPrescriptionOption(prescription, index) {
+  const date = prescription?.date || prescription?.updated_at || 'undated'
+  const lens = prescription?.lens_type || 'Lens type not recorded'
+  const source = prescription?.source === 'exam_form' ? 'Exam Form' : 'Prescription'
+  return `${index === 0 ? 'Latest - ' : ''}${date} - ${lens} (${source})`
+}
+
+function parsePrescriptionRange(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null
+  const numbers = String(value).match(/[+-]?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+  if (numbers.length === 0) return null
+  return [Math.min(...numbers), Math.max(...numbers)]
+}
+
+function numberFromPrescription(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null
+  const number = Number(String(value).replace(',', '.'))
+  return Number.isFinite(number) ? number : null
+}
+
+function valuesWithinRange(values, range) {
+  if (!range) return true
+  const numbers = values.map(numberFromPrescription).filter((value) => value !== null)
+  return numbers.length > 0 && numbers.every((value) => value >= range[0] && value <= range[1])
+}
+
+function samePrescriptionValue(left, right) {
+  const normalize = (value) => {
+    if (value === null || value === undefined || String(value).trim() === '') return ''
+    const normalized = String(value).trim().toUpperCase().replace(',', '.')
+    if (normalized === 'PL' || normalized === 'PLANO') return '0'
+    const number = Number(normalized)
+    return Number.isFinite(number) ? String(number) : normalized
+  }
+  return normalize(left) === normalize(right)
+}
+
+function isExactPrescriptionExample(prescription, example) {
+  return ['sph_od', 'sph_os', 'cyl_od', 'cyl_os', 'add_od', 'add_os']
+    .every((field) => samePrescriptionValue(prescription?.[field], example?.[field]))
+}
+
+function findSellingPriceMatches(prescription, rows) {
+  if (!prescription) return []
+  const lensType = String(prescription.lens_type ?? '').trim().toLowerCase()
+  const material = String(prescription.lens_material ?? '').trim().toLowerCase()
+
+  const rangeMatches = rows
+    .filter((row) => {
+      if (String(row.lens_type ?? '').trim().toLowerCase() !== lensType) return false
+      if (row.lens_material && material && String(row.lens_material).trim().toLowerCase() !== material) return false
+      return valuesWithinRange([prescription.sph_od, prescription.sph_os], parsePrescriptionRange(row.sph_range))
+        && valuesWithinRange([prescription.cyl_od, prescription.cyl_os], parsePrescriptionRange(row.cyl_range))
+        && valuesWithinRange([prescription.add_od, prescription.add_os], parsePrescriptionRange(row.add_range))
+        && row.selling_price !== null
+        && row.selling_price !== undefined
+    })
+    .map((row) => Number(row.selling_price))
+    .filter((price) => Number.isFinite(price) && price > 0)
+    .filter((price, index, prices) => prices.indexOf(price) === index)
+
+  const exactMatches = rows
+    .filter((row) => String(row.lens_type ?? '').trim().toLowerCase() === lensType)
+    .filter((row) => row.lens_material && material && String(row.lens_material).trim().toLowerCase() !== material ? false : true)
+    .filter((row) => (row.prescription_examples ?? []).some((example) => isExactPrescriptionExample(prescription, example)))
+    .map((row) => Number(row.selling_price))
+    .filter((price) => Number.isFinite(price) && price > 0)
+    .filter((price, index, prices) => prices.indexOf(price) === index)
+
+  return exactMatches.length ? exactMatches : rangeMatches
+}
+
+function findCatalogueMatches(prescription, rows) {
+  if (!prescription) return []
+  const lensType = String(prescription.lens_type ?? '').trim().toLowerCase()
+  const material = String(prescription.lens_material ?? '').trim().toLowerCase()
+  return rows.filter((row) => (
+    String(row.lens_type ?? '').trim().toLowerCase() === lensType
+    && (!row.lens_material || !material || String(row.lens_material).trim().toLowerCase() === material)
+    && valuesWithinRange([prescription.sph_od, prescription.sph_os], parsePrescriptionRange(row.sph_range))
+    && valuesWithinRange([prescription.cyl_od, prescription.cyl_os], parsePrescriptionRange(row.cyl_range))
+    && valuesWithinRange([prescription.add_od, prescription.add_os], parsePrescriptionRange(row.add_range))
+  ))
+}
+
 export default function BillingSection({
   session,
   billingMeta,
@@ -56,6 +141,12 @@ export default function BillingSection({
   paymentDetail,
   isLoadingPaymentDetail,
   openBillingPayment,
+  fetchPatientPrescriptions,
+  fetchHistoricalSellingPrices,
+  fetchSellingPriceRules,
+  catalogueSellingPricePrescription,
+  fetchSellingPriceSettings,
+  submitSellingPriceRequest,
   billingError,
   billingSuccess,
   dailyPaymentSearch,
@@ -70,6 +161,15 @@ export default function BillingSection({
   const [refundForm, setRefundForm] = useState({ amount: '', component: '', refund_method: '', reason: '' })
   const [isLoadingRefundOptions, setIsLoadingRefundOptions] = useState(false)
   const [isSubmittingRefund, setIsSubmittingRefund] = useState(false)
+  const [patientPrescriptions, setPatientPrescriptions] = useState([])
+  const [isLoadingPatientPrescriptions, setIsLoadingPatientPrescriptions] = useState(false)
+  const [prescriptionLoadError, setPrescriptionLoadError] = useState('')
+  const [sellingPriceRows, setSellingPriceRows] = useState([])
+  const [receptionistOverrideAllowed, setReceptionistOverrideAllowed] = useState(false)
+  const [isLoadingSellingPrices, setIsLoadingSellingPrices] = useState(false)
+  const [isSubmittingSellingPriceRequest, setIsSubmittingSellingPriceRequest] = useState(false)
+  const [sellingPriceRequestMessage, setSellingPriceRequestMessage] = useState('')
+  const [sellingPriceRequestSubmitted, setSellingPriceRequestSubmitted] = useState(false)
   const [pricingForm, setPricingForm] = useState({
     consultation_price: '100.00',
     existing_consultation_price: '80.00',
@@ -107,6 +207,63 @@ export default function BillingSection({
   const selectedFrameProduct = null
   const framePriceWarning = ''
   const setFramePriceWarning = () => {}
+  const selectedPrescription = patientPrescriptions.find(
+    (prescription) => String(prescription.prescription_id ?? prescription.id) === String(billingForm.prescription_id),
+  )
+  const matchedSellingPrices = useMemo(
+    () => findSellingPriceMatches(selectedPrescription, sellingPriceRows),
+    [selectedPrescription, sellingPriceRows],
+  )
+  const catalogueMatches = useMemo(
+    () => findCatalogueMatches(selectedPrescription, sellingPriceRows),
+    [selectedPrescription, sellingPriceRows],
+  )
+  const matchedSellingPrice = matchedSellingPrices.length === 1 ? matchedSellingPrices[0] : null
+  const manualLensPrice = sumLensItems(normalizedLensItems)
+  const canOverrideMatchedPrice = Boolean(receptionistOverrideAllowed)
+  const hasSellingPriceOverride = Boolean(
+    matchedSellingPrice
+    && Math.abs(manualLensPrice - Number(matchedSellingPrice)) > 0.005,
+  )
+
+  useEffect(() => {
+    setSellingPriceRequestSubmitted(false)
+    setSellingPriceRequestMessage('')
+  }, [billingForm.patient_id, billingForm.prescription_id, matchedSellingPrice, manualLensPrice])
+
+  async function requestSellingPriceReview() {
+    if (!billingForm.patient_id || manualLensPrice <= 0) return
+    if (matchedSellingPrice && !canOverrideMatchedPrice) return
+    setIsSubmittingSellingPriceRequest(true)
+    setSellingPriceRequestMessage('')
+    setSellingPriceRequestSubmitted(false)
+    try {
+      await submitSellingPriceRequest({
+        patient_id: billingForm.patient_id ? Number(billingForm.patient_id) : null,
+        prescription_id: /^\d+$/.test(String(selectedPrescription?.prescription_id ?? selectedPrescription?.id ?? ''))
+          ? Number(selectedPrescription?.prescription_id ?? selectedPrescription?.id)
+          : null,
+        requested_price: manualLensPrice,
+        lens_type: selectedPrescription?.lens_type || '',
+        lens_material: selectedPrescription?.lens_material || '',
+        sph_od: selectedPrescription?.sph_od || '',
+        sph_os: selectedPrescription?.sph_os || '',
+        cyl_od: selectedPrescription?.cyl_od || '',
+        cyl_os: selectedPrescription?.cyl_os || '',
+        add_od: selectedPrescription?.add_od || '',
+        add_os: selectedPrescription?.add_os || '',
+        notes: hasSellingPriceOverride
+          ? `Reception override of approved price GHS ${Number(matchedSellingPrice).toFixed(2)} for the matched prescription range.`
+          : undefined,
+      })
+      setSellingPriceRequestSubmitted(true)
+      setSellingPriceRequestMessage('Price request submitted successfully for Technician and GM approval.')
+    } catch (error) {
+      setSellingPriceRequestMessage(error.message || 'Unable to submit the selling-price request.')
+    } finally {
+      setIsSubmittingSellingPriceRequest(false)
+    }
+  }
 
   const filteredCandidates = useMemo(() => {
     const query = billingPatientSearch.trim().toLowerCase()
@@ -126,6 +283,101 @@ export default function BillingSection({
       setBillingPatientSearch('')
     }
   }, [billingSuccess])
+
+  useEffect(() => {
+    if (!billingForm.patient_id || !isBillingModalOpen) {
+      setPatientPrescriptions([])
+      return
+    }
+
+    let cancelled = false
+    setIsLoadingPatientPrescriptions(true)
+    setPrescriptionLoadError('')
+    fetchPatientPrescriptions(billingForm.patient_id)
+      .then((response) => {
+        if (cancelled) return
+        const prescriptions = (response.prescriptions ?? []).filter((prescription) => (
+          (prescription?.prescription_id !== null && prescription?.prescription_id !== undefined)
+          || (prescription?.id !== null && prescription?.id !== undefined)
+        ))
+        setPatientPrescriptions(prescriptions)
+        const latest = prescriptions[0]
+        if (latest) {
+          setBillingForm((current) => ({
+            ...current,
+            prescription_id: latest.prescription_id ?? latest.id ?? '',
+          }))
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setPrescriptionLoadError(error.message || 'Unable to load prescriptions.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPatientPrescriptions(false)
+      })
+
+    return () => { cancelled = true }
+  }, [billingForm.patient_id, fetchPatientPrescriptions, isBillingModalOpen, setBillingForm])
+
+  useEffect(() => {
+    if (!isBillingModalOpen) return undefined
+    let cancelled = false
+    setIsLoadingSellingPrices(true)
+    fetchSellingPriceRules()
+      .then((response) => {
+        if (!cancelled) setSellingPriceRows(response.records ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setSellingPriceRows([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSellingPrices(false)
+      })
+    return () => { cancelled = true }
+  }, [fetchSellingPriceRules, isBillingModalOpen])
+
+  useEffect(() => {
+    if (!isBillingModalOpen || !selectedPrescription || catalogueMatches.length > 0) return undefined
+    let cancelled = false
+    catalogueSellingPricePrescription({
+      lens_type: selectedPrescription.lens_type,
+      lens_material: selectedPrescription.lens_material,
+      lens_index: selectedPrescription.lens_index,
+      sph_od: selectedPrescription.sph_od,
+      sph_os: selectedPrescription.sph_os,
+      cyl_od: selectedPrescription.cyl_od,
+      cyl_os: selectedPrescription.cyl_os,
+      add_od: selectedPrescription.add_od,
+      add_os: selectedPrescription.add_os,
+    }).then(() => {
+      if (!cancelled) return fetchSellingPriceRules()
+    }).then((response) => {
+      if (!cancelled && response) setSellingPriceRows(response.records ?? [])
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [catalogueMatches.length, catalogueSellingPricePrescription, fetchSellingPriceRules, isBillingModalOpen, selectedPrescription])
+
+  useEffect(() => {
+    if (!isBillingModalOpen) return undefined
+    let cancelled = false
+    fetchSellingPriceSettings()
+      .then((response) => {
+        if (!cancelled) setReceptionistOverrideAllowed(Boolean(Number(response.receptionist_override_allowed ?? 0)))
+      })
+      .catch(() => {
+        if (!cancelled) setReceptionistOverrideAllowed(false)
+      })
+    return () => { cancelled = true }
+  }, [fetchSellingPriceSettings, isBillingModalOpen])
+
+  useEffect(() => {
+    if (!matchedSellingPrice) return
+    setBillingForm((current) => ({
+      ...current,
+      lens_price: Number(matchedSellingPrice).toFixed(2),
+      lens_items: [{ amount: Number(matchedSellingPrice).toFixed(2) }],
+    }))
+  }, [matchedSellingPrice, setBillingForm])
 
   useEffect(() => {
     if (!billingMeta?.standard_prices) return
@@ -519,7 +771,7 @@ export default function BillingSection({
 
       {isBillingModalOpen ? (
         <div className="modal-overlay" onClick={() => setIsBillingModalOpen(false)}>
-          <article className="modal-panel" onClick={(event) => event.stopPropagation()}>
+          <article className="modal-panel billing-create-modal" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Create Bill</p>
@@ -563,7 +815,7 @@ export default function BillingSection({
                       patient_id: selected?.id ?? '',
                       folder_id: selected?.folder_id ?? '',
                       name: selected?.name ?? '',
-                      prescription_id: selected?.prescription_id ?? '',
+                      prescription_id: '',
                       consultation_customer_type: selected?.is_existing_customer ? 'existing' : 'new',
                       frame_code_id: '',
                       frame_price: '0.00',
@@ -585,6 +837,55 @@ export default function BillingSection({
               </label>
               {billingPatientSearch && filteredCandidates.length === 0 ? (
                 <p className="muted-copy full-span">No patients match that search in the patient database yet.</p>
+              ) : null}
+              {billingForm.patient_id ? (
+                <label className="full-span">
+                  Optometrist prescription
+                  <select
+                    value={billingForm.prescription_id ? String(billingForm.prescription_id) : ''}
+                    onChange={(event) => setBillingForm((current) => ({
+                      ...current,
+                      prescription_id: event.target.value,
+                      lens_price: '0.00',
+                      lens_items: [{ amount: '0.00' }],
+                    }))}
+                    disabled={isLoadingPatientPrescriptions}
+                  >
+                    <option value="">
+                      {isLoadingPatientPrescriptions ? 'Loading prescriptions...' : patientPrescriptions.length ? 'Select prescription' : 'Not available'}
+                    </option>
+                    {patientPrescriptions.map((prescription, index) => (
+                      <option
+                        key={`${prescription.prescription_id ?? prescription.id}-${index}`}
+                        value={prescription.prescription_id ?? prescription.id}
+                      >
+                        {formatPrescriptionOption(prescription, index)}
+                      </option>
+                    ))}
+                  </select>
+                  {prescriptionLoadError ? <small className="billing-field-warning">{prescriptionLoadError}</small> : null}
+                  {isLoadingPatientPrescriptions ? (
+                    <small className="billing-loading-line"><span className="billing-loading-spinner" /> Loading optometrist prescription...</small>
+                  ) : patientPrescriptions.length === 0 ? (
+                    <small className="billing-field-warning">Not available — enter the lens selling price manually and submit it for approval.</small>
+                  ) : null}
+                </label>
+              ) : null}
+              {billingForm.patient_id ? (
+                <div className="full-span billing-prescription-price">
+                  <strong>Lens selling price</strong>
+                  {isLoadingPatientPrescriptions ? <span className="billing-loading-line"><span className="billing-loading-spinner" /> Loading prescription...</span> : isLoadingSellingPrices ? <span className="muted-copy">Checking approved price ranges...</span> : matchedSellingPrice ? (
+                    <span className="billing-matched-price">Fetched: GHS {Number(matchedSellingPrice).toFixed(2)}{canOverrideMatchedPrice ? ' — override allowed' : ' — locked by GM/Technician'}</span>
+                  ) : !selectedPrescription ? (
+                    <span className="billing-field-warning">Not available — enter the lens selling price below.</span>
+                  ) : matchedSellingPrices.length > 1 ? (
+                    <span className="billing-field-warning">Multiple selling prices match. Technician or GM review is required.</span>
+                  ) : catalogueMatches.length > 0 ? (
+                    <span className="billing-field-warning">Lens range found, but no approved selling price has been entered. Enter a price and submit it for approval.</span>
+                  ) : (
+                    <span className="billing-field-warning">No unique selling price found. Enter the authorized price below.</span>
+                  )}
+                </div>
               ) : null}
 
               <label>
@@ -662,6 +963,7 @@ export default function BillingSection({
                           type="number"
                           step="0.01"
                           value={item.amount}
+                          readOnly={Boolean(matchedSellingPrice && !canOverrideMatchedPrice)}
                           onChange={(event) =>
                             setBillingForm((current) => ({
                               ...current,
@@ -685,9 +987,20 @@ export default function BillingSection({
                       >
                         Remove
                       </button>
+                      {(!matchedSellingPrice || (canOverrideMatchedPrice && hasSellingPriceOverride)) ? (
+                        <button
+                          type="button"
+                          className={sellingPriceRequestSubmitted ? 'ghost-button selling-price-request-success' : 'ghost-button'}
+                          onClick={requestSellingPriceReview}
+                          disabled={sellingPriceRequestSubmitted || manualLensPrice <= 0 || isSubmittingSellingPriceRequest || (matchedSellingPrice && !hasSellingPriceOverride)}
+                        >
+                          {isSubmittingSellingPriceRequest ? 'Submitting...' : sellingPriceRequestSubmitted ? 'Submitted successfully' : hasSellingPriceOverride ? 'Submit override for approval' : 'Submit price for approval'}
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                 </div>
+                {sellingPriceRequestMessage ? <small className="billing-field-note">{sellingPriceRequestMessage}</small> : null}
                 <div className="billing-line-items-total">
                   <span>Lens total</span>
                   <strong>{currency.format(sumLensItems(normalizedLensItems))}</strong>

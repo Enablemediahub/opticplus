@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import AccountantDashboardSection from './components/AccountantDashboardSection.jsx'
 import AuditLogSection from './components/AuditLogSection.jsx'
@@ -35,6 +35,7 @@ import PortalIcon from './components/PortalIcon.jsx'
 import ReportsSection from './components/ReportsSection.jsx'
 import MonitorSection from './components/MonitorSection.jsx'
 import SettingsSection from './components/SettingsSection.jsx'
+import SellingPricelistSection from './components/SellingPricelistSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
 import TechnicianDashboardSection from './components/TechnicianDashboardSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
@@ -87,6 +88,7 @@ const managerNavSections = [
     items: [
       { label: 'Inventory', navLabel: 'Product Tracker', icon: 'inventory' },
       { label: 'Lens Orders', navLabel: 'Lens Order Management', icon: 'glasses' },
+      { label: 'Selling Pricelist', navLabel: 'Lens Selling Pricelist', icon: 'money' },
       { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
       { label: 'Assets Register', navLabel: 'Company Assets', icon: 'briefcase' },
     ],
@@ -184,6 +186,7 @@ const technicianNavSections = [
       { label: 'Lens Tracker', navLabel: 'Lens Tracker', icon: 'glasses' },
       { label: 'Lens Orders', navLabel: 'Lens Orders', icon: 'receipt' },
       { label: 'Prescription Reference', navLabel: 'Prescription Reference', icon: 'reports' },
+      { label: 'Selling Pricelist', navLabel: 'Lens Selling Pricelist', icon: 'money' },
     ],
   },
   {
@@ -326,6 +329,7 @@ const viewHashMap = {
   'Lens Tracker': '#/lens-tracker',
   'Product Tracker': '#/product-tracker',
   'Lens Orders': '#/lens-orders',
+  'Selling Pricelist': '#/selling-pricelist',
   'Place Lens Order': '#/place-lens-order',
   'Prescription Reference': '#/prescription-reference',
   Memos: '#/memos',
@@ -356,7 +360,7 @@ const financeViews = ['Finance', 'Sales', 'Revenue Tracking', 'Expenses', 'Extra
 const paymentDetailViews = ['Billing', ...financeViews]
 const insuranceViews = ['Insurance', 'Insurance Claims']
 const inventoryViews = ['Inventory', 'Lens Tracker', 'Product Tracker', 'BSMI Tracking', 'Assets Register', 'Memos']
-const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Notes']
+const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Selling Pricelist', 'Notes']
 const optometristPatientViews = [
   'Patient Management',
   'Prescription Reference',
@@ -836,7 +840,7 @@ function App() {
   const canSwitchBranch = session?.is_admin || isTechnician
   const scopedBranchId = canSwitchBranch ? selectedBranchId : session?.branch_id
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
-  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
+  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Selling Pricelist', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
   const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
@@ -3425,7 +3429,7 @@ function App() {
     return response
   }
 
-  async function fetchPatientPrescriptions(recordId) {
+  const fetchPatientPrescriptions = useCallback(async (recordId) => {
     const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
     const params = new URLSearchParams()
     if (branchId !== undefined && branchId !== null) {
@@ -3435,7 +3439,7 @@ function App() {
     return apiFetch(`/patients/${recordId}/prescriptions${params.toString() ? `?${params.toString()}` : ''}`, {
       token,
     })
-  }
+  }, [selectedBranchId, session, token])
 
   async function fetchPatientPayments(recordId) {
     const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
@@ -3746,6 +3750,83 @@ function App() {
     const branchId = session.is_admin ? selectedBranchId : session.branch_id
     return apiFetch(`/billing/${billingId}/refund-options?branch_id=${branchId}`, { token })
   }
+
+  const fetchHistoricalSellingPrices = useCallback(async () => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/historical?branch_id=${branchId}`, { token })
+  }, [selectedBranchId, session, token])
+
+  const submitSellingPriceRequest = useCallback(async (payload) => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch('/selling-pricelist/requests', {
+      method: 'POST',
+      token,
+      body: { ...payload, branch_id: branchId },
+    })
+  }, [selectedBranchId, session, token])
+
+  const fetchSellingPriceRequests = useCallback(async () => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/requests?branch_id=${branchId}`, { token })
+  }, [selectedBranchId, session, token])
+
+  const fetchSellingPriceRules = useCallback(async () => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/rules?branch_id=${branchId}`, { token })
+  }, [selectedBranchId, session, token])
+
+  const catalogueSellingPricePrescription = useCallback(async (payload) => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/catalogue?branch_id=${branchId}`, {
+      method: 'POST',
+      token,
+      body: payload,
+    })
+  }, [selectedBranchId, session, token])
+
+  const fetchSellingPriceSettings = useCallback(async () => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/settings?branch_id=${branchId}`, { token })
+  }, [selectedBranchId, session, token])
+
+  const updateSellingPriceSettings = useCallback(async (payload) => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/settings?branch_id=${branchId}`, {
+      method: 'PUT',
+      token,
+      body: payload,
+    })
+  }, [selectedBranchId, session, token])
+
+  const bootstrapSellingPriceRules = useCallback(async () => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/rules/bootstrap?branch_id=${branchId}`, {
+      method: 'POST',
+      token,
+    })
+  }, [selectedBranchId, session, token])
+
+  const saveSellingPriceRule = useCallback(async (payload, ruleId = null) => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/rules${ruleId ? `/${ruleId}` : ''}?branch_id=${branchId}`, {
+      method: ruleId ? 'PUT' : 'POST',
+      token,
+      body: payload,
+    })
+  }, [selectedBranchId, session, token])
+
+  const deleteSellingPriceRule = useCallback(async (ruleId) => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/rules/${ruleId}?branch_id=${branchId}`, { method: 'DELETE', token })
+  }, [selectedBranchId, session, token])
+
+  const approveSellingPriceRequest = useCallback(async (requestId) => {
+    const branchId = session.is_admin ? selectedBranchId : session.branch_id
+    return apiFetch(`/selling-pricelist/requests/${requestId}/approve?branch_id=${branchId}`, {
+      method: 'POST',
+      token,
+    })
+  }, [selectedBranchId, session, token])
 
   async function refundBillingRecord(billingId, refund) {
     const branchId = session.is_admin ? selectedBranchId : session.branch_id
@@ -5480,6 +5561,13 @@ function App() {
                 paymentDetail={paymentDetail}
                 isLoadingPaymentDetail={isLoadingPaymentDetail}
                 openBillingPayment={(billingId) => openPaymentModal(billingId, 'Billing')}
+                fetchPatientPrescriptions={fetchPatientPrescriptions}
+                fetchHistoricalSellingPrices={fetchHistoricalSellingPrices}
+                fetchSellingPriceRules={fetchSellingPriceRules}
+                catalogueSellingPricePrescription={catalogueSellingPricePrescription}
+                fetchSellingPriceSettings={fetchSellingPriceSettings}
+                bootstrapSellingPriceRules={bootstrapSellingPriceRules}
+                submitSellingPriceRequest={submitSellingPriceRequest}
                 billingError={billingError}
                 billingSuccess={billingSuccess}
                 dailyPaymentSearch={dailyPaymentSearch}
@@ -6032,6 +6120,20 @@ function App() {
               />
             ) : null}
 
+            {activeView === 'Selling Pricelist' && (isGeneralManager || isTechnician) ? (
+              <SellingPricelistSection
+                session={session}
+                fetchHistoricalSellingPrices={fetchHistoricalSellingPrices}
+                fetchSellingPriceRequests={fetchSellingPriceRequests}
+                fetchSellingPriceRules={fetchSellingPriceRules}
+                fetchSellingPriceSettings={fetchSellingPriceSettings}
+                updateSellingPriceSettings={updateSellingPriceSettings}
+                approveSellingPriceRequest={approveSellingPriceRequest}
+                saveSellingPriceRule={saveSellingPriceRule}
+                deleteSellingPriceRule={deleteSellingPriceRule}
+              />
+            ) : null}
+
             {activeView === 'BSMI Tracking' ? (
               <BsmiTrackingSection
                 bsmiData={inventoryBsmiData}
@@ -6167,7 +6269,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Selling Pricelist', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>

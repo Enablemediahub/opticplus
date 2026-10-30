@@ -129,6 +129,583 @@ class BillingController extends Controller
         ]);
     }
 
+    public function historicalLensSellingPrices(Request $request): JsonResponse
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if (! in_array($role, ['manager', 'technician', 'receptionist'], true)) {
+            return response()->json(['message' => 'This role cannot view selling-price matches.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $records = DB::table('billing as b')
+            ->leftJoin('glasses_prescriptions as gp', function ($join): void {
+                $join->on('gp.prescription_id', '=', 'b.prescription_id')
+                    ->on('gp.folder_id', '=', 'b.folder_id');
+            })
+            ->when($branchId > 0, fn ($query) => $query->where('b.branch_id', $branchId))
+            ->whereIn('b.status', ['paid', 'completed'])
+            ->where('b.lens_price', '>', 0)
+            ->orderByDesc('b.date')
+            ->orderByDesc('b.id')
+            ->limit(500)
+            ->get([
+                'b.id as billing_id',
+                'b.date as billed_date',
+                'b.status as billing_status',
+                'b.lens_price',
+                'b.folder_id',
+                'b.name as patient_name',
+                'gp.prescription_id',
+                'gp.lens_type',
+                'gp.lens_material',
+                'gp.sph_od',
+                'gp.sph_os',
+                'gp.cyl_od',
+                'gp.cyl_os',
+                'gp.add_od',
+                'gp.add_os',
+                'gp.ipd',
+            ]);
+
+        $formRows = DB::table('patient_form_data as pfd')
+            ->whereIn('folder_id', $records->pluck('folder_id')->unique()->values())
+            ->when(
+                Schema::hasColumn('patient_form_data', 'branch_id') && $branchId > 0,
+                fn ($query) => $query->where('pfd.branch_id', $branchId),
+            )
+            ->get(['pfd.folder_id', 'pfd.updated_at', 'pfd.form_data']);
+
+        foreach ($records->whereNull('prescription_id') as $record) {
+            $matchingForms = $formRows
+                ->filter(function ($candidate) use ($record): bool {
+                    return $candidate->folder_id === $record->folder_id
+                        && substr((string) $candidate->updated_at, 0, 10) === substr((string) $record->billed_date, 0, 10);
+                })
+                ->map(fn ($candidate) => $this->examFormPrescription($candidate->form_data))
+                ->filter()
+                ->values();
+
+            // Do not assign a bill when multiple prescriptions exist on the same day.
+            if ($matchingForms->count() !== 1) {
+                continue;
+            }
+
+            $records->push((object) [
+                'billing_id' => $record->billing_id,
+                'billed_date' => $record->billed_date,
+                'billing_status' => $record->billing_status,
+                'lens_price' => $record->lens_price,
+                'folder_id' => $record->folder_id,
+                'patient_name' => $record->patient_name,
+                'prescription_id' => null,
+                ...$matchingForms->first(),
+            ]);
+        }
+
+        $records = $records
+            ->filter(fn ($record) => trim((string) ($record->lens_type ?? '')) !== '')
+            ->values();
+
+        $grouped = $records
+            ->groupBy(fn ($record) => implode('|', [
+                $record->lens_type ?? '',
+                $record->lens_material ?? '',
+                number_format((float) $record->lens_price, 2, '.', ''),
+            ]))
+            ->values()
+            ->map(function ($matches, int $index): array {
+                $prices = $matches->pluck('lens_price')->map(fn ($price) => (float) $price)->unique()->values();
+                $first = $matches->first();
+                $sphValues = $this->prescriptionNumbers($matches, ['sph_od', 'sph_os']);
+                $cylValues = $this->prescriptionNumbers($matches, ['cyl_od', 'cyl_os']);
+                $addValues = $this->prescriptionNumbers($matches, ['add_od', 'add_os']);
+
+                return [
+                    'id' => "historical-range-{$index}",
+                    'prescription_count' => $matches->count(),
+                    'category' => $this->lensCategory($first->lens_type),
+                    'lens_type' => $first->lens_type,
+                    'lens_material' => $first->lens_material,
+                    'sph_range' => $this->formatPrescriptionRange($sphValues),
+                    'cyl_range' => $this->formatPrescriptionRange($cylValues),
+                    'add_range' => $this->formatPrescriptionRange($addValues),
+                    'selling_price' => $prices->count() === 1 ? $prices->first() : null,
+                    'historical_prices' => $prices,
+                    'prescription_examples' => $matches->map(fn ($match) => [
+                        'sph_od' => $match->sph_od,
+                        'sph_os' => $match->sph_os,
+                        'cyl_od' => $match->cyl_od,
+                        'cyl_os' => $match->cyl_os,
+                        'add_od' => $match->add_od,
+                        'add_os' => $match->add_os,
+                    ])->values(),
+                    'status' => 'Pre-list - pending review',
+                ];
+            });
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'currency' => 'GHS',
+            'source' => 'paid_or_completed_bills',
+            'records' => $grouped,
+        ]);
+    }
+
+    private function examFormPrescription(?string $formData): ?array
+    {
+        $data = $formData ? json_decode($formData, true) : null;
+        $od = $data['spectacle_rx']['od'] ?? null;
+        $os = $data['spectacle_rx']['os'] ?? null;
+        if (! is_array($od) && ! is_array($os)) {
+            return null;
+        }
+
+        return [
+            'lens_type' => is_array($od) ? ($od['lens_type'] ?? '') : ($os['lens_type'] ?? ''),
+            'lens_material' => null,
+            'sph_od' => is_array($od) ? ($od['sphere'] ?? '') : '',
+            'sph_os' => is_array($os) ? ($os['sphere'] ?? '') : '',
+            'cyl_od' => is_array($od) ? ($od['cylinder'] ?? '') : '',
+            'cyl_os' => is_array($os) ? ($os['cylinder'] ?? '') : '',
+            'add_od' => is_array($od) ? ($od['add'] ?? '') : '',
+            'add_os' => is_array($os) ? ($os['add'] ?? '') : '',
+            'ipd' => null,
+        ];
+    }
+
+    public function storeSellingPriceRequest(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        $validated = $request->validate([
+            'patient_id' => ['nullable', 'integer'],
+            'prescription_id' => ['nullable', 'integer'],
+            'requested_price' => ['required', 'numeric', 'gt:0'],
+            'lens_type' => ['nullable', 'string', 'max:255'],
+            'lens_material' => ['nullable', 'string', 'max:255'],
+            'sph_od' => ['nullable', 'string', 'max:20'],
+            'sph_os' => ['nullable', 'string', 'max:20'],
+            'cyl_od' => ['nullable', 'string', 'max:20'],
+            'cyl_os' => ['nullable', 'string', 'max:20'],
+            'add_od' => ['nullable', 'string', 'max:20'],
+            'add_os' => ['nullable', 'string', 'max:20'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $requestId = DB::table('lens_selling_price_requests')->insertGetId([
+            'branch_id' => $branchId,
+            'patient_id' => $validated['patient_id'] ?? null,
+            'prescription_id' => $validated['prescription_id'] ?? null,
+            'requested_by' => $request->user()?->id,
+            'status' => 'pending',
+            'requested_price' => $validated['requested_price'],
+            'lens_type' => $validated['lens_type'] ?? null,
+            'lens_material' => $validated['lens_material'] ?? null,
+            'sph_od' => $validated['sph_od'] ?? null,
+            'sph_os' => $validated['sph_os'] ?? null,
+            'cyl_od' => $validated['cyl_od'] ?? null,
+            'cyl_os' => $validated['cyl_os'] ?? null,
+            'add_od' => $validated['add_od'] ?? null,
+            'add_os' => $validated['add_os'] ?? null,
+            'notes' => $validated['notes'] ?? 'Manual selling price requested from billing.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Selling-price request submitted for Technician and GM approval.',
+            'request_id' => $requestId,
+            'status' => 'pending',
+        ], 201);
+    }
+
+    public function sellingPriceRequests(Request $request): JsonResponse
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if (! in_array($role, ['manager', 'technician'], true)) {
+            return response()->json(['message' => 'Only the General Manager or Technician can view selling-price requests.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $records = DB::table('lens_selling_price_requests')
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get();
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'records' => $records,
+        ]);
+    }
+
+    public function approveSellingPriceRequest(Request $request, int $requestId): JsonResponse
+    {
+        $this->ensureSellingPriceRuleAccess($request);
+        $branchId = $this->resolveBranchId($request);
+        $priceRequest = DB::table('lens_selling_price_requests')
+            ->where('id', $requestId)
+            ->where('branch_id', $branchId)
+            ->where('status', 'pending')
+            ->first();
+
+        if (! $priceRequest) {
+            return response()->json(['message' => 'Pending selling-price request not found.'], 404);
+        }
+
+        $range = static function (...$values): ?string {
+            $numbers = collect($values)
+                ->map(fn ($value) => is_numeric($value) ? (float) $value : null)
+                ->filter(fn ($value) => $value !== null)
+                ->values();
+            if ($numbers->isEmpty()) return null;
+            $min = $numbers->min();
+            $max = $numbers->max();
+            return $min === $max
+                ? number_format($min, 2, '.', '')
+                : number_format($max, 2, '.', '').' to '.number_format($min, 2, '.', '');
+        };
+        $example = [
+            'sph_od' => $priceRequest->sph_od ?? '',
+            'sph_os' => $priceRequest->sph_os ?? '',
+            'cyl_od' => $priceRequest->cyl_od ?? '',
+            'cyl_os' => $priceRequest->cyl_os ?? '',
+            'add_od' => $priceRequest->add_od ?? '',
+            'add_os' => $priceRequest->add_os ?? '',
+        ];
+        $ruleValues = [
+            'category' => $this->lensCategory($priceRequest->lens_type),
+            'lens_type' => $priceRequest->lens_type ?? 'Other',
+            'lens_material' => $priceRequest->lens_material,
+            'lens_index' => null,
+            'sph_range' => $range($priceRequest->sph_od, $priceRequest->sph_os),
+            'cyl_range' => $range($priceRequest->cyl_od, $priceRequest->cyl_os),
+            'add_range' => $range($priceRequest->add_od, $priceRequest->add_os),
+            'price_label' => null,
+            'selling_price' => $priceRequest->requested_price,
+            'prescription_examples' => json_encode([$example]),
+            'prescription_count' => 1,
+            'status' => 'approved',
+            'updated_by' => $request->user()?->id,
+            'updated_at' => now(),
+        ];
+
+        DB::transaction(function () use ($request, $requestId, $branchId, $priceRequest, $ruleValues): void {
+            DB::table('lens_selling_price_rules')->insert([
+                ...$ruleValues,
+                'branch_id' => $branchId,
+                'created_by' => $request->user()?->id,
+                'created_at' => now(),
+                'notes' => 'Approved from receptionist selling-price request #'.$requestId.'.',
+            ]);
+            DB::table('lens_selling_price_requests')
+                ->where('id', $requestId)
+                ->update([
+                    'status' => 'approved',
+                    'updated_at' => now(),
+                ]);
+        });
+
+        return response()->json(['message' => 'Selling-price request approved and added to the catalogue.']);
+    }
+
+    public function sellingPriceRules(Request $request): JsonResponse
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if (! in_array($role, ['manager', 'technician', 'receptionist'], true)) {
+            return response()->json(['message' => 'This role cannot view selling-price rules.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        return response()->json([
+            'branch_id' => $branchId,
+            'currency' => 'GHS',
+            'records' => DB::table('lens_selling_price_rules')
+                ->whereIn('status', ['approved', 'pending_price'])
+                ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                ->orderBy('category')
+                ->orderBy('lens_type')
+                ->orderBy('id')
+                ->get()
+                ->map(function ($record) {
+                    $record->prescription_examples = $record->prescription_examples
+                        ? json_decode($record->prescription_examples, true)
+                        : [];
+                        $record->prescription_count = (int) ($record->prescription_count ?? count($record->prescription_examples));
+                    return $record;
+                }),
+        ]);
+    }
+
+    public function catalogueSellingPricePrescription(Request $request): JsonResponse
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if (! in_array($role, ['manager', 'technician', 'receptionist', 'optometrist'], true)) {
+            return response()->json(['message' => 'This role cannot add lens catalogue entries.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $validated = $request->validate([
+            'lens_type' => ['required', 'string', 'max:255'],
+            'lens_material' => ['nullable', 'string', 'max:255'],
+            'lens_index' => ['nullable', 'string', 'max:50'],
+            'sph_od' => ['nullable', 'string', 'max:20'],
+            'sph_os' => ['nullable', 'string', 'max:20'],
+            'cyl_od' => ['nullable', 'string', 'max:20'],
+            'cyl_os' => ['nullable', 'string', 'max:20'],
+            'add_od' => ['nullable', 'string', 'max:20'],
+            'add_os' => ['nullable', 'string', 'max:20'],
+        ]);
+        $range = static function (...$values): ?string {
+            $numbers = collect($values)->map(fn ($value) => is_numeric($value) ? (float) $value : null)->filter(fn ($value) => $value !== null)->values();
+            if ($numbers->isEmpty()) return null;
+            $min = $numbers->min();
+            $max = $numbers->max();
+            return $min === $max ? number_format($min, 2, '.', '') : number_format($max, 2, '.', '').' to '.number_format($min, 2, '.', '');
+        };
+        $lensType = trim($validated['lens_type']);
+        $lensMaterial = $validated['lens_material'] ?? null;
+        $lensIndex = $validated['lens_index'] ?? null;
+        $sphRange = $range($validated['sph_od'] ?? null, $validated['sph_os'] ?? null);
+        $cylRange = $range($validated['cyl_od'] ?? null, $validated['cyl_os'] ?? null);
+        $addRange = $range($validated['add_od'] ?? null, $validated['add_os'] ?? null);
+        $existing = DB::table('lens_selling_price_rules')
+            ->where('branch_id', $branchId)
+            ->where('status', 'pending_price')
+            ->where('lens_type', $lensType)
+            ->where('lens_material', $lensMaterial)
+            ->where('lens_index', $lensIndex)
+            ->where('sph_range', $sphRange)
+            ->where('cyl_range', $cylRange)
+            ->where('add_range', $addRange)
+            ->first();
+        if ($existing) return response()->json(['record' => $existing, 'created' => false]);
+
+        $record = [
+            'branch_id' => $branchId,
+            'category' => $this->lensCategory($lensType),
+            'lens_type' => $lensType,
+            'lens_material' => $lensMaterial,
+            'lens_index' => $lensIndex,
+            'sph_range' => $sphRange,
+            'cyl_range' => $cylRange,
+            'add_range' => $addRange,
+            'price_label' => null,
+            'selling_price' => null,
+            'status' => 'pending_price',
+            'notes' => 'Automatically added from an optometrist prescription; price pending GM or Technician approval.',
+            'prescription_examples' => json_encode([[
+                'sph_od' => $validated['sph_od'] ?? '',
+                'sph_os' => $validated['sph_os'] ?? '',
+                'cyl_od' => $validated['cyl_od'] ?? '',
+                'cyl_os' => $validated['cyl_os'] ?? '',
+                'add_od' => $validated['add_od'] ?? '',
+                'add_os' => $validated['add_os'] ?? '',
+            ]]),
+            'prescription_count' => 1,
+            'created_by' => $request->user()?->id,
+            'updated_by' => $request->user()?->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+        $id = DB::table('lens_selling_price_rules')->insertGetId($record);
+        return response()->json(['record' => DB::table('lens_selling_price_rules')->where('id', $id)->first(), 'created' => true], 201);
+    }
+
+    public function sellingPriceSettings(Request $request): JsonResponse
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        if (! in_array($role, ['manager', 'technician', 'receptionist'], true)) {
+            return response()->json(['message' => 'This role cannot view selling-price settings.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $settings = DB::table('lens_selling_price_settings')->where('branch_id', $branchId)->first();
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'receptionist_override_allowed' => $settings?->receptionist_override_allowed ?? true,
+        ]);
+    }
+
+    public function updateSellingPriceSettings(Request $request): JsonResponse
+    {
+        $this->ensureSellingPriceRuleAccess($request);
+        $branchId = $this->resolveBranchId($request);
+        $validated = $request->validate([
+            'receptionist_override_allowed' => ['required', 'boolean'],
+        ]);
+
+        DB::table('lens_selling_price_settings')->updateOrInsert(
+            ['branch_id' => $branchId],
+            [
+                'receptionist_override_allowed' => $validated['receptionist_override_allowed'],
+                'updated_by' => $request->user()?->id,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
+        return $this->sellingPriceSettings($request);
+    }
+
+    public function bootstrapSellingPriceRules(Request $request): JsonResponse
+    {
+        $this->ensureSellingPriceRuleAccess($request);
+        $branchId = $this->resolveBranchId($request);
+        $existing = DB::table('lens_selling_price_rules')
+            ->where('branch_id', $branchId)
+            ->where('status', 'approved')
+            ->exists();
+        if ($existing) {
+            return $this->sellingPriceRules($request);
+        }
+
+        $historical = $this->historicalLensSellingPrices($request)->getData(true)['records'] ?? [];
+        foreach ($historical as $record) {
+            if (($record['selling_price'] ?? null) === null) {
+                continue;
+            }
+            DB::table('lens_selling_price_rules')->insert([
+                'branch_id' => $branchId,
+                'category' => $record['category'] ?? null,
+                'lens_type' => $record['lens_type'] ?? '',
+                'lens_material' => $record['lens_material'] ?? null,
+                'sph_range' => $record['sph_range'] ?? null,
+                'cyl_range' => $record['cyl_range'] ?? null,
+                'add_range' => $record['add_range'] ?? null,
+                'selling_price' => $record['selling_price'],
+                'prescription_examples' => json_encode($record['prescription_examples'] ?? []),
+                'prescription_count' => $record['prescription_count'] ?? count($record['prescription_examples'] ?? []),
+                'status' => 'approved',
+                'created_by' => $request->user()?->id,
+                'updated_by' => $request->user()?->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $this->sellingPriceRules($request);
+    }
+
+    public function storeSellingPriceRule(Request $request): JsonResponse
+    {
+        return $this->saveSellingPriceRule($request);
+    }
+
+    public function updateSellingPriceRule(Request $request, int $ruleId): JsonResponse
+    {
+        return $this->saveSellingPriceRule($request, $ruleId);
+    }
+
+    public function deleteSellingPriceRule(Request $request, int $ruleId): JsonResponse
+    {
+        $this->ensureSellingPriceRuleAccess($request);
+        $branchId = $this->resolveBranchId($request);
+        $deleted = DB::table('lens_selling_price_rules')
+            ->where('id', $ruleId)
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->delete();
+
+        if ($deleted === 0) {
+            return response()->json(['message' => 'Selling-price rule not found.'], 404);
+        }
+
+        return response()->json(['message' => 'Selling-price rule deleted.']);
+    }
+
+    private function saveSellingPriceRule(Request $request, ?int $ruleId = null): JsonResponse
+    {
+        $this->ensureSellingPriceRuleAccess($request);
+        $branchId = $this->resolveBranchId($request);
+        $validated = $request->validate([
+            'category' => ['nullable', 'string', 'max:255'],
+            'lens_type' => ['required', 'string', 'max:255'],
+            'lens_material' => ['nullable', 'string', 'max:255'],
+            'lens_index' => ['nullable', 'string', 'max:50'],
+            'sph_range' => ['nullable', 'string', 'max:100'],
+            'cyl_range' => ['nullable', 'string', 'max:100'],
+            'add_range' => ['nullable', 'string', 'max:100'],
+            'price_label' => ['nullable', 'string', 'max:100'],
+            'selling_price' => ['nullable', 'numeric', 'gt:0'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'receptionist_override_allowed' => ['sometimes', 'boolean'],
+        ]);
+
+        $values = [
+            ...$validated,
+            'branch_id' => $branchId,
+            'status' => empty($validated['selling_price']) ? 'pending_price' : 'approved',
+            'updated_by' => $request->user()?->id,
+            'updated_at' => now(),
+            'prescription_examples' => json_encode($request->input('prescription_examples', [])),
+            'prescription_count' => count($request->input('prescription_examples', [])),
+        ];
+        if ($ruleId === null) {
+            $values['created_by'] = $request->user()?->id;
+            $values['created_at'] = now();
+            $ruleId = DB::table('lens_selling_price_rules')->insertGetId($values);
+        } else {
+            $updated = DB::table('lens_selling_price_rules')
+                ->where('id', $ruleId)
+                ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                ->update($values);
+            if ($updated === 0) {
+                return response()->json(['message' => 'Selling-price rule not found.'], 404);
+            }
+        }
+
+        return response()->json([
+            'message' => empty($validated['selling_price'])
+                ? 'Selling-price catalogue entry saved with price pending.'
+                : ($ruleId ? 'Selling-price rule saved as approved.' : 'Selling-price rule approved.'),
+            'record' => DB::table('lens_selling_price_rules')->where('id', $ruleId)->first(),
+        ], $ruleId ? 200 : 201);
+    }
+
+    private function ensureSellingPriceRuleAccess(Request $request): void
+    {
+        $role = $request->user()?->normalized_role ?? $request->user()?->role;
+        abort_unless(in_array($role, ['manager', 'technician'], true), 403, 'Only the General Manager or Technician can edit selling-price rules.');
+    }
+
+    private function prescriptionNumbers($records, array $fields): array
+    {
+        return $records
+            ->flatMap(fn ($record) => collect($fields)->map(fn ($field) => $record->{$field} ?? null))
+            ->map(function ($value) {
+                if ($value === null || trim((string) $value) === '') {
+                    return null;
+                }
+                $normalized = str_replace(',', '.', trim((string) $value));
+                return is_numeric($normalized) ? (float) $normalized : null;
+            })
+            ->filter(fn ($value) => $value !== null)
+            ->values()
+            ->all();
+    }
+
+    private function formatPrescriptionRange(array $values): ?string
+    {
+        if ($values === []) {
+            return null;
+        }
+
+        $min = min($values);
+        $max = max($values);
+        $format = static fn (float $value): string => number_format($value, 2, '.', '');
+
+        return $min === $max ? $format($min) : "{$format($max)} to {$format($min)}";
+    }
+
+    private function lensCategory(?string $lensType): string
+    {
+        $value = strtolower((string) $lensType);
+        if (str_contains($value, 'prog')) return 'Progressive';
+        if (str_contains($value, 'bf') || str_contains($value, 'bifocal')) return 'Bifocal';
+        if (str_contains($value, 'sv') || str_contains($value, 'single')) return 'Single Vision';
+        return 'Other';
+    }
+
     public function patientSearch(Request $request): JsonResponse
     {
         $branchId = $this->resolveBranchId($request);

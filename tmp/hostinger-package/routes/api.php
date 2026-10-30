@@ -49,6 +49,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/bank-alerts', [BankAlertController::class, 'index']);
         Route::get('/bank-alerts/history', [BankAlertController::class, 'history']);
         Route::post('/bank-alerts/accounts', [BankAlertController::class, 'storeAccount']);
+        Route::delete('/bank-alerts/accounts/{accountId}', [BankAlertController::class, 'destroyAccount']);
         Route::post('/bank-alerts/devices', [BankAlertController::class, 'issueDevice']);
         Route::post('/bank-alerts/devices/{deviceId}/sync-request', [BankAlertController::class, 'requestDeviceSync']);
         Route::post('/bank-alerts/{alertId}/review', [BankAlertController::class, 'review']);
@@ -71,6 +72,18 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/patients/{recordId}/documents', [PatientRecordController::class, 'storeDocuments']);
         Route::get('/patients/{recordId}/medical-report', [PatientRecordController::class, 'medicalReport']);
         Route::get('/glasses-prescriptions', [PatientRecordController::class, 'glassesPrescriptionIndex']);
+        Route::get('/selling-pricelist/historical', [BillingController::class, 'historicalLensSellingPrices']);
+        Route::get('/selling-pricelist/rules', [BillingController::class, 'sellingPriceRules']);
+        Route::post('/selling-pricelist/catalogue', [BillingController::class, 'catalogueSellingPricePrescription']);
+        Route::get('/selling-pricelist/settings', [BillingController::class, 'sellingPriceSettings']);
+        Route::put('/selling-pricelist/settings', [BillingController::class, 'updateSellingPriceSettings']);
+        Route::post('/selling-pricelist/rules/bootstrap', [BillingController::class, 'bootstrapSellingPriceRules']);
+        Route::post('/selling-pricelist/rules', [BillingController::class, 'storeSellingPriceRule']);
+        Route::put('/selling-pricelist/rules/{ruleId}', [BillingController::class, 'updateSellingPriceRule']);
+        Route::delete('/selling-pricelist/rules/{ruleId}', [BillingController::class, 'deleteSellingPriceRule']);
+        Route::post('/selling-pricelist/requests', [BillingController::class, 'storeSellingPriceRequest']);
+        Route::get('/selling-pricelist/requests', [BillingController::class, 'sellingPriceRequests']);
+        Route::post('/selling-pricelist/requests/{requestId}/approve', [BillingController::class, 'approveSellingPriceRequest']);
         Route::get('/billing/meta', [BillingController::class, 'meta']);
         Route::get('/billing/patient-search', [BillingController::class, 'patientSearch']);
         Route::get('/billing/search', [BillingController::class, 'search']);

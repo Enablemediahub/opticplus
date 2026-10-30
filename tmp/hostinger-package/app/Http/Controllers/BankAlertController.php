@@ -38,6 +38,7 @@ class BankAlertController extends Controller
                 'accounts' => $accounts,
                 'alerts' => [],
                 'device' => null,
+                'devices' => [],
                 'banks' => [],
             ]);
         }
@@ -67,16 +68,17 @@ class BankAlertController extends Controller
                 'accounts.account_label',
             ]);
 
-        $device = DB::table('bank_sms_devices')
+        $devices = DB::table('bank_sms_devices')
             ->whereNull('revoked_at')
             ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
             ->orderByDesc('id')
-            ->first(['id', 'branch_id', 'label', 'token_hint', 'last_used_at', 'created_at', 'sync_request_version', 'sync_completed_version']);
+            ->get(['id', 'branch_id', 'label', 'token_hint', 'last_used_at', 'created_at', 'sync_request_version', 'sync_completed_version']);
 
         return response()->json([
             'accounts' => $accounts,
             'alerts' => $alerts,
-            'device' => $device,
+            'device' => $devices->first(),
+            'devices' => $devices,
             'banks' => self::BANKS,
         ]);
     }
@@ -118,6 +120,58 @@ class BankAlertController extends Controller
             'message' => 'Bank account added.',
             'account_id' => $accountId,
         ], 201);
+    }
+
+    public function destroyAccount(Request $request, int $accountId): JsonResponse
+    {
+        if ($response = $this->ensureManager($request)) {
+            return $response;
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $accountQuery = DB::table('bank_accounts')->where('id', $accountId);
+        if ($branchId > 0) {
+            $accountQuery->where('branch_id', $branchId);
+        }
+        $account = $accountQuery->first();
+        if (! $account) {
+            return response()->json(['message' => 'That account was not found for the selected branch.'], 404);
+        }
+
+        $now = now();
+        $sender = array_search($account->bank_name, self::SENDER_BANKS, true);
+
+        DB::transaction(function () use ($account, $accountId, $sender, $now): void {
+            $linkedAlerts = DB::table('bank_sms_alerts')->where('bank_account_id', $accountId);
+            $linkedAlerts->whereIn('status', ['pending', 'unmatched'])->update([
+                'bank_account_id' => null,
+                'status' => 'archived',
+                'updated_at' => $now,
+            ]);
+            DB::table('bank_sms_alerts')->where('bank_account_id', $accountId)->update([
+                'bank_account_id' => null,
+                'updated_at' => $now,
+            ]);
+
+            if ($sender !== false) {
+                DB::table('bank_sms_alerts')
+                    ->where('branch_id', $account->branch_id)
+                    ->where('account_suffix', $account->account_suffix)
+                    ->where('sender', $sender)
+                    ->whereNull('bank_account_id')
+                    ->whereIn('status', ['pending', 'unmatched'])
+                    ->update([
+                        'status' => 'archived',
+                        'updated_at' => $now,
+                    ]);
+            }
+
+            DB::table('bank_accounts')->where('id', $accountId)->delete();
+        });
+
+        return response()->json([
+            'message' => 'Account removed. SMS history and posted bank-register activity were preserved; pending alerts for this account were archived.',
+        ]);
     }
 
     public function history(Request $request): JsonResponse
@@ -262,13 +316,6 @@ class BankAlertController extends Controller
         $token = 'opba_'.Str::random(64);
         $now = now();
         DB::transaction(function () use ($validated, $token, $now, $request): void {
-            DB::table('bank_sms_devices')
-                ->where('branch_id', $validated['branch_id'])
-                ->whereNull('revoked_at')
-                ->update([
-                'revoked_at' => $now,
-                'updated_at' => $now,
-            ]);
             DB::table('bank_sms_devices')->insert([
                 'branch_id' => $validated['branch_id'],
                 'label' => trim($validated['label']),
