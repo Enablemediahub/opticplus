@@ -383,23 +383,27 @@ public final class MainActivity extends Activity {
                 testStatus.setText("No recent inbox messages from supported bank or MTN sender IDs were found.");
                 return;
             }
-            BankAlert alert = null;
+            int imported = 0;
+            int parsed = 0;
             do {
-                alert = BankSmsParser.parse(cursor.getString(0), cursor.getString(1), cursor.getLong(2));
-            } while (alert == null && cursor.moveToNext());
-            if (alert == null) {
+                BankAlert alert = BankSmsParser.parse(cursor.getString(0), cursor.getString(1), cursor.getLong(2));
+                if (alert != null) {
+                    parsed++;
+                    if (database.insertIfNew(alert)) imported++;
+                }
+            } while (cursor.moveToNext());
+            if (parsed == 0) {
                 testStatus.setText("No recent supported bank or MTN message matched. SMS text was not saved.");
                 return;
             }
 
-            boolean added = database.insertIfNew(alert);
             updateScreen();
-            if (added) {
+            if (imported > 0) {
                 BankAlertSync.enqueue(this);
             }
-            testStatus.setText(added
-                    ? "Latest supported alert parsed and added to the local review list. SMS text was not saved."
-                    : "Latest supported alert was already on the local review list.");
+            testStatus.setText(imported > 0
+                    ? "Checked the 20 latest supported sender messages; added " + imported + " new alert(s) to the local review list. SMS text was not saved."
+                    : "Supported messages were found, but they were already on the local review list.");
         } catch (SecurityException exception) {
             testStatus.setText(
                     "Android did not allow inbox access. Grant SMS reading permission in app settings, then try again."

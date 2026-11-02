@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `bank_sms_devices` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `branch_id` INT UNSIGNED NOT NULL,
   `label` VARCHAR(100) NOT NULL,
+  `alert_source` VARCHAR(16) NOT NULL DEFAULT 'both',
   `token_hash` CHAR(64) NOT NULL,
   `token_hint` VARCHAR(8) NOT NULL,
   `created_by` BIGINT UNSIGNED NULL,

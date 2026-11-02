@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,7 @@ class BankAlertController extends Controller
 
         $accounts = DB::table('bank_accounts')
             ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->where('is_active', true)
             ->orderBy('branch_id')
             ->orderBy('bank_name')
             ->orderBy('account_suffix')
@@ -68,11 +70,18 @@ class BankAlertController extends Controller
                 'accounts.account_label',
             ]);
 
+        $deviceColumns = ['id', 'branch_id', 'label', 'token_hint', 'last_used_at', 'created_at'];
+        foreach (['alert_source', 'sync_request_version', 'sync_completed_version'] as $optionalColumn) {
+            if (Schema::hasColumn('bank_sms_devices', $optionalColumn)) {
+                $deviceColumns[] = $optionalColumn;
+            }
+        }
+
         $devices = DB::table('bank_sms_devices')
             ->whereNull('revoked_at')
             ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
             ->orderByDesc('id')
-            ->get(['id', 'branch_id', 'label', 'token_hint', 'last_used_at', 'created_at', 'sync_request_version', 'sync_completed_version']);
+            ->get($deviceColumns);
 
         return response()->json([
             'accounts' => $accounts,
@@ -96,18 +105,33 @@ class BankAlertController extends Controller
             'account_label' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $exists = DB::table('bank_accounts')
+        $existingAccount = DB::table('bank_accounts')
             ->where('branch_id', $validated['branch_id'])
             ->where('bank_name', $validated['bank_name'])
             ->where('account_suffix', $validated['account_suffix'])
-            ->exists();
-        if ($exists) {
+            ->first(['id', 'is_active']);
+        if ($existingAccount?->is_active) {
             throw ValidationException::withMessages([
                 'account_suffix' => 'That bank account is already configured for this branch.',
             ]);
         }
 
         $now = now();
+        if ($existingAccount) {
+            DB::table('bank_accounts')->where('id', $existingAccount->id)->update([
+                'account_label' => trim((string) ($validated['account_label'] ?? '')) ?: null,
+                'reported_balance' => null,
+                'reported_balance_at' => null,
+                'is_active' => true,
+                'updated_at' => $now,
+            ]);
+
+            return response()->json([
+                'message' => 'Bank account reconnected.',
+                'account_id' => (int) $existingAccount->id,
+            ]);
+        }
+
         $accountId = DB::table('bank_accounts')->insertGetId([
             ...$validated,
             'account_label' => trim((string) ($validated['account_label'] ?? '')) ?: null,
@@ -166,7 +190,12 @@ class BankAlertController extends Controller
                     ]);
             }
 
-            DB::table('bank_accounts')->where('id', $accountId)->delete();
+            DB::table('bank_accounts')->where('id', $accountId)->update([
+                'is_active' => false,
+                'reported_balance' => null,
+                'reported_balance_at' => null,
+                'updated_at' => $now,
+            ]);
         });
 
         return response()->json([
@@ -259,6 +288,89 @@ class BankAlertController extends Controller
         ], 202);
     }
 
+    public function revokeDevice(Request $request, int $deviceId): JsonResponse
+    {
+        if ($response = $this->ensureManager($request)) {
+            return $response;
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        $deviceQuery = DB::table('bank_sms_devices')
+            ->where('id', $deviceId)
+            ->whereNull('revoked_at');
+        if ($branchId > 0) {
+            $deviceQuery->where('branch_id', $branchId);
+        }
+        $device = $deviceQuery->first(['id', 'label', 'branch_id']);
+        if (! $device) {
+            return response()->json(['message' => 'That active phone pairing was not found for the selected branch.'], 404);
+        }
+
+        DB::table('bank_sms_devices')->where('id', $device->id)->update([
+            'revoked_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => $device->label.' pairing revoked. SMS history is preserved; you can generate a new token to pair the phone again.',
+        ]);
+    }
+
+    public function updateDeviceSource(Request $request, int $deviceId): JsonResponse
+    {
+        if ($response = $this->ensureManager($request)) {
+            return $response;
+        }
+
+        if (! Schema::hasColumn('bank_sms_devices', 'alert_source')) {
+            return response()->json([
+                'message' => 'Phone source settings are not enabled yet. Apply database/schema/add_bank_sms_device_alert_source.mysql.sql first.',
+            ], 503);
+        }
+
+        $validated = $request->validate([
+            'alert_source' => ['required', 'string', Rule::in(['prudential', 'momo', 'both'])],
+        ]);
+        $branchId = $this->resolveBranchId($request);
+        $deviceQuery = DB::table('bank_sms_devices')->where('id', $deviceId)->whereNull('revoked_at');
+        if ($branchId > 0) {
+            $deviceQuery->where('branch_id', $branchId);
+        }
+        $device = $deviceQuery->first(['id', 'branch_id', 'label', 'alert_source']);
+        if (! $device) {
+            return response()->json(['message' => 'That active phone pairing was not found for the selected branch.'], 404);
+        }
+
+        $newSource = $validated['alert_source'];
+        $blockedSender = $newSource === 'prudential' ? 'MTN_MOMO' : ($newSource === 'momo' ? 'PRUDENTIAL' : null);
+        DB::transaction(function () use ($device, $newSource, $blockedSender): void {
+            if ($blockedSender) {
+                $blockedAlerts = DB::table('bank_sms_alerts')
+                    ->where('device_id', $device->id)
+                    ->where('sender', $blockedSender)
+                    ->whereIn('status', ['pending', 'unmatched']);
+                $affectedAccountIds = (clone $blockedAlerts)->whereNotNull('bank_account_id')->pluck('bank_account_id')->unique();
+                foreach ($affectedAccountIds as $accountId) {
+                    $latest = DB::table('bank_sms_alerts')->where('bank_account_id', $accountId)->orderByDesc('received_at')->first(['device_id', 'sender']);
+                    if ($latest && (int) $latest->device_id === (int) $device->id && $latest->sender === $blockedSender) {
+                        DB::table('bank_accounts')->where('id', $accountId)->update([
+                            'reported_balance' => null,
+                            'reported_balance_at' => null,
+                            'updated_at' => now(),
+                        ]);
+                    }
+                }
+                $blockedAlerts->update(['status' => 'archived', 'bank_account_id' => null, 'updated_at' => now()]);
+            }
+            DB::table('bank_sms_devices')->where('id', $device->id)->update([
+                'alert_source' => $newSource,
+                'updated_at' => now(),
+            ]);
+        });
+
+        return response()->json(['message' => $device->label.' is now set to '.($newSource === 'prudential' ? 'Prudential only' : ($newSource === 'momo' ? 'MTN MoMo only' : 'both Prudential and MTN MoMo alerts')).'.']);
+    }
+
     public function deviceSyncRequest(Request $request): JsonResponse
     {
         $deviceId = (int) $request->attributes->get('bank_alert_device_id');
@@ -309,9 +421,16 @@ class BankAlertController extends Controller
             return $response;
         }
 
+        if (! Schema::hasColumn('bank_sms_devices', 'alert_source')) {
+            return response()->json([
+                'message' => 'Phone pairing is not enabled until the Hostinger database is updated. Apply database/schema/add_bank_sms_device_alert_source.mysql.sql, then try again.',
+            ], 503);
+        }
+
         $validated = $request->validate([
             'label' => ['required', 'string', 'max:100'],
             'branch_id' => ['required', 'integer', Rule::in([1, 2])],
+            'alert_source' => ['required', 'string', Rule::in(['prudential', 'momo', 'both'])],
         ]);
         $token = 'opba_'.Str::random(64);
         $now = now();
@@ -319,6 +438,7 @@ class BankAlertController extends Controller
             DB::table('bank_sms_devices')->insert([
                 'branch_id' => $validated['branch_id'],
                 'label' => trim($validated['label']),
+                'alert_source' => $validated['alert_source'],
                 'token_hash' => hash('sha256', $token),
                 'token_hint' => substr($token, -8),
                 'created_by' => $request->user()->id,
@@ -353,10 +473,14 @@ class BankAlertController extends Controller
             throw ValidationException::withMessages(['transaction_date' => 'Invalid transaction date.']);
         }
 
+        $deviceColumns = ['branch_id'];
+        if (Schema::hasColumn('bank_sms_devices', 'alert_source')) {
+            $deviceColumns[] = 'alert_source';
+        }
         $device = DB::table('bank_sms_devices')
             ->where('id', $deviceId)
             ->whereNull('revoked_at')
-            ->first(['branch_id']);
+            ->first($deviceColumns);
         if (! $device) {
             return response()->json(['message' => 'The paired device is no longer active.'], 401);
         }
@@ -365,6 +489,12 @@ class BankAlertController extends Controller
             throw ValidationException::withMessages([
                 'received_at' => 'The alert timestamp cannot be in the future.',
             ]);
+        }
+
+        $source = $validated['sender'] === 'PRUDENTIAL' ? 'prudential' : 'momo';
+        if (isset($device->alert_source) && $device->alert_source !== 'both' && $device->alert_source !== $source) {
+            DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
+            return response()->json(['message' => 'Alert ignored because this phone is not paired for this SMS source.', 'ignored' => true]);
         }
 
         if ($validated['sender'] === 'PRUDENTIAL' && empty($validated['account_suffix'])) {

@@ -14,6 +14,8 @@ const dateIso = (date) => {
   return `${year}-${month}-${day}`
 }
 
+const formatWholeCedi = (value) => currency.format(Math.ceil(Number(value) || 0))
+
 const defaultPeriod = () => ({
   date_from: dateIso(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
   date_to: dateIso(new Date()),
@@ -36,6 +38,9 @@ const monthlyContributions = (entries = [], schedule = []) => {
       amount: 0,
       days: new Map(),
       required: 0,
+      exactRequired: 0,
+      roundedRequired: 0,
+      actualSaved: 0,
       available: 0,
       lensReserve: 0,
       frameReserve: 0,
@@ -58,6 +63,9 @@ const monthlyContributions = (entries = [], schedule = []) => {
     const { current, day } = getMonthDay(entry.date)
     Object.assign(day, entry)
     current.required += Number(entry.required_rent_savings ?? 0)
+    current.exactRequired += Number(entry.exact_daily_target ?? entry.required_rent_savings ?? 0)
+    current.roundedRequired += Number(entry.rounded_daily_target ?? Math.ceil(Number(entry.required_rent_savings ?? 0)))
+    current.actualSaved += Number(entry.actual_rent_saved ?? 0)
     current.available += Number(entry.available_for_allocations ?? 0)
     current.lensReserve += Number(entry.lens_cost_to_set_aside ?? 0)
     current.frameReserve += Number(entry.frame_cost_to_set_aside ?? 0)
@@ -84,7 +92,7 @@ const formatDate = (date) => new Date(`${date}T00:00:00`).toLocaleDateString('en
   year: 'numeric',
 })
 
-export default function SalesAllocationWorkspace({ apiFetch, token, branchId, branchName, isMerged }) {
+export default function SalesAllocationWorkspace({ apiFetch, token, branchId, branchName, isMerged, session }) {
   const [period, setPeriod] = useState(defaultPeriod)
   const [appliedPeriod, setAppliedPeriod] = useState(defaultPeriod)
   const [allocationData, setAllocationData] = useState(null)
@@ -96,10 +104,14 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
   const [isSaving, setIsSaving] = useState(false)
   const [savingDayKey, setSavingDayKey] = useState('')
   const [savingDrafts, setSavingDrafts] = useState({})
+  const [savingEditDrafts, setSavingEditDrafts] = useState({})
+  const [savingEditId, setSavingEditId] = useState(null)
+  const [editingSavingId, setEditingSavingId] = useState(null)
   const [isRemoving, setIsRemoving] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const isGeneralManager = (session?.normalized_role ?? session?.role) === 'manager'
 
   const params = useMemo(() => new URLSearchParams({
     branch_id: String(branchId),
@@ -256,6 +268,31 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
     }
   }
 
+  async function updateDailySaving(event, item, savingEntry) {
+    event.preventDefault()
+    const draft = savingEditDrafts[savingEntry.id] ?? {}
+    setSavingEditId(savingEntry.id)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch(`/debts/sales-allocations/${item.id}/savings/${savingEntry.id}?branch_id=${branchId}`, {
+        method: 'PUT',
+        token,
+        body: {
+          amount: Number(draft.amount ?? savingEntry.amount),
+          set_aside_date: draft.set_aside_date ?? savingEntry.set_aside_date,
+        },
+      })
+      setSuccess(response.message ?? 'Savings entry updated.')
+      setEditingSavingId(null)
+      setRefreshKey((current) => current + 1)
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setSavingEditId(null)
+    }
+  }
+
   if (isMerged) {
     return (
       <article className="panel allocation-empty-state">
@@ -372,7 +409,7 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                     <strong>Target reached</strong>
                   ) : item.required_daily_savings != null ? (
                     <>
-                      <strong>Put aside at least {currency.format(Number(item.required_daily_savings))} per day</strong>
+                      <strong>Put aside at least {formatWholeCedi(item.required_daily_savings)} per day</strong>
                       <span>{currency.format(Number(item.remaining_to_target))} remaining across {item.working_days_remaining} working days (Sundays excluded)</span>
                     </>
                   ) : item.target_deadline_passed ? (
@@ -395,7 +432,9 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                         {month.required > 0 ? (
                           <>
                             <div className="allocation-month__summary">
-                              <span>{item.name} target for these working days: {currency.format(month.required)}</span>
+                              <span>Exact daily target total: {currency.format(month.exactRequired)}</span>
+                              <span>Rounded daily targets total: {currency.format(month.roundedRequired)}</span>
+                              <span>Actual saved: {currency.format(month.actualSaved)}</span>
                         <span>Available after costs and all recorded expenses on recorded days: {month.costsAvailable ? currency.format(month.available) : 'unavailable'}</span>
                               {month.unrecordedDays > 0 ? <span>{month.unrecordedDays} future working days not recorded yet</span> : null}
                             </div>
@@ -429,7 +468,7 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                               <tr>
                                 <th scope="col">Workday</th>
                                 <th scope="col">Cash collected</th>
-                                <th scope="col">Daily target</th>
+                                <th scope="col" title="Exact daily target is adjusted for any rounded excess saved on earlier days">Daily target / rounded plan</th>
                                 <th scope="col">Lens reserve</th>
                                 <th scope="col">Frame reserve</th>
                                 <th scope="col">All expenses</th>
@@ -446,7 +485,21 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                                 const remaining = Number(entry.remaining_for_day ?? 0)
                                 const canRecord = entry.required_rent_savings != null
                                   && remaining > 0
+                                  && Number(item.remaining_to_target ?? 0) > 0
                                 const savingDraft = savingDrafts[dayKey] ?? {}
+                                const enteredAmount = Number(savingDraft.amount ?? 0)
+                                const projectedBalance = Math.max(Number(item.remaining_to_target ?? 0) - enteredAmount, 0)
+                                const nextWorkday = (item.daily_savings_schedule ?? []).find((day) => day.date > entry.date)
+                                const projectedCarry = Math.max(
+                                  Number(entry.carry_in ?? 0)
+                                    + Number(entry.actual_rent_saved ?? 0)
+                                    + enteredAmount
+                                    - Math.ceil(Number(entry.exact_daily_target ?? entry.required_rent_savings ?? 0)),
+                                  0,
+                                )
+                                const projectedNextDue = nextWorkday
+                                  ? Math.max(Number(nextWorkday.exact_daily_target ?? 0) - projectedCarry, 0)
+                                  : null
 
                                 return (
                                   <tr key={entry.date}>
@@ -455,7 +508,13 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                                       {!entry.sales_recorded && entry.required_rent_savings != null ? <small>Sales not recorded</small> : null}
                                     </th>
                                     <td>{entry.sales_recorded ? currency.format(Number(entry.eligible_collections ?? 0)) : '—'}</td>
-                                    <td>{entry.required_rent_savings == null ? '—' : currency.format(Number(entry.required_rent_savings))}</td>
+                                    <td>{entry.required_rent_savings == null ? '—' : (
+                                      <>
+                                        <strong>{currency.format(Number(entry.required_rent_savings))}</strong>
+                                        <small>Rounded plan: {currency.format(Number(entry.rounded_daily_target ?? Math.ceil(Number(entry.required_rent_savings))))}</small>
+                                        {Number(entry.carry_in ?? 0) > 0 ? <small>Credit carried in: {currency.format(Number(entry.carry_in))}</small> : null}
+                                      </>
+                                    )}</td>
                                     <td className="allocation-month__cost-cell allocation-month__cost-cell--lens">
                                       {entry.required_rent_savings == null ? '—' : currency.format(Number(entry.lens_cost_to_set_aside ?? 0))}
                                       {Number(entry.unpriced_lens_sales ?? 0) > 0 ? (
@@ -492,8 +551,23 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                                       {entry.saving_entries?.length ? (
                                         <small>
                                           {entry.saving_entries.map((savingEntry) => (
-                                            <span key={savingEntry.expense_id}>
-                                              {currency.format(Number(savingEntry.amount))} expense on {formatDate(savingEntry.set_aside_date)} (#{savingEntry.expense_id})
+                                            <span className="allocation-saving-entry" key={savingEntry.expense_id}>
+                                              {editingSavingId === savingEntry.id ? (
+                                                <form className="allocation-saving-edit-form" onSubmit={(event) => updateDailySaving(event, item, savingEntry)}>
+                                                  <label>Amount<input type="number" min="0.01" max={Number(item.remaining_to_target ?? 0) + Number(savingEntry.amount)} step="0.01" value={savingEditDrafts[savingEntry.id]?.amount ?? savingEntry.amount} onChange={(event) => setSavingEditDrafts((current) => ({ ...current, [savingEntry.id]: { ...current[savingEntry.id], amount: event.target.value } }))} required /></label>
+                                                  <label>Set-aside date<input type="date" max={today} value={savingEditDrafts[savingEntry.id]?.set_aside_date ?? savingEntry.set_aside_date} onChange={(event) => setSavingEditDrafts((current) => ({ ...current, [savingEntry.id]: { ...current[savingEntry.id], set_aside_date: event.target.value } }))} required /></label>
+                                                  <button type="submit" disabled={savingEditId === savingEntry.id}>{savingEditId === savingEntry.id ? 'Saving…' : 'Save'}</button>
+                                                  <button type="button" onClick={() => setEditingSavingId(null)}>Cancel</button>
+                                                </form>
+                                              ) : (
+                                                <>
+                                                  <span>{currency.format(Number(savingEntry.amount))} expense on {formatDate(savingEntry.set_aside_date)} (#{savingEntry.expense_id})</span>
+                                                  {isGeneralManager ? <button type="button" className="allocation-saving-edit-button" onClick={() => {
+                                                    setSavingEditDrafts((current) => ({ ...current, [savingEntry.id]: { amount: String(savingEntry.amount), set_aside_date: savingEntry.set_aside_date } }))
+                                                    setEditingSavingId(savingEntry.id)
+                                                  }}>Edit</button> : null}
+                                                </>
+                                              )}
                                             </span>
                                           ))}
                                         </small>
@@ -509,20 +583,29 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                                     <td>
                                       {canRecord ? (
                                         <form className="allocation-day-saving-form allocation-day-saving-form--table" onSubmit={(event) => recordDailySaving(event, item, entry)}>
+                                            <small className="allocation-day-saving-hint">Extra savings reduce later workday targets.</small>
+                                            {enteredAmount > 0 ? (
+                                              <div className="allocation-day-saving-preview" aria-live="polite">
+                                                <span>Goal balance after entry <strong>{currency.format(projectedBalance)}</strong></span>
+                                                <span>Current day still due <strong>{currency.format(Math.max(remaining - enteredAmount, 0))}</strong></span>
+                                                {projectedCarry > 0 ? <span>Credit moving forward <strong>{currency.format(projectedCarry)}</strong></span> : null}
+                                                {projectedNextDue != null ? <span>Next workday target <strong>{currency.format(projectedNextDue)} exact · {currency.format(Math.ceil(projectedNextDue))} rounded</strong></span> : null}
+                                              </div>
+                                            ) : null}
                                             <label>
                                               Amount
                                               <input
                                                 aria-label={`Savings amount for ${formatDate(entry.date)}`}
                                                 type="number"
                                                 min="0.01"
-                                                max={remaining}
+                                                max={Number(item.remaining_to_target ?? 0)}
                                                 step="0.01"
                                                 value={savingDraft.amount ?? ''}
                                                 onChange={(event) => setSavingDrafts((current) => ({
                                                   ...current,
                                                   [dayKey]: { ...current[dayKey], amount: event.target.value },
                                                 }))}
-                                                placeholder={`Up to ${remaining.toFixed(2)}`}
+                                                placeholder={`Goal balance ${currency.format(Number(item.remaining_to_target ?? 0))}`}
                                                 required
                                               />
                                             </label>
@@ -540,7 +623,7 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                                                 required
                                               />
                                             </label>
-                                            <button type="submit" className="mini-action" disabled={savingDayKey === dayKey}>
+                                            <button type="submit" className="mini-action allocation-day-saving-submit" disabled={savingDayKey === dayKey}>
                                               {savingDayKey === dayKey ? 'Saving...' : 'Save'}
                                             </button>
                                         </form>
@@ -557,7 +640,7 @@ export default function SalesAllocationWorkspace({ apiFetch, token, branchId, br
                   )) : (
                     <p className="muted-copy">No matching savings entries have been recorded yet.</p>
                   )}
-                  <small>Monthly “saved” totals are actual expense entries; daily targets and post-cost sales are shown separately.</small>
+                  <small>Monthly figures separate the exact target, the rounded daily plan, and actual expense entries. Any excess from rounding carries into later working days.</small>
                 </div>
               </details>
               )

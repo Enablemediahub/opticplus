@@ -23,9 +23,10 @@ return new class extends Migration
             $table->string('cyl_range', 100)->nullable();
             $table->string('add_range', 100)->nullable();
             $table->string('price_label', 100)->nullable();
-            $table->decimal('selling_price', 12, 2);
+            $table->decimal('selling_price', 12, 2)->nullable();
             $table->text('notes')->nullable();
             $table->text('prescription_examples')->nullable();
+            $table->unsignedInteger('prescription_count')->default(0);
             $table->string('status', 30)->default('approved');
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();

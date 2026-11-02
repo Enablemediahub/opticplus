@@ -37,6 +37,8 @@ import MonitorSection from './components/MonitorSection.jsx'
 import SettingsSection from './components/SettingsSection.jsx'
 import SellingPricelistSection from './components/SellingPricelistSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
+import StaffAppraisalPanel from './components/StaffAppraisalPanel.jsx'
+import StaffAppraisalManagerPanel from './components/StaffAppraisalManagerPanel.jsx'
 import TechnicianDashboardSection from './components/TechnicianDashboardSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
 import WorkingCapitalLiabilitiesSection from './components/WorkingCapitalLiabilitiesSection.jsx'
@@ -116,6 +118,7 @@ const managerNavSections = [
   {
     title: 'Human Resources',
     items: [
+      { label: 'Appraisals', navLabel: 'Staff Appraisals', icon: 'check-badge' },
       { label: 'Payroll', navLabel: 'Staff Payroll', icon: 'money' },
       { label: 'Staff Profiles', navLabel: 'Staff Profiles', icon: 'support' },
       { label: 'Users', navLabel: 'User Management', icon: 'settings' },
@@ -144,7 +147,10 @@ const managerNavSections = [
 const receptionistNavSections = [
   {
     title: 'Overview',
-    items: [{ label: 'Dashboard', navLabel: 'Dashboard Overview', icon: 'dashboard' }],
+    items: [
+      { label: 'Dashboard', navLabel: 'Dashboard Overview', icon: 'dashboard' },
+      { label: 'Appraisals', navLabel: 'My Appraisals', icon: 'check-badge' },
+    ],
   },
   {
     title: 'Front Desk',
@@ -178,7 +184,10 @@ const receptionistNavSections = [
 const technicianNavSections = [
   {
     title: 'Overview',
-    items: [{ label: 'Dashboard', navLabel: 'Dashboard Overview', icon: 'dashboard' }],
+    items: [
+      { label: 'Dashboard', navLabel: 'Dashboard Overview', icon: 'dashboard' },
+      { label: 'Appraisals', navLabel: 'My Appraisals', icon: 'check-badge' },
+    ],
   },
   {
     title: 'Operations',
@@ -275,6 +284,7 @@ const accountantNavSections = [
   {
     title: 'Staff & Preferences',
     items: [
+      { label: 'Appraisals', navLabel: 'My Appraisals', icon: 'check-badge' },
       { label: 'Payroll', navLabel: 'Staff Payroll', icon: 'money' },
       { label: 'Notes', navLabel: 'Notes & Reminders', icon: 'message' },
       { label: 'Settings', navLabel: 'My Profile & Settings', icon: 'settings' },
@@ -308,6 +318,7 @@ const executiveNavSections = [
 
 const viewHashMap = {
   Dashboard: '#/dashboard',
+  Appraisals: '#/appraisals',
   Users: '#/users',
   Database: '#/database',
   'Staff Profiles': '#/staff-profiles',
@@ -5447,6 +5458,19 @@ function App() {
               )
             ) : null}
 
+            {activeView === 'Appraisals' && isGeneralManager ? (
+              <section className="finance-section appraisals-page">
+                <div className="patients-header">
+                  <div><p className="eyebrow">Human Resources</p><h2>Staff Appraisals</h2><p className="header-copy">Set role-based goals, review progress, and finalize daily, weekly, or monthly scores.</p></div>
+                </div>
+                <StaffAppraisalManagerPanel apiFetch={apiFetch} token={token} branchId={selectedBranchId} />
+              </section>
+            ) : null}
+
+            {activeView === 'Appraisals' && !isGeneralManager && !['receptionist', 'accountant', 'technician'].includes(session?.normalized_role ?? session?.role) ? (
+              <section className="module-section"><div className="message-banner">Appraisals are available to the General Manager, receptionist, accountant, and technician roles.</div></section>
+            ) : null}
+
             {activeView === 'Users' && isGeneralManager ? (
               <UsersManagementSection
                 token={token}
@@ -6269,7 +6293,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Selling Pricelist', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Appraisals', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Selling Pricelist', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>
@@ -6348,6 +6372,10 @@ function App() {
           fetchPatientPrescriptions={fetchPatientPrescriptions}
           fetchPatientExamForm={fetchPatientExamForm}
         />
+      ) : null}
+
+      {session && ['receptionist', 'accountant', 'technician'].includes(session?.normalized_role ?? session?.role) ? (
+        <StaffAppraisalPanel apiFetch={apiFetch} token={token} session={session} showCard={activeView === 'Appraisals'} />
       ) : null}
 
       {receiptPreview ? (

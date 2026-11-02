@@ -174,6 +174,7 @@ class DebtController extends Controller
             ->orderBy('se.set_aside_date')
             ->orderBy('se.id')
             ->get([
+                'se.id',
                 'se.allocation_item_id',
                 'se.target_date',
                 'se.set_aside_date',
@@ -235,7 +236,8 @@ class DebtController extends Controller
                 ? ceil(($remainingToTarget / $workingDaysRemaining) * 100) / 100
                 : null;
             $targetDeadlinePassed = $targetDeadline !== null && $targetDeadline->isBefore($today);
-            $dailySchedule = collect($allWorkingDates)->map(function (string $date) use ($item, $dailyCollections, $dailyProductCosts, $dailyExpenses, $savingsPercent, $requiredDailySavings, $productCostTrackingAvailable, $recordedSavingsByDay, $savingsEntryDetails, $today): array {
+            $carryForward = 0.0;
+            $dailySchedule = collect($allWorkingDates)->map(function (string $date) use ($item, $dailyCollections, $dailyProductCosts, $dailyExpenses, $savingsPercent, $requiredDailySavings, $productCostTrackingAvailable, $recordedSavingsByDay, $savingsEntryDetails, $today, &$carryForward): array {
                 $costs = $dailyProductCosts->get($date, []);
                 $collected = round((float) ($dailyCollections->get($date)->collected ?? 0), 2);
                 $lensCost = round((float) ($costs['lens_cost'] ?? 0), 2);
@@ -254,11 +256,17 @@ class DebtController extends Controller
                     : null;
                 $savedEntry = $recordedSavingsByDay->get((int) $item->id)?->get($date);
                 $saved = round((float) ($savedEntry->saved_amount ?? 0), 2);
-                $remainingForDay = round(max((float) $requiredDailySavings - $saved, 0), 2);
+                $carryIn = round($carryForward, 2);
+                $effectiveTarget = round(max((float) $requiredDailySavings - $carryIn, 0), 2);
+                $remainingForDay = round(max($effectiveTarget - $saved, 0), 2);
+                $roundedTarget = $effectiveTarget > 0 ? ceil($effectiveTarget) : 0;
+                $roundedRemaining = round(max($roundedTarget - $saved, 0), 2);
+                $carryForward = round(max($carryIn + $saved - ceil((float) $requiredDailySavings), 0), 2);
                 $isDue = Carbon::parse($date)->startOfDay()->lessThanOrEqualTo($today);
                 $arrears = $isDue ? $remainingForDay : 0.0;
                 $entryDetails = ($savingsEntryDetails->get((int) $item->id)?->get($date) ?? collect())
                     ->map(fn ($entry) => [
+                        'id' => (int) $entry->id,
                         'set_aside_date' => $entry->set_aside_date,
                         'amount' => round((float) $entry->amount, 2),
                         'expense_id' => (int) $entry->expense_id,
@@ -281,17 +289,22 @@ class DebtController extends Controller
                     'available_after_costs' => $availableAfterCosts,
                     'available_for_allocations' => $availableForAllocations,
                     'estimated_bank_deposit' => $estimatedBankDeposit,
-                    'required_rent_savings' => $requiredDailySavings,
+                    'required_rent_savings' => $effectiveTarget,
+                    'exact_daily_target' => $requiredDailySavings,
+                    'rounded_daily_target' => $roundedTarget,
+                    'carry_in' => $carryIn,
+                    'carry_out' => $carryForward,
                     'required_share_percent' => $availableForAllocations !== null && $availableForAllocations > 0
-                        ? round($requiredDailySavings / $availableForAllocations * 100, 2)
+                        ? round($effectiveTarget / $availableForAllocations * 100, 2)
                         : null,
                     'actual_rent_saved' => $saved,
                     'remaining_for_day' => $remainingForDay,
+                    'rounded_remaining_for_day' => $roundedRemaining,
                     'arrears_amount' => $arrears,
                     'is_due' => $isDue,
                     'saving_entries' => $entryDetails,
                     'shortfall_after_costs' => $productCostTrackingAvailable && $salesRecorded && $requiredDailySavings !== null
-                        ? round(max($requiredDailySavings - $availableForAllocations, 0), 2)
+                        ? round(max($effectiveTarget - $availableForAllocations, 0), 2)
                         : null,
                 ];
             })->values();
@@ -426,24 +439,10 @@ class DebtController extends Controller
                 ->whereDate('date', '<=', now()->toDateString())
                 ->sum('amount');
             $remainingToTarget = max((float) $item->target_amount - $contributedSoFar, 0);
-            $targetStart = Carbon::parse($item->target_start_date)->startOfDay()->max(now()->startOfDay());
-            $deadline = Carbon::parse($item->target_date)->startOfDay()->subDay();
-            $workingDays = 0;
-            if (! $targetStart->isAfter($deadline)) {
-                for ($date = $targetStart->copy(); ! $date->isAfter($deadline); $date->addDay()) {
-                    if ($date->dayOfWeek !== Carbon::SUNDAY) {
-                        $workingDays++;
-                    }
-                }
-            }
-            $dailyTarget = $workingDays > 0
-                ? ceil(($remainingToTarget / $workingDays) * 100) / 100
-                : 0.0;
-            $arrears = max($dailyTarget - $existingSaved, 0);
             $amount = round((float) $validated['amount'], 2);
-            if ($amount > $arrears + 0.0001) {
+            if ($amount > $remainingToTarget + 0.0001) {
                 abort(response()->json([
-                    'message' => 'The amount cannot exceed this day’s remaining savings target of GH₵'.number_format($arrears, 2).'.',
+                    'message' => 'The amount cannot exceed the remaining savings goal of GH₵'.number_format($remainingToTarget, 2).'.',
                 ], 422));
             }
 
@@ -493,6 +492,79 @@ class DebtController extends Controller
             'message' => trim((string) $item->name).' savings recorded as an expense.',
             'expense_id' => $expenseId,
         ], 201);
+    }
+
+    public function updateSalesAllocationSaving(Request $request, int $allocationId, int $entryId): JsonResponse
+    {
+        $user = $request->user();
+        $role = $user?->normalized_role ?? $user?->role;
+        if ($role !== 'manager') {
+            return response()->json(['message' => 'Only the General Manager can edit a recorded savings entry.'], 403);
+        }
+
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+        $validated = $request->validate([
+            'set_aside_date' => ['required', 'date', 'before_or_equal:today'],
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01'],
+        ]);
+
+        $entry = DB::table('sales_allocation_savings_entries as se')
+            ->join('sales_allocation_items as ai', 'ai.id', '=', 'se.allocation_item_id')
+            ->where('se.id', $entryId)
+            ->where('se.allocation_item_id', $allocationId)
+            ->where('se.branch_id', $branchId)
+            ->where('ai.branch_id', $branchId)
+            ->where('ai.treatment', 'savings')
+            ->first(['se.id', 'se.expense_id', 'se.amount', 'se.set_aside_date', 'ai.name', 'ai.target_amount']);
+        if (! $entry || ! $entry->expense_id) {
+            return response()->json(['message' => 'The savings entry could not be found.'], 404);
+        }
+
+        $expense = DB::table('expenses')
+            ->where('expense_id', $entry->expense_id)
+            ->where('branch_id', $branchId)
+            ->first(['expense_id']);
+        if (! $expense) {
+            return response()->json(['message' => 'The linked expense could not be found.'], 404);
+        }
+
+        $contributedWithoutEntry = (float) DB::table('expenses')
+            ->where('branch_id', $branchId)
+            ->whereRaw('LOWER(TRIM(category)) = ?', [mb_strtolower(trim((string) $entry->name))])
+            ->whereDate('date', '<=', now()->toDateString())
+            ->where('expense_id', '!=', $entry->expense_id)
+            ->sum('amount');
+        $maxEditableAmount = max((float) $entry->target_amount - $contributedWithoutEntry, 0);
+        $amount = round((float) $validated['amount'], 2);
+        if ($amount > $maxEditableAmount + 0.0001) {
+            return response()->json([
+                'message' => 'The amount cannot exceed the remaining savings goal of GH₵'.number_format($maxEditableAmount, 2).'.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($entry, $validated, $amount, $branchId): void {
+            DB::table('sales_allocation_savings_entries')
+                ->where('id', $entry->id)
+                ->where('branch_id', $branchId)
+                ->update([
+                    'amount' => $amount,
+                    'set_aside_date' => $validated['set_aside_date'],
+                    'updated_at' => now(),
+                ]);
+            DB::table('expenses')
+                ->where('expense_id', $entry->expense_id)
+                ->where('branch_id', $branchId)
+                ->update([
+                    'amount' => $amount,
+                    'date' => $validated['set_aside_date'],
+                    'updated_at' => now(),
+                ]);
+        });
+
+        return response()->json(['message' => 'Savings entry and linked expense updated.']);
     }
 
     public function storeSalesAllocation(Request $request): JsonResponse

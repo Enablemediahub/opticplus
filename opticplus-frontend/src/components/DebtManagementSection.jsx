@@ -56,6 +56,9 @@ const debtFormFromRecord = (debt) => ({
 export default function DebtManagementSection(props) {
   const [debtMeta, setDebtMeta] = useState(null)
   const [debtData, setDebtData] = useState(null)
+  const [allocationOverview, setAllocationOverview] = useState(null)
+  const [allocationOverviewError, setAllocationOverviewError] = useState('')
+  const [isLoadingAllocationOverview, setIsLoadingAllocationOverview] = useState(false)
   const [filters, setFilters] = useState(defaultFilters())
   const [query, setQuery] = useState(defaultFilters())
   const [debtForm, setDebtForm] = useState(defaultDebtForm())
@@ -77,15 +80,16 @@ export default function DebtManagementSection(props) {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [activeWorkspace, setActiveWorkspace] = useState(() => {
     try {
-      return window.localStorage.getItem('opticplus:debts-workspace') === 'allocations' ? 'allocations' : 'debts'
+      const storedWorkspace = window.localStorage.getItem('opticplus:debts-workspace-v2')
+      return ['overview', 'debts', 'allocations'].includes(storedWorkspace) ? storedWorkspace : 'overview'
     } catch {
-      return 'debts'
+      return 'overview'
     }
   })
 
   useEffect(() => {
     try {
-      window.localStorage.setItem('opticplus:debts-workspace', activeWorkspace)
+      window.localStorage.setItem('opticplus:debts-workspace-v2', activeWorkspace)
     } catch {
       // Keep workspace switching usable when browser storage is unavailable.
     }
@@ -124,6 +128,44 @@ export default function DebtManagementSection(props) {
     }
 
     loadMeta()
+    return () => {
+      cancelled = true
+    }
+  }, [branchId, props.apiFetch, props.session, props.token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAllocationOverview() {
+      if (!props.token || !props.session || Number(branchId) === 0) {
+        setAllocationOverview(null)
+        setAllocationOverviewError('')
+        setIsLoadingAllocationOverview(false)
+        return
+      }
+
+      const dateTo = localTodayIso()
+      const params = new URLSearchParams({
+        branch_id: String(branchId),
+        date_from: `${dateTo.slice(0, 7)}-01`,
+        date_to: dateTo,
+      })
+      setIsLoadingAllocationOverview(true)
+      setAllocationOverviewError('')
+      try {
+        const response = await props.apiFetch(`/debts/sales-allocations?${params.toString()}`, { token: props.token })
+        if (!cancelled) setAllocationOverview(response)
+      } catch (loadError) {
+        if (!cancelled) {
+          setAllocationOverview(null)
+          setAllocationOverviewError(loadError.message)
+        }
+      } finally {
+        if (!cancelled) setIsLoadingAllocationOverview(false)
+      }
+    }
+
+    loadAllocationOverview()
     return () => {
       cancelled = true
     }
@@ -309,11 +351,13 @@ export default function DebtManagementSection(props) {
     <section className="finance-section debt-management-section">
       <div className="patients-header">
         <div>
-          <p className="eyebrow">{activeWorkspace === 'debts' ? 'Debt Management' : 'Sales Allocation'}</p>
-          <h3>{activeWorkspace === 'debts' ? 'Track loans, credit lines, and company payment schedules' : 'Plan how collected sales support branch obligations'}</h3>
-          <p className="header-copy">{activeWorkspace === 'debts'
-            ? 'Built from the legacy debt management page and connected to the company debt database.'
-            : 'Set flexible percentages for savings, payroll, suppliers, rent, and the bank.'}</p>
+          <p className="eyebrow">{activeWorkspace === 'overview' ? 'Debt & Sales Allocation' : activeWorkspace === 'debts' ? 'Debt Management' : 'Sales Allocation'}</p>
+          <h3>{activeWorkspace === 'overview' ? 'Financial commitments at a glance' : activeWorkspace === 'debts' ? 'Track loans, credit lines, and company payment schedules' : 'Plan how collected sales support branch obligations'}</h3>
+          <p className="header-copy">{activeWorkspace === 'overview'
+            ? 'A clear view of outstanding obligations and how branch collections are planned.'
+            : activeWorkspace === 'debts'
+              ? 'Built from the legacy debt management page and connected to the company debt database.'
+              : 'Set flexible percentages for savings, payroll, suppliers, rent, and the bank.'}</p>
         </div>
         {activeWorkspace === 'debts' ? (
           <div className="header-actions">
@@ -324,6 +368,7 @@ export default function DebtManagementSection(props) {
 
       <WorkspaceTabs
         tabs={[
+          { id: 'overview', label: 'Overview', description: 'Debt and sales allocation snapshot', icon: '◉' },
           { id: 'debts', label: 'Debt Register', description: 'Loans, balances, and repayment schedules', icon: 'D' },
           { id: 'allocations', label: 'Sales Allocation', description: 'Plan savings reserves and bank transfers', icon: '%' },
         ]}
@@ -331,10 +376,23 @@ export default function DebtManagementSection(props) {
         onChange={setActiveWorkspace}
         ariaLabel="Debt and sales allocation workspaces"
         heading="Choose a finance workspace"
-        description="Switch between company debt servicing and branch sales planning."
+        description="Review the financial snapshot, manage company debts, or plan branch sales allocations."
       />
 
-      {activeWorkspace === 'debts' ? (
+      {activeWorkspace === 'overview' ? (
+        <DebtFinanceOverview
+          debtData={debtData}
+          allocationData={allocationOverview}
+          allocationError={allocationOverviewError}
+          isLoadingDebts={isLoading && !debtData}
+          isLoadingAllocation={isLoadingAllocationOverview}
+          branchName={debtData?.branch_name ?? debtMeta?.branch_name ?? 'Selected branch'}
+          isMerged={Number(branchId) === 0}
+          error={error}
+          onOpenDebts={() => setActiveWorkspace('debts')}
+          onOpenAllocations={() => setActiveWorkspace('allocations')}
+        />
+      ) : activeWorkspace === 'debts' ? (
         <>
       {error ? <div className="message-banner error">{error}</div> : null}
       {success ? <div className="message-banner success">{success}</div> : null}
@@ -558,6 +616,7 @@ export default function DebtManagementSection(props) {
           branchId={branchId}
           branchName={debtMeta?.branch_name ?? 'Selected branch'}
           isMerged={Number(branchId) === 0}
+          session={props.session}
         />
       )}
 
@@ -728,6 +787,226 @@ export default function DebtManagementSection(props) {
   )
 }
 
+function DebtFinanceOverview({
+  debtData,
+  allocationData,
+  allocationError,
+  isLoadingDebts,
+  isLoadingAllocation,
+  branchName,
+  isMerged,
+  error,
+  onOpenDebts,
+  onOpenAllocations,
+}) {
+  const debtStats = debtData?.stats ?? {}
+  const allocationSummary = allocationData?.summary ?? {}
+  const debtsCount = Number(debtStats.total_debts ?? 0)
+  const settledPercent = debtsCount > 0 ? (Number(debtStats.paid_count ?? 0) / debtsCount) * 100 : 0
+  const allocationItems = (allocationData?.items ?? []).slice(0, 3)
+  const allocationPercent = Math.min(Number(allocationSummary.total_percent ?? 0), 100)
+
+  return (
+    <section className="debt-finance-overview">
+      {error ? <div className="message-banner error">{error}</div> : null}
+      <div className="debt-finance-overview__heading">
+        <div>
+          <p className="eyebrow">Portfolio snapshot</p>
+          <h3>{branchName} financial overview</h3>
+          <p>Outstanding commitments beside this month’s collection plan.</p>
+        </div>
+        <span className="debt-finance-overview__period">Updated live · {localTodayIso()}</span>
+      </div>
+
+      <div className="debt-finance-overview__grid">
+        <article className="debt-overview-card debt-overview-card--debts">
+          <div className="debt-overview-card__topline">
+            <span className="debt-overview-card__icon" aria-hidden="true">↗</span>
+            <span className="debt-overview-card__tag">Debt portfolio</span>
+            <span className="debt-overview-card__ornament" aria-hidden="true" />
+          </div>
+          <div className="debt-overview-card__main">
+            <div>
+              <p className="debt-overview-card__label">Outstanding balance</p>
+              <strong className="debt-overview-card__value">
+                {isLoadingDebts ? 'Loading…' : currency.format(Number(debtStats.total_balance ?? 0))}
+              </strong>
+            </div>
+            <div className="debt-overview-ring" style={{ '--settled-share': `${settledPercent}%` }} aria-label={`${Number(debtStats.paid_count ?? 0)} of ${debtsCount} debts paid`}>
+              <span>{Number(debtStats.paid_count ?? 0)}<small>paid</small></span>
+            </div>
+          </div>
+          <div className="debt-overview-card__metrics">
+            <div><span>Active debts</span><strong>{Number(debtStats.active_count ?? 0)}</strong></div>
+            <div className={Number(debtStats.overdue_count ?? 0) > 0 ? 'is-alert' : ''}><span>Overdue</span><strong>{Number(debtStats.overdue_count ?? 0)}</strong></div>
+            <div><span>Due in 30 days</span><strong>{currency.format(Number(debtStats.next_30_days ?? 0))}</strong></div>
+          </div>
+          <div className="debt-overview-card__viz">
+            <div className="debt-overview-card__viz-heading"><span>Upcoming commitments</span><span>{(debtData?.upcoming_payments ?? []).length} scheduled</span></div>
+            {(debtData?.upcoming_payments ?? []).length ? debtData.upcoming_payments.slice(0, 2).map((debt) => (
+              <div className="debt-overview-mini-row" key={`overview-upcoming-${debt.id}`}>
+                <span className="debt-overview-mini-row__dot" />
+                <span className="debt-overview-mini-row__name">{debt.category || debt.lender_name || 'Debt payment'}</span>
+                <strong>{currency.format(Number(debt.next_payment_amount ?? 0))}</strong>
+              </div>
+            )) : <p className="debt-overview-card__empty">{isLoadingDebts ? 'Gathering payment schedule…' : 'No payments due in the next 30 days.'}</p>}
+          </div>
+          <button type="button" className="debt-overview-card__action" onClick={onOpenDebts}>
+            Open debt register <span aria-hidden="true">→</span>
+          </button>
+        </article>
+
+        <article className="debt-overview-card debt-overview-card--allocations">
+          <div className="debt-overview-card__topline">
+            <span className="debt-overview-card__icon" aria-hidden="true">◒</span>
+            <span className="debt-overview-card__tag">Sales allocation</span>
+            <span className="debt-overview-card__month">This month</span>
+          </div>
+          {isMerged ? (
+            <div className="debt-overview-allocation-empty">
+              <strong>Choose a branch to preview its plan</strong>
+              <span>Sales allocations are managed separately for each branch.</span>
+            </div>
+          ) : (
+            <>
+              <div className="debt-overview-card__main debt-overview-card__main--allocation">
+                <div>
+                  <p className="debt-overview-card__label">Collections assigned</p>
+                  <strong className="debt-overview-card__value">
+                    {isLoadingAllocation ? 'Loading…' : `${Number(allocationSummary.total_percent ?? 0).toFixed(1)}%`}
+                  </strong>
+                  <span className="debt-overview-card__subvalue">across {allocationData?.items?.length ?? 0} active goals</span>
+                </div>
+                <div className="debt-overview-allocation-mark" aria-hidden="true">
+                  <span>{Math.round(allocationPercent)}%</span>
+                  <i /><i /><i />
+                </div>
+              </div>
+              <div className="debt-overview-allocation-summary">
+                <div><span>Available after costs</span><strong>{currency.format(Number(allocationSummary.allocation_base ?? 0))}</strong></div>
+                <div><span>Savings recorded</span><strong>{currency.format(Number(allocationSummary.existing_set_aside_amount ?? 0))}</strong></div>
+              </div>
+              {allocationError ? (
+                <p className="debt-overview-card__empty">Allocation preview unavailable: {allocationError}</p>
+              ) : (
+                <div className="debt-overview-allocation-bars" aria-label="Top allocation purposes">
+                  {allocationItems.length ? allocationItems.map((item) => (
+                    <div className="debt-overview-allocation-item" key={`overview-allocation-${item.id}`}>
+                      <div><span>{item.name}</span><strong>{Number(item.allocation_percent).toFixed(1)}%</strong></div>
+                      <span className={`debt-overview-allocation-track treatment-${item.treatment}`}>
+                        <i style={{ width: `${Math.min(Number(item.allocation_percent ?? 0), 100)}%` }} />
+                      </span>
+                    </div>
+                  )) : <p className="debt-overview-card__empty">{isLoadingAllocation ? 'Calculating the branch plan…' : 'No allocation goals set up yet.'}</p>}
+                </div>
+              )}
+            </>
+          )}
+          <button type="button" className="debt-overview-card__action" onClick={onOpenAllocations}>
+            Open sales allocation <span aria-hidden="true">→</span>
+          </button>
+        </article>
+      </div>
+
+      <div className="debt-overview-thumbnails">
+        <section className="debt-overview-thumbnail-group">
+          <div className="debt-overview-thumbnail-group__heading">
+            <div>
+              <p className="eyebrow">Debt snapshots</p>
+              <h4>Individual debts</h4>
+            </div>
+            <span>{Number(debtData?.pagination?.total ?? 0)} records</span>
+          </div>
+          {isLoadingDebts ? (
+            <div className="debt-overview-thumbnail-empty">Loading debt snapshots…</div>
+          ) : (debtData?.debts ?? []).length ? (
+            <div className="debt-overview-thumbnail-grid">
+              {debtData.debts.map((debt) => {
+                const total = Number(debt.total_amount ?? 0)
+                const balance = Math.max(Number(debt.balance ?? 0), 0)
+                const paidPercent = total > 0 ? Math.max(0, Math.min((Number(debt.amount_paid ?? 0) / total) * 100, 100)) : 0
+                return (
+                  <button
+                    type="button"
+                    className="debt-item-thumbnail"
+                    key={`overview-debt-${debt.id}`}
+                    onClick={onOpenDebts}
+                    title="Open this record in the debt register"
+                  >
+                    <span className="debt-item-thumbnail__topline">
+                      <span className="debt-item-thumbnail__category">{debt.category || formatLabel(debt.debt_type)}</span>
+                      <span className={`debt-item-thumbnail__status status-${String(debt.status ?? '').toLowerCase().replaceAll('_', '-')}`}>{formatLabel(debt.status)}</span>
+                    </span>
+                    <strong className="debt-item-thumbnail__name">{debt.lender_name || debt.debtor_name || 'Debt record'}</strong>
+                    <span className="debt-item-thumbnail__balance">{currency.format(balance)} <small>remaining</small></span>
+                    <span className="debt-item-thumbnail__track"><i style={{ width: `${paidPercent}%` }} /></span>
+                    <span className="debt-item-thumbnail__foot">
+                      <span>{paidPercent.toFixed(0)}% repaid</span>
+                      <span>{debt.due_date ? `Due ${String(debt.due_date).slice(0, 10)}` : 'No due date'}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="debt-overview-thumbnail-empty">No debt records to display yet.</div>
+          )}
+          {Number(debtData?.pagination?.total ?? 0) > (debtData?.debts ?? []).length ? (
+            <p className="debt-overview-thumbnail-note">Showing the first {(debtData?.debts ?? []).length} priority records. Open the register to view the rest.</p>
+          ) : null}
+        </section>
+
+        <section className="debt-overview-thumbnail-group debt-overview-thumbnail-group--allocations">
+          <div className="debt-overview-thumbnail-group__heading">
+            <div>
+              <p className="eyebrow">Plan details</p>
+              <h4>Sales allocation goals</h4>
+            </div>
+            <span>{allocationData?.items?.length ?? 0} active</span>
+          </div>
+          {isMerged ? (
+            <div className="debt-overview-thumbnail-empty">Choose a branch to view its individual allocation goals.</div>
+          ) : isLoadingAllocation ? (
+            <div className="debt-overview-thumbnail-empty">Loading allocation goals…</div>
+          ) : allocationError ? (
+            <div className="debt-overview-thumbnail-empty">Allocation goals are unavailable: {allocationError}</div>
+          ) : (allocationData?.items ?? []).length ? (
+            <div className="debt-overview-thumbnail-grid">
+              {allocationData.items.map((item) => {
+                const progress = Math.max(0, Math.min(Number(item.target_progress_percent ?? 0), 100))
+                return (
+                  <button
+                    type="button"
+                    className="allocation-item-thumbnail"
+                    key={`overview-allocation-item-${item.id}`}
+                    onClick={onOpenAllocations}
+                    title="Open this goal in the sales allocation plan"
+                  >
+                    <span className="allocation-item-thumbnail__topline">
+                      <span className={`allocation-item-thumbnail__type treatment-${item.treatment}`}>{item.treatment === 'bank' ? 'Bank-bound' : 'Savings goal'}</span>
+                      <strong>{Number(item.allocation_percent ?? 0).toFixed(1)}%</strong>
+                    </span>
+                    <strong className="allocation-item-thumbnail__name">{item.name}</strong>
+                    <span className="allocation-item-thumbnail__planned">{currency.format(Number(item.period_allocation ?? 0))}<small> planned this month</small></span>
+                    {item.target_amount != null ? (
+                      <>
+                        <span className="allocation-item-thumbnail__track"><i style={{ width: `${progress}%` }} /></span>
+                        <span className="allocation-item-thumbnail__foot">{progress.toFixed(0)}% of {currency.format(Number(item.target_amount))} target</span>
+                      </>
+                    ) : <span className="allocation-item-thumbnail__foot">No savings target set</span>}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="debt-overview-thumbnail-empty">No sales allocation goals set up for this branch.</div>
+          )}
+        </section>
+      </div>
+    </section>
+  )
+}
+
 function Pagination({ pagination, onPageChange }) {
   if (!pagination) return null
   return (
@@ -755,4 +1034,11 @@ function formatLabel(value) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function localTodayIso() {
+  const date = new Date()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
 }

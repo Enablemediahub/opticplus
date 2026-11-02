@@ -49,18 +49,21 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [accountForm, setAccountForm] = useState(() => defaultAccountForm(branchId))
   const [deviceToken, setDeviceToken] = useState('')
   const [smsDeviceLabel, setSmsDeviceLabel] = useState('')
+  const [smsDeviceSource, setSmsDeviceSource] = useState('')
   const [tokenDeviceLabel, setTokenDeviceLabel] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
   const refreshInProgress = useRef(false)
+  const refreshWaiters = useRef([])
   const [isSavingDeposit, setIsSavingDeposit] = useState(false)
   const [isSavingBalance, setIsSavingBalance] = useState(false)
   const [isSavingAccount, setIsSavingAccount] = useState(false)
   const [deletingAccountId, setDeletingAccountId] = useState(null)
   const [isPairingDevice, setIsPairingDevice] = useState(false)
   const [isRequestingPhoneRefresh, setIsRequestingPhoneRefresh] = useState(false)
+  const [revokingDeviceId, setRevokingDeviceId] = useState(null)
   const [phoneRefreshFeedback, setPhoneRefreshFeedback] = useState(null)
   const [historyDialog, setHistoryDialog] = useState(null)
   const [historyFilters, setHistoryFilters] = useState({ start_date: '', end_date: '' })
@@ -69,8 +72,13 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [historyError, setHistoryError] = useState('')
   const historyRequestId = useRef(0)
 
-  const loadRegister = useCallback(async ({ silent = false } = {}) => {
-    if (!token || !session || refreshInProgress.current) return
+  const loadRegister = useCallback(async ({ silent = false, force = false } = {}) => {
+    if (!token || !session) return
+
+    while (refreshInProgress.current) {
+      if (!force) return
+      await new Promise((resolve) => refreshWaiters.current.push(resolve))
+    }
 
     refreshInProgress.current = true
     if (!silent) setIsLoading(true)
@@ -104,6 +112,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       setError(loadError.message)
     } finally {
       refreshInProgress.current = false
+      refreshWaiters.current.splice(0).forEach((resolve) => resolve())
       if (!silent) setIsLoading(false)
     }
   }, [apiFetch, branchId, session, token])
@@ -177,7 +186,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
 
       setSuccess(response.message || 'Bank deposit recorded successfully.')
       setDepositForm(defaultDepositForm())
-      await loadRegister()
+      await loadRegister({ force: true })
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -203,7 +212,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
 
       setSuccess(response.message || 'Bank balance updated successfully.')
       setBalanceForm((current) => ({ ...current, reason: '' }))
-      await loadRegister()
+      await loadRegister({ force: true })
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -225,7 +234,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       })
       setSuccess(response.message || 'Bank account added.')
       setAccountForm((current) => ({ ...current, account_suffix: '', account_label: '' }))
-      await loadRegister()
+      await loadRegister({ force: true })
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -249,7 +258,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         token,
       })
       setSuccess(response.message || 'Connected account removed.')
-      await loadRegister()
+      await loadRegister({ force: true })
     } catch (deleteError) {
       setError(deleteError.message)
     } finally {
@@ -268,20 +277,39 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       const response = await apiFetch('/bank-alerts/devices', {
         method: 'POST',
         token,
+        freshIdempotencyKey: true,
         body: {
           label,
           branch_id: branchId > 0 ? branchId : accountForm.branch_id,
+          alert_source: smsDeviceSource,
         },
       })
       setDeviceToken(response.token)
       setTokenDeviceLabel(label)
       setSmsDeviceLabel('')
+      setSmsDeviceSource('')
       setSuccess(response.message || 'Android phone paired.')
-      await loadRegister()
+      await loadRegister({ force: true })
     } catch (pairError) {
       setError(pairError.message)
     } finally {
       setIsPairingDevice(false)
+    }
+  }
+
+  async function updateDeviceSource(device, alertSource) {
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch(`/bank-alerts/devices/${device.id}/source?branch_id=${branchId}`, {
+        method: 'PATCH',
+        token,
+        body: { alert_source: alertSource },
+      })
+      setSuccess(response.message || 'Phone SMS source updated.')
+      await loadRegister()
+    } catch (sourceError) {
+      setError(sourceError.message)
     }
   }
 
@@ -309,6 +337,29 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       setError(requestError.message)
     } finally {
       setIsRequestingPhoneRefresh(false)
+    }
+  }
+
+  async function removePhonePairing(device) {
+    const confirmed = window.confirm(
+      `Remove the pairing for ${device.label}? This phone will stop uploading to OpticPlus. SMS history is kept, and you can generate a new token to pair it again.`
+    )
+    if (!confirmed) return
+
+    setRevokingDeviceId(device.id)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch(`/bank-alerts/devices/${device.id}?branch_id=${branchId}`, {
+        method: 'DELETE',
+        token,
+      })
+      setSuccess(response.message || 'Phone pairing removed.')
+      await loadRegister()
+    } catch (revokeError) {
+      setError(revokeError.message)
+    } finally {
+      setRevokingDeviceId(null)
     }
   }
 
@@ -485,7 +536,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                 value={accountForm.bank_name}
                 onChange={(event) => setAccountForm((current) => ({ ...current, bank_name: event.target.value }))}
               >
-                {bankAlerts.banks.map((bank) => <option key={bank} value={bank}>{bank}</option>)}
+                {(bankAlerts.banks.length ? bankAlerts.banks : bankBrands.map((bank) => bank.name))
+                  .map((bank) => <option key={bank} value={bank}>{bank}</option>)}
               </select>
             </label>
             <label>
@@ -523,7 +575,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
           <div>
             <p className="eyebrow">Android SMS Connection</p>
             <h3>{pairedDevices.length ? `${pairedDevices.length} SMS phone${pairedDevices.length === 1 ? '' : 's'} paired` : 'Connect bank / MTN MoMo SMS phones'}</h3>
-            <p className="header-copy">Each phone that receives bank or MoMo SMS can have its own token. Pair the phones one at a time and assign each to the correct branch.</p>
+            <p className="header-copy">Each phone has its own branch and SMS source setting. Set the Prudential phone to Prudential only and the MoMo SIM phone to MTN MoMo only.</p>
           </div>
         </div>
         {pairedDevices.length ? (
@@ -537,10 +589,23 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                     {device.last_used_at ? ` • last phone check ${formatDateTime(device.last_used_at)}` : ' • waiting for first check'}
                     {Number(device.sync_request_version ?? 0) > Number(device.sync_completed_version ?? 0) ? ' • refresh requested; waiting for phone' : ''}
                   </p>
+                  <label className="sms-device-source-control">
+                    Accept alerts from
+                    <select value={device.alert_source ?? 'both'} onChange={(event) => updateDeviceSource(device, event.target.value)}>
+                      <option value="prudential">Prudential only</option>
+                      <option value="momo">MTN MoMo only</option>
+                      <option value="both">Both sources</option>
+                    </select>
+                  </label>
                 </div>
-                <button type="button" className="ghost-button" disabled={isRequestingPhoneRefresh} onClick={() => requestPhoneRefresh(device)}>
-                  {isRequestingPhoneRefresh ? 'Requesting...' : 'Request Phone SMS Refresh'}
-                </button>
+                <div className="sms-device-actions">
+                  <button type="button" className="ghost-button" disabled={isRequestingPhoneRefresh || revokingDeviceId === device.id} onClick={() => requestPhoneRefresh(device)}>
+                    {isRequestingPhoneRefresh ? 'Requesting...' : 'Request Phone SMS Refresh'}
+                  </button>
+                  <button type="button" className="ghost-button danger-button" disabled={revokingDeviceId === device.id || isRequestingPhoneRefresh} onClick={() => removePhonePairing(device)}>
+                    {revokingDeviceId === device.id ? 'Removing...' : 'Remove pairing'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -560,10 +625,20 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
               placeholder="e.g. Madina MoMo SIM phone"
             />
           </label>
-          <button type="button" className="ghost-button" disabled={isPairingDevice} onClick={pairDevice}>
-            {isPairingDevice ? 'Pairing...' : pairedDevices.length ? 'Pair Another Phone' : 'Create Pairing Token'}
+          <label>
+            SMS alerts from this phone
+            <select value={smsDeviceSource} onChange={(event) => setSmsDeviceSource(event.target.value)}>
+              <option value="" disabled>Select a source</option>
+              <option value="prudential">Prudential only</option>
+              <option value="momo">MTN MoMo only</option>
+              <option value="both">Both sources</option>
+            </select>
+          </label>
+          <button type="button" className="ghost-button" disabled={isPairingDevice || !smsDeviceSource} onClick={pairDevice}>
+            {isPairingDevice ? 'Generating...' : pairedDevices.length ? 'Generate Token for Another Phone' : 'Generate Phone Pairing Token'}
           </button>
         </div>
+        <p className="muted-copy">Phone tokens are assigned to branches, not individual accounts. Deleting or re-adding a bank or MoMo account does not require a new phone token.</p>
         {deviceToken ? (
           <div className="message-banner warning">
             <strong>Copy this one-time token into {tokenDeviceLabel} now.</strong>
