@@ -1,15 +1,12 @@
-Hostinger FileZilla sync manifest — current update only
-Generated: 2026-11-02 10:33 Africa/Accra
-Package: tmp/hostinger-package
-Remote destination: Laravel application root; preserve relative paths.
+Hostinger package files to upload/sync
+Last updated: 2026-11-02 16:11 Africa/Accra
+Paths are relative to tmp/hostinger-package; Hostinger document root is public.
 
-UPLOAD VIA FILEZILLA
-  app/Http/Controllers/StaffAppraisalController.php
-  public/index.html
-  public/assets/index-LuUtQIBj.js
-  public/assets/index-zD7SIKcS.css
-
-DELETE THESE OLD ASSETS AFTER UPLOAD
-  public/assets/index-Bjm9Vco9.js
-
-This update adds merged-branch appraisal cycles. Clicking an accountant or technician defaults the cycle to Merged branches; the single period and progress record appear in the GM's merged view and in both Labadi and Madina views. Staff see one shared cycle and score. The existing schema supports branch_id 0, so no SQL changes are required. The Hostinger package contains only the active JS and CSS files. Keep the server .env and Laravel runtime files unchanged.
+app/Http/Controllers/CustomerServiceController.php
+app/Http/Controllers/FinanceController.php
+app/Http/Controllers/PatientRecordController.php
+routes/api.php
+public/index.html
+public/registration/index.html
+public/assets/App-BN9iT6ab.js
+public/assets/index-CObGzy0g.js

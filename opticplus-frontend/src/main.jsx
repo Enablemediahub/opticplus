@@ -1,7 +1,13 @@
-import { Component, StrictMode } from 'react'
+import { Component, lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.jsx'
+import './components/PublicRegistrationPage.css'
+import './components/PublicPatientIdCard.css'
+
+const isPublicRegistration = window.location.pathname.replace(/\/+$/, '') === '/registration'
+const ApplicationEntry = lazy(() => isPublicRegistration
+  ? import('./components/PublicRegistrationPage.jsx')
+  : import('./App.jsx'))
 
 class StartupErrorBoundary extends Component {
   constructor(props) {
@@ -48,7 +54,7 @@ class StartupErrorBoundary extends Component {
             OPTICPLUS Startup Error
           </p>
           <h1 style={{ margin: '10px 0 12px', fontSize: '1.8rem' }}>
-            The portal hit a runtime error before the login page could load.
+            OPTICPLUS could not open this page.
           </h1>
           <p style={{ margin: '0 0 16px', color: '#cbd5e1' }}>
             Your files are still present. This screen is here so startup failures never appear as a silent blank page again.
@@ -76,7 +82,9 @@ class StartupErrorBoundary extends Component {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <StartupErrorBoundary>
-      <App />
+      <Suspense fallback={<main className="public-registration-loading">Opening Bealet Optical Center registration…</main>}>
+        <ApplicationEntry />
+      </Suspense>
     </StartupErrorBoundary>
   </StrictMode>,
 )

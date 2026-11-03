@@ -31,6 +31,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
     });
 
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/public/registrations', [PatientRecordController::class, 'publicStore'])
+        ->middleware('throttle:10,1');
+    Route::post('/public/folder-ids', [PatientRecordController::class, 'issuePublicFolderId'])
+        ->middleware('throttle:30,1');
     Route::get('/company-profile', [CompanyProfileController::class, 'show']);
     Route::post('/bank-alerts/ingest', [BankAlertController::class, 'ingest'])
         ->middleware(['auth.bank-alert-device', 'throttle:60,1']);

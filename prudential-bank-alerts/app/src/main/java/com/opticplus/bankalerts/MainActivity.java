@@ -7,12 +7,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Telephony;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
@@ -139,8 +137,8 @@ public final class MainActivity extends Activity {
 
         TextView privacyNote = text(
                 "Only supported Prudential and MTN MoMo sender IDs and message formats are checked. " +
-                        "A manager can request a refresh from OpticPlus; the phone checks for it about every five minutes. " +
-                        "Background inbox refresh scans only recent supported sender messages and requires inbox permission. " +
+                        "Grant background inbox refresh permission to automatically scan recent supported sender messages about every five minutes. " +
+                        "Without inbox permission, only newly received SMS messages are monitored. " +
                         "The app stores parsed transaction details only; " +
                         "it does not save the original SMS or change bank balances. Verify alerts against " +
                         "the bank because sender IDs can be spoofed.",
@@ -166,8 +164,7 @@ public final class MainActivity extends Activity {
         root.addView(testLatestMessage, testButtonParams);
 
         testStatus = text(
-                "One-time test: checks recent messages from supported bank and MTN sender IDs. " +
-                        "The SMS text is not saved.",
+                "Manual check of recent supported bank and MTN messages. The same scan runs automatically during background sync when inbox access is granted. SMS text is not saved.",
                 13,
                 0xFF52647D,
                 false
@@ -362,47 +359,22 @@ public final class MainActivity extends Activity {
     }
 
     private void readLatestSupportedMessage() {
-        Uri inboxUri = Telephony.Sms.Inbox.CONTENT_URI;
-        String[] projection = {
-                Telephony.Sms.ADDRESS,
-                Telephony.Sms.BODY,
-                Telephony.Sms.DATE
-        };
-
-        try (Cursor cursor = getContentResolver().query(
-                inboxUri,
-                projection,
-                "(" + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                        + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                        + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                        + Telephony.Sms.ADDRESS + " LIKE ? COLLATE NOCASE)",
-                new String[] { "PRUDENTIAL", "170", "MobileMoney", "MTN%" },
-                Telephony.Sms.DATE + " DESC LIMIT 20"
-        )) {
-            if (cursor == null || !cursor.moveToFirst()) {
+        try {
+            SupportedSmsInboxScanner.ScanResult scan = SupportedSmsInboxScanner.scan(this, database);
+            if (scan.examinedCount == 0) {
                 testStatus.setText("No recent inbox messages from supported bank or MTN sender IDs were found.");
                 return;
             }
-            int imported = 0;
-            int parsed = 0;
-            do {
-                BankAlert alert = BankSmsParser.parse(cursor.getString(0), cursor.getString(1), cursor.getLong(2));
-                if (alert != null) {
-                    parsed++;
-                    if (database.insertIfNew(alert)) imported++;
-                }
-            } while (cursor.moveToNext());
-            if (parsed == 0) {
+            if (scan.parsedCount == 0) {
                 testStatus.setText("No recent supported bank or MTN message matched. SMS text was not saved.");
                 return;
             }
-
             updateScreen();
-            if (imported > 0) {
+            if (scan.importedCount > 0) {
                 BankAlertSync.enqueue(this);
             }
-            testStatus.setText(imported > 0
-                    ? "Checked the 20 latest supported sender messages; added " + imported + " new alert(s) to the local review list. SMS text was not saved."
+            testStatus.setText(scan.importedCount > 0
+                    ? "Checked the latest supported sender messages; added " + scan.importedCount + " new alert(s) to the local review list. SMS text was not saved."
                     : "Supported messages were found, but they were already on the local review list.");
         } catch (SecurityException exception) {
             testStatus.setText(

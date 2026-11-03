@@ -339,47 +339,172 @@ class PatientRecordController extends Controller
             'appointment_date' => ['nullable', 'date'],
         ]);
 
-        $folderId = $this->generateFolderId(
-            $validated['surname'],
-            $validated['firstname'],
-            $validated['othernames'] ?? ''
-        );
-
         $fullName = trim(implode(' ', array_filter([
             $validated['surname'],
             $validated['firstname'],
             $validated['othernames'] ?? null,
         ])));
 
-        $recordId = DB::table('patient_records')->insertGetId([
-            'date' => now()->toDateString(),
-            'folder_id' => $folderId,
-            'surname' => $validated['surname'],
-            'firstname' => $validated['firstname'],
-            'othernames' => $validated['othernames'] ?? null,
-            'sex' => $validated['sex'],
-            'dob' => $validated['dob'] ?? null,
-            'age' => $validated['age'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'],
-            'address' => $validated['address'] ?? null,
-            'residence' => $validated['residence'] ?? null,
-            'purpose' => $validated['purpose'],
-            'patient_type' => $validated['patient_type'],
-            'comment' => $validated['comment'] ?? null,
-            'status' => 'pending',
-            'name' => $fullName,
-            'appointment_date' => $validated['appointment_date'] ?? null,
-            'branch_id' => $branchId,
-            'created_by' => $request->user()?->id,
-            'created_at' => now(),
-        ]);
+        [$folderId, $recordId] = DB::transaction(function () use ($validated, $branchId, $request, $fullName): array {
+            [$folderId, $allocationId] = $this->allocateFolderId(
+                $validated['surname'],
+                $validated['firstname'],
+                $validated['othernames'] ?? ''
+            );
+
+            $recordId = DB::table('patient_records')->insertGetId([
+                'date' => now()->toDateString(),
+                'folder_id' => $folderId,
+                'surname' => $validated['surname'],
+                'firstname' => $validated['firstname'],
+                'othernames' => $validated['othernames'] ?? null,
+                'sex' => $validated['sex'],
+                'dob' => $validated['dob'] ?? null,
+                'age' => $validated['age'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'],
+                'address' => $validated['address'] ?? null,
+                'residence' => $validated['residence'] ?? null,
+                'purpose' => $validated['purpose'],
+                'patient_type' => $validated['patient_type'],
+                'comment' => $validated['comment'] ?? null,
+                'status' => 'pending',
+                'name' => $fullName,
+                'appointment_date' => $validated['appointment_date'] ?? null,
+                'branch_id' => $branchId,
+                'created_by' => $request->user()?->id,
+                'created_at' => now(),
+            ]);
+
+            $this->markFolderIdUsed($allocationId, $recordId);
+
+            return [$folderId, $recordId];
+        });
 
         $record = DB::table('patient_records')->where('id', $recordId)->first();
 
         return response()->json([
             'message' => 'Patient record created successfully.',
             'record' => $record,
+        ], 201);
+    }
+
+    public function issuePublicFolderId(Request $request): JsonResponse
+    {
+        if (trim((string) $request->input('website', '')) !== '') {
+            return response()->json(['message' => 'Folder ID issued.', 'folder_id' => 'BOC-XX/0000/'.now()->format('Y')], 201);
+        }
+
+        $validated = $request->validate([
+            'initials' => ['required', 'string', 'regex:/^[A-Z0-9]{2,3}$/'],
+            'website' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (! Schema::hasTable('patient_folder_id_allocations')) {
+            return response()->json(['message' => 'Folder ID allocation is not ready. Please contact reception.'], 503);
+        }
+
+        [$folderId] = DB::transaction(fn (): array => $this->allocateFolderIdFromInitials($validated['initials']));
+
+        return response()->json(['folder_id' => $folderId, 'issued_at' => now()->toDateString()], 201);
+    }
+
+    public function publicStore(Request $request): JsonResponse
+    {
+        if (trim((string) $request->input('website', '')) !== '') {
+            return response()->json(['message' => 'Registration received.'], 201);
+        }
+
+        $validated = $request->validate([
+            'branch_id' => ['required', 'integer', 'in:1,2'],
+            'folder_id' => ['required', 'string', 'max:60', 'regex:/^BOC-[A-Z0-9]{2,3}\/[0-9]{4,}\/[0-9]{4}$/'],
+            'surname' => ['required', 'string', 'max:100'],
+            'firstname' => ['required', 'string', 'max:100'],
+            'othernames' => ['nullable', 'string', 'max:100'],
+            'sex' => ['required', 'in:Male,Female'],
+            'dob' => ['nullable', 'date', 'before_or_equal:today'],
+            'age' => ['nullable', 'integer', 'min:0', 'max:150'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'phone' => ['required', 'string', 'max:20'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'residence' => ['nullable', 'string', 'max:255'],
+            'purpose' => ['required', 'string', 'max:50'],
+            'patient_type' => ['required', 'in:new,old'],
+            'comment' => ['nullable', 'string', 'max:2000'],
+            'appointment_date' => ['nullable', 'date', 'after_or_equal:today'],
+            'privacy_consent' => ['required', 'accepted'],
+            'website' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->ensurePatientRecordIdSchema();
+        if (! Schema::hasColumn('patient_records', 'registration_source') || ! Schema::hasColumn('patient_records', 'privacy_consent_at') || ! Schema::hasTable('patient_folder_id_allocations')) {
+            return response()->json([
+                'message' => 'Online registration is not available yet. Please ask our reception team for assistance.',
+            ], 503);
+        }
+
+        $folderId = $validated['folder_id'];
+        $expectedInitials = $this->folderInitials($validated['surname'], $validated['firstname'], $validated['othernames'] ?? '');
+        if (! preg_match('/^BOC-'.preg_quote($expectedInitials, '/').'\/[0-9]{4,}\/[0-9]{4}$/', $folderId)) {
+            return response()->json(['message' => 'The previewed folder ID no longer matches these details. Please preview the card again.'], 409);
+        }
+        $fullName = trim(implode(' ', array_filter([
+            $validated['surname'],
+            $validated['firstname'],
+            $validated['othernames'] ?? null,
+        ])));
+
+        $saved = DB::transaction(function () use ($validated, $folderId, $fullName, $expectedInitials): bool {
+            $allocation = DB::table('patient_folder_id_allocations')
+                ->where('folder_id', $folderId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $allocation || $allocation->status !== 'reserved' || $allocation->initials !== $expectedInitials || DB::table('patient_records')->where('folder_id', $folderId)->exists()) {
+                return false;
+            }
+
+            $recordId = DB::table('patient_records')->insertGetId([
+                'date' => now()->toDateString(),
+                'folder_id' => $folderId,
+                'surname' => $validated['surname'],
+                'firstname' => $validated['firstname'],
+                'othernames' => $validated['othernames'] ?? null,
+                'sex' => $validated['sex'],
+                'dob' => $validated['dob'] ?? null,
+                'age' => $validated['age'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'],
+                'address' => $validated['address'] ?? null,
+                'residence' => $validated['residence'] ?? null,
+                'purpose' => $validated['purpose'],
+                'patient_type' => $validated['patient_type'],
+                'comment' => $validated['comment'] ?? null,
+                'status' => 'pending',
+                'name' => $fullName,
+                'appointment_date' => $validated['appointment_date'] ?? null,
+                'branch_id' => (int) $validated['branch_id'],
+                'created_by' => null,
+                'registration_source' => 'public_qr',
+                'privacy_consent_at' => now(),
+                'created_at' => now(),
+            ]);
+
+            $this->markFolderIdUsed((int) $allocation->id, $recordId);
+
+            return true;
+        });
+
+        if (! $saved) {
+            return response()->json([
+                'message' => 'This folder ID has expired or was already used. Please preview a new ID card and submit again.',
+            ], 409);
+        }
+
+        return response()->json([
+            'message' => 'Your registration has been received.',
+            'folder_id' => $folderId,
+            'issued_at' => now()->toDateString(),
         ], 201);
     }
 
@@ -2009,17 +2134,58 @@ class PatientRecordController extends Controller
         ];
     }
 
-    private function generateFolderId(string $surname, string $firstname, string $othernames = ''): string
+    private function folderInitials(string $surname, string $firstname, string $othernames = ''): string
     {
-        $initials = Str::upper(Str::substr(trim($surname), 0, 1))
-            .Str::upper(Str::substr(trim($firstname), 0, 1))
-            .Str::upper(Str::substr(trim($othernames), 0, 1));
+        $parts = [$surname, $firstname, $othernames];
+        $initials = '';
 
-        $year = now()->format('Y');
-        $count = ((int) DB::table('patient_records')->count()) + 1;
-        $sequence = str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+        foreach ($parts as $part) {
+            $ascii = Str::ascii(trim($part));
+            $letters = preg_replace('/[^A-Za-z0-9]/', '', $ascii) ?? '';
+            if ($letters !== '') {
+                $initials .= Str::upper(Str::substr($letters, 0, 1));
+            }
+            if (strlen($initials) === 3) {
+                break;
+            }
+        }
 
-        return "BOC-{$initials}/{$sequence}/{$year}";
+        return $initials !== '' ? $initials : 'PT';
+    }
+
+    private function allocateFolderId(string $surname, string $firstname, string $othernames = ''): array
+    {
+        return $this->allocateFolderIdFromInitials($this->folderInitials($surname, $firstname, $othernames));
+    }
+
+    private function allocateFolderIdFromInitials(string $initials): array
+    {
+        $now = now();
+        $allocationId = DB::table('patient_folder_id_allocations')->insertGetId([
+            'initials' => $initials,
+            'issued_year' => $now->format('Y'),
+            'status' => 'reserved',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $folderId = 'BOC-'.$initials.'/'.str_pad((string) $allocationId, 4, '0', STR_PAD_LEFT).'/'.$now->format('Y');
+
+        DB::table('patient_folder_id_allocations')
+            ->where('id', $allocationId)
+            ->update(['folder_id' => $folderId, 'updated_at' => now()]);
+
+        return [$folderId, (int) $allocationId];
+    }
+
+    private function markFolderIdUsed(int $allocationId, int $recordId): void
+    {
+        DB::table('patient_folder_id_allocations')
+            ->where('id', $allocationId)
+            ->update([
+                'status' => 'used',
+                'patient_record_id' => $recordId,
+                'updated_at' => now(),
+            ]);
     }
 
     private function ensurePatientRecordIdSchema(): void

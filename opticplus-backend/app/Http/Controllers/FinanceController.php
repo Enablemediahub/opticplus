@@ -2274,7 +2274,7 @@ class FinanceController extends Controller
         }
 
         return response()->json([
-            'message' => 'Expense updated successfully.',
+            'message' => 'Expense updated successfully. The change was recorded in the audit trail.',
         ]);
     }
 
@@ -2282,9 +2282,9 @@ class FinanceController extends Controller
     {
         $user = $request->user();
         $role = $user?->normalized_role ?? $user?->role;
-        if ($role !== 'manager') {
+        if (! in_array($role, ['manager', 'accountant'], true)) {
             return response()->json([
-                'message' => 'Only the General Manager can delete expenses.',
+                'message' => 'Only the General Manager and Accountant can delete branch expenses.',
             ], 403);
         }
 
@@ -2298,6 +2298,11 @@ class FinanceController extends Controller
             return response()->json([
                 'message' => 'Expense record not found for this branch.',
             ], 404);
+        }
+        if ($role === 'accountant' && ($this->isLinkedLensCostExpense($current) || $this->isLinkedFrameReservationExpense($current))) {
+            return response()->json([
+                'message' => 'Only the General Manager can delete expenses linked to Lens Tracker or Frames Tracker.',
+            ], 403);
         }
         if ($this->isSalesAllocationSavingExpense($expenseId)) {
             return response()->json([
@@ -2318,7 +2323,7 @@ class FinanceController extends Controller
         });
 
         return response()->json([
-            'message' => 'Expense deleted successfully.',
+            'message' => 'Expense deleted successfully. The change was recorded in the audit trail.',
         ]);
     }
 
@@ -4271,9 +4276,9 @@ class FinanceController extends Controller
         $user = $request->user();
         $role = $user?->normalized_role ?? $user?->role;
 
-        if ($role !== 'manager') {
+        if (! in_array($role, ['manager', 'accountant'], true)) {
             return response()->json([
-                'message' => 'Only the General Manager can edit recorded expenses. Ask the General Manager to make any correction so expense approval controls remain in effect.',
+                'message' => 'Only the General Manager and Accountant can edit recorded branch expenses.',
             ], 403);
         }
 

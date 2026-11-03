@@ -1896,7 +1896,7 @@ function ExpensesTab(props) {
   }, [props.financeExpenses?.expense_workflow_settings?.accountant_memo_threshold, props.financeExpenses?.expense_workflow_settings?.receptionist_direct_limit])
 
   const canManageExpenses = (['manager', 'accountant'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
-  const canEditExpenseRecords = props.session?.role === 'manager' && !props.readOnly
+  const canEditExpenseRecords = ['manager', 'accountant'].includes(props.session?.role) && !props.readOnly
   const canCreateExpenses = (['manager', 'accountant', 'receptionist'].includes(props.session?.role) || props.session?.is_admin) && !props.readOnly
   const canDeleteLinkedLensExpense = props.session?.role === 'manager' && !props.readOnly
   const isCategoryManager = canManageExpenses
@@ -1932,7 +1932,8 @@ function ExpensesTab(props) {
   const canEditSelectedExpenseDetails = canEditSelectedExpense && !isSelectedFrameReserved
   const canDeleteSelectedExpense = isSelectedLensLinked
     ? canDeleteLinkedLensExpense
-    : props.session?.role === 'manager' && !props.readOnly
+    : (props.session?.role === 'manager' && !props.readOnly)
+      || (props.session?.role === 'accountant' && !props.readOnly && !isSelectedFrameReserved)
   const categoryOptions = props.financeExpenses?.categories ?? []
   const expenseApprovalRequests = props.financeExpenses?.approval_requests ?? []
   const canReviewExpenseApprovals = props.session?.role === 'manager'
@@ -2868,10 +2869,10 @@ function ExpensesTab(props) {
                     disabled={props.deletingExpenseRecordId === selectedExpense.expense_id}
                     onClick={async () => {
                       const confirmMessage = selectedExpense.is_lens_linked
-                        ? 'Delete this Lens Tracker expense row? Use this for clearing duplicates. If the lens cost still exists in Lens Tracker, one expense entry may be recreated automatically.'
+                        ? 'Delete this Lens Tracker expense row? Use this for clearing duplicates. If the lens cost still exists in Lens Tracker, one expense entry may be recreated automatically. This action will be recorded in the audit trail.'
                         : selectedExpense.is_frame_reserved
-                          ? 'Delete this frame reservation expense and its linked reservation? This will remove the reserved amount from the Monitor frame set-aside total.'
-                        : 'Delete this expense record?'
+                          ? 'Delete this frame reservation expense and its linked reservation? This will remove the reserved amount from the Monitor frame set-aside total. This action will be recorded in the audit trail.'
+                        : 'Delete this expense record? This cannot be undone. This action will be recorded in the audit trail.'
                       if (!window.confirm(confirmMessage)) return
                       try {
                         await props.deleteExpenseRecord(selectedExpense.expense_id)
@@ -2904,6 +2905,10 @@ function ExpensesTab(props) {
               onSubmit={async (event) => {
                 event.preventDefault()
                 if (!canEditSelectedExpense) return
+                const confirmationMessage = isSelectedFrameReserved
+                  ? 'Save this expense date change? It will be recorded in the audit trail.'
+                  : 'Save these expense changes? They will be recorded in the audit trail.'
+                if (!window.confirm(confirmationMessage)) return
                 try {
                   await props.updateExpenseRecord(selectedExpense.expense_id, expenseModalForm)
                   if (!expenseModalForm.receipt_unavailable && !selectedExpense.gm_approved) {

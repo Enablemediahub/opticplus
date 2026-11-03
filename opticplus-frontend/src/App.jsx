@@ -4023,7 +4023,7 @@ function App() {
     setFinanceSuccess('')
 
     try {
-      await apiFetch(`/finance/expenses/${expenseId}?branch_id=${branchId}`, {
+      const response = await apiFetch(`/finance/expenses/${expenseId}?branch_id=${branchId}`, {
         method: 'PUT',
         token,
         body: {
@@ -4033,7 +4033,7 @@ function App() {
         },
       })
 
-      setFinanceSuccess('Expense updated successfully.')
+      setFinanceSuccess(response.message || 'Expense updated successfully. The change was recorded in the audit trail.')
       setFinanceExpenseQuery((current) => ({ ...current }))
       const summary = await apiFetch(`/finance/summary?branch_id=${branchId}`, { token })
       setFinanceSummary(summary)

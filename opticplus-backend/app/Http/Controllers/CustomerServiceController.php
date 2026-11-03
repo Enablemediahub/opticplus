@@ -145,7 +145,7 @@ class CustomerServiceController extends Controller
         }
 
         $records = $query
-            ->orderByRaw("CASE BINARY ({$effectivePickupStatusSql})
+            ->orderByRaw("CASE BINARY pickup_status
                 WHEN 0x7265616479 THEN 1
                 WHEN 0x6e6f746966696564 THEN 2
                 WHEN 0x7069636b65645f7570 THEN 3
@@ -223,7 +223,7 @@ class CustomerServiceController extends Controller
                 }
             })
             ->whereRaw("BINARY ({$effectivePickupStatusSql}) IN (0x7265616479, 0x6e6f746966696564)")
-            ->orderByRaw("CASE BINARY ({$effectivePickupStatusSql})
+            ->orderByRaw("CASE BINARY pickup_status
                 WHEN 0x7265616479 THEN 1
                 WHEN 0x6e6f746966696564 THEN 2
                 ELSE 3

@@ -1,11 +1,8 @@
 package com.opticplus.bankalerts;
 
 import android.content.Context;
-import android.database.Cursor;
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.net.Uri;
-import android.provider.Telephony;
 
 import androidx.annotation.NonNull;
 import androidx.work.Worker;
@@ -64,6 +61,7 @@ public final class BankAlertSyncWorker extends Worker {
         try {
             Long completedRefreshVersion = null;
             boolean refreshWaitingForPermission = false;
+            boolean inboxPermissionLostDuringScan = false;
             int importedCount = 0;
             String refreshPollIssue = null;
             if (isRefreshPoll) {
@@ -83,13 +81,26 @@ public final class BankAlertSyncWorker extends Worker {
                             if (appContext.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
                                 refreshWaitingForPermission = true;
                             } else {
-                                importedCount = importRecentSupportedMessages(database);
                                 completedRefreshVersion = version > 0 ? version : null;
                             }
                         }
                     } catch (JSONException exception) {
                         refreshPollIssue = "OpticPlus returned an unreadable refresh response.";
                     }
+                }
+            }
+
+            if (appContext.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) {
+                try {
+                    importedCount = SupportedSmsInboxScanner.scan(appContext, database).importedCount;
+                    if (importedCount > 0) {
+                        appContext.sendBroadcast(new android.content.Intent(MainActivity.ACTION_ALERT_STORED)
+                                .setPackage(appContext.getPackageName()));
+                    }
+                } catch (SecurityException exception) {
+                    completedRefreshVersion = null;
+                    inboxPermissionLostDuringScan = true;
+                    refreshPollIssue = "Android denied SMS inbox access during the automatic check. Grant background inbox refresh permission in the app.";
                 }
             }
 
@@ -121,8 +132,16 @@ public final class BankAlertSyncWorker extends Worker {
             if (refreshWaitingForPermission) {
                 SecureSettings.saveLastSyncStatus(appContext, "OpticPlus requested an inbox refresh. Grant SMS inbox access in the app to complete it."
                         + (refreshPollIssue == null ? "" : " " + refreshPollIssue + " Pending alerts were still checked for sync."));
+            } else if (inboxPermissionLostDuringScan) {
+                SecureSettings.saveLastSyncStatus(appContext, refreshPollIssue + " Pending alerts were still checked for sync.");
             } else if (completedRefreshVersion != null) {
                 SecureSettings.saveLastSyncStatus(appContext, "OpticPlus refresh completed. Imported " + importedCount + " new supported SMS alert(s); synced " + pending.size() + " alert(s)."
+                        + (refreshPollIssue == null ? "" : " " + refreshPollIssue));
+            } else if (appContext.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) {
+                SecureSettings.saveLastSyncStatus(appContext, "Automatic inbox check imported " + importedCount + " new supported SMS alert(s); synced " + pending.size() + " alert(s)."
+                        + (refreshPollIssue == null ? "" : " " + refreshPollIssue));
+            } else if (isRefreshPoll && !refreshWaitingForPermission) {
+                SecureSettings.saveLastSyncStatus(appContext, "Grant background inbox refresh permission in the app to automatically check recent supported SMS alerts. Newly received supported messages still sync automatically."
                         + (refreshPollIssue == null ? "" : " " + refreshPollIssue));
             } else if (pending.isEmpty()) {
                 SecureSettings.saveLastSyncStatus(appContext, (refreshPollIssue == null
@@ -231,31 +250,6 @@ public final class BankAlertSyncWorker extends Worker {
         }
         connection.disconnect();
         return new ApiResponse(statusCode, responseBody.toString());
-    }
-
-    private int importRecentSupportedMessages(AlertDatabase database) {
-        Uri inboxUri = Telephony.Sms.Inbox.CONTENT_URI;
-        String[] projection = { Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE };
-        String selection = "(" + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                + Telephony.Sms.ADDRESS + " LIKE ? COLLATE NOCASE)";
-        String[] selectionArgs = { "PRUDENTIAL", "170", "MobileMoney", "MTN%" };
-        int imported = 0;
-        try (Cursor cursor = appContext.getContentResolver().query(
-                inboxUri,
-                projection,
-                selection,
-                selectionArgs,
-                Telephony.Sms.DATE + " DESC LIMIT 50"
-        )) {
-            if (cursor == null) return 0;
-            while (cursor.moveToNext()) {
-                BankAlert alert = BankSmsParser.parse(cursor.getString(0), cursor.getString(1), cursor.getLong(2));
-                if (alert != null && database.insertIfNew(alert)) imported++;
-            }
-        }
-        return imported;
     }
 
     private static final class SyncResponse {

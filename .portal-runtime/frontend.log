@@ -111,3 +111,106 @@
 10:32:12 AM [vite] (client) page reload src/components/StaffAppraisalManagerPanel.jsx
 10:32:19 AM [vite] (client) page reload src/components/StaffAppraisalManagerPanel.jsx
 10:33:09 AM [vite] (client) page reload src/components/StaffAppraisalManagerPanel.jsx
+11:04:42 AM [vite] (client) page reload src/main.jsx
+11:04:43 AM [vite] (client) Pre-transform error: Failed to resolve import "./components/PublicRegistrationPage.jsx" from "src/main.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/main.jsx:7:11
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+  6  |  const isPublicRegistration = window.location.pathname.replace(/\/+$/, "") === "/registration";
+  7  |  ...ApplicationEntry = lazy(() => isPublicRegistration ? import("./components/PublicRegistrationPage.jsx") : import("....
+     |                                                                 ^
+  8  |  class StartupErrorBoundary extends Component {
+  9  |  	constructor(props) {
+11:04:43 AM [vite] (client) Pre-transform error: Failed to resolve import "./components/PublicRegistrationPage.jsx" from "src/main.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/main.jsx:7:11
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+  6  |  const isPublicRegistration = window.location.pathname.replace(/\/+$/, "") === "/registration";
+  7  |  ...ApplicationEntry = lazy(() => isPublicRegistration ? import("./components/PublicRegistrationPage.jsx") : import("....
+     |                                                                 ^
+  8  |  class StartupErrorBoundary extends Component {
+  9  |  	constructor(props) {
+11:04:43 AM [vite] Internal server error: Failed to resolve import "./components/PublicRegistrationPage.jsx" from "src/main.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/main.jsx:7:11
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+  6  |  const isPublicRegistration = window.location.pathname.replace(/\/+$/, "") === "/registration";
+  7  |  ...ApplicationEntry = lazy(() => isPublicRegistration ? import("./components/PublicRegistrationPage.jsx") : import("....
+     |                                                                 ^
+  8  |  class StartupErrorBoundary extends Component {
+  9  |  	constructor(props) {
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+11:04:43 AM [vite] Internal server error: Failed to resolve import "./components/PublicRegistrationPage.jsx" from "src/main.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/main.jsx:7:11
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+  6  |  const isPublicRegistration = window.location.pathname.replace(/\/+$/, "") === "/registration";
+  7  |  ...ApplicationEntry = lazy(() => isPublicRegistration ? import("./components/PublicRegistrationPage.jsx") : import("....
+     |                                                                 ^
+  8  |  class StartupErrorBoundary extends Component {
+  9  |  	constructor(props) {
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+11:04:43 AM [vite] (client) Pre-transform error: Failed to resolve import "./components/PublicRegistrationPage.jsx" from "src/main.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/main.jsx:7:11
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+  6  |  const isPublicRegistration = window.location.pathname.replace(/\/+$/, "") === "/registration";
+  7  |  ...ApplicationEntry = lazy(() => isPublicRegistration ? import("./components/PublicRegistrationPage.jsx") : import("....
+     |                                                                 ^
+  8  |  class StartupErrorBoundary extends Component {
+  9  |  	constructor(props) {
+11:04:43 AM [vite] Internal server error: Failed to resolve import "./components/PublicRegistrationPage.jsx" from "src/main.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/main.jsx:7:11
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+  6  |  const isPublicRegistration = window.location.pathname.replace(/\/+$/, "") === "/registration";
+  7  |  ...ApplicationEntry = lazy(() => isPublicRegistration ? import("./components/PublicRegistrationPage.jsx") : import("....
+     |                                                                 ^
+  8  |  class StartupErrorBoundary extends Component {
+  9  |  	constructor(props) {
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 4)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+11:05:03 AM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+11:23:16 AM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+11:23:56 AM [vite] (client) hmr update /src/components/PublicRegistrationPage.css
+11:24:08 AM [vite] (client) hmr update /src/components/PublicRegistrationPage.css
+11:24:38 AM [vite] (client) hmr update /src/components/PublicRegistrationPage.css
+11:25:10 AM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+11:30:44 AM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+11:33:43 AM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+12:00:45 PM [vite] (client) page reload src/main.jsx
+12:12:57 PM [vite] (client) page reload src/components/PublicPatientIdCard.jsx
+12:12:59 PM [vite] (client) hmr update /src/components/PublicPatientIdCard.css
+12:13:13 PM [vite] (client) hmr update /src/components/PublicPatientIdCard.css
+12:13:35 PM [vite] (client) page reload src/components/PublicPatientIdCard.jsx
+12:20:42 PM [vite] (client) page reload src/main.jsx
+12:30:15 PM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+12:30:20 PM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+12:30:58 PM [vite] (client) page reload src/components/PublicRegistrationPage.jsx
+12:40:43 PM [vite] (client) hmr update /src/components/PublicPatientIdCard.css
+12:40:46 PM [vite] (client) hmr update /src/components/PublicRegistrationPage.css
+12:40:49 PM [vite] (client) page reload src/components/PublicPatientIdCard.jsx
+4:02:14 PM [vite] (client) page reload src/App.jsx
+4:02:14 PM [vite] (client) page reload src/components/FinanceSection.jsx
+4:02:20 PM [vite] (client) page reload src/components/FinanceSection.jsx
