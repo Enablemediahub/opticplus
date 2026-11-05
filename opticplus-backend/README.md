@@ -54,6 +54,12 @@ In order to ensure that the Laravel community is welcoming to all, please review
 
 If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
+## Manager phone notifications
+
+Phone push notifications require HTTPS, the `push_subscriptions` database table, and VAPID credentials. Generate a key pair once with `php artisan webpush:generate-vapid`; the command prints a private key, so run it in a trusted terminal and never commit or share its output. Set both generated values and a valid `WEBPUSH_SUBJECT` (a `mailto:` address or the portal URL) in the server `.env`, then run `php artisan config:clear`. In environments with Artisan access, create the table with `php artisan migrate --force`. For Hostinger installs without migration access, run `tmp/hostinger-package/database/manual_sql/create_push_subscriptions.sql` against the application database in phpMyAdmin instead. Keep the same key pair when deploying updates.
+
+The portal's in-app counts work without push credentials. Push delivery and app-icon badges depend on browser/OS support; the user must allow notifications and install the portal as an app where required.
+
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

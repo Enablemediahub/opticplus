@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Database\Schema\Blueprint;
 
 class PatientRecordController extends Controller
 {
@@ -168,6 +168,48 @@ class PatientRecordController extends Controller
             ],
             'records' => $records,
         ]);
+    }
+
+    private function latestCompletedPatientFormRow(string $folderId, int $branchId): ?object
+    {
+        return $this->patientFormQuery($folderId, $branchId)
+            ->where('status', 'completed')
+            ->orderByDesc('version')
+            ->orderByDesc('updated_at')
+            ->first([
+                'id',
+                'version',
+                'status',
+                'updated_at',
+                'form_data',
+            ]);
+    }
+
+    private function latestCompletedFormOrderIsPlaced(int $recordId, string $folderId, int $branchId): bool
+    {
+        $latestCompletedForm = $this->latestCompletedPatientFormRow($folderId, $branchId);
+
+        return $latestCompletedForm !== null
+            && $this->formOrderIsPlaced($recordId, $latestCompletedForm, $branchId);
+    }
+
+    private function formOrderIsPlaced(int $recordId, object $form, int $branchId): bool
+    {
+        if (! Schema::hasTable('lens_order_requests')) {
+            return false;
+        }
+
+        $query = DB::table('lens_order_requests')
+            ->where('branch_id', $branchId)
+            ->where('source', 'exam_form')
+            ->where('source_id', 'FORM-'.$recordId.'-'.$form->version)
+            ->where('status', 'placed');
+
+        if (Schema::hasColumn('lens_order_requests', 'pickup_status')) {
+            $query->where('pickup_status', '!=', 'picked_up');
+        }
+
+        return $query->exists();
     }
 
     public function lookup(Request $request): JsonResponse
@@ -809,6 +851,7 @@ class PatientRecordController extends Controller
     {
         $branchId = $this->resolveBranchId($request);
         $this->ensurePrescriptionAuditColumns();
+        $this->ensurePatientFormDataTable();
 
         $record = DB::table('patient_records')
             ->where('id', $recordId)
@@ -824,6 +867,7 @@ class PatientRecordController extends Controller
         $legacyPrescriptions = DB::table('glasses_prescriptions')
             ->where('folder_id', $record->folder_id)
             ->where('branch_id', $branchId)
+            ->whereNull('deleted_at')
             ->orderByDesc('date')
             ->orderByDesc('patient_id')
             ->get([
@@ -850,9 +894,11 @@ class PatientRecordController extends Controller
                 'edited_by_name',
                 'edited_by_role',
                 'edited_at',
+                'deleted_at',
             ]);
 
         $formPrescriptions = $this->patientFormQuery($record->folder_id, $branchId)
+            ->whereNull('prescription_deleted_at')
             ->orderByDesc('version')
             ->orderByDesc('updated_at')
             ->get([
@@ -861,6 +907,7 @@ class PatientRecordController extends Controller
                 'status',
                 'updated_at',
                 'form_data',
+                'prescription_deleted_at',
             ])
             ->map(fn ($form) => $this->formatExamFormPrescriptionRow($record, $form))
             ->filter()
@@ -868,6 +915,11 @@ class PatientRecordController extends Controller
 
         $prescriptions = $formPrescriptions
             ->concat($legacyPrescriptions->map(fn ($item) => (array) $item))
+            ->map(fn (array $item) => [
+                ...$item,
+                'source' => $item['source'] ?? 'legacy',
+                'row_id' => $item['row_id'] ?? $item['patient_id'] ?? null,
+            ])
             ->sortByDesc(fn ($item) => ($item['date'] ?? '').'|'.($item['created_at'] ?? ''))
             ->values();
 
@@ -875,6 +927,100 @@ class PatientRecordController extends Controller
             'patient_id' => $recordId,
             'folder_id' => $record->folder_id,
             'prescriptions' => $prescriptions,
+        ]);
+    }
+
+    public function deleteGlassesPrescriptions(Request $request): JsonResponse
+    {
+        $branchId = $this->resolveBranchId($request);
+        if ($response = $this->ensureWritableBranch($branchId)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'prescriptions' => ['required', 'array', 'min:1', 'max:100'],
+            'prescriptions.*.source' => ['required', 'in:legacy,exam_form'],
+            'prescriptions.*.patient_id' => ['required', 'integer', 'min:1'],
+            'prescriptions.*.row_id' => ['required_if:prescriptions.*.source,legacy', 'integer', 'min:1'],
+            'prescriptions.*.form_id' => ['required_if:prescriptions.*.source,exam_form', 'integer', 'min:1'],
+        ]);
+
+        $this->ensurePrescriptionAuditColumns();
+        $this->ensurePatientFormDataTable();
+
+        $deleted = DB::transaction(function () use ($validated, $branchId, $request): array {
+            $deletedRecords = [];
+
+            foreach ($validated['prescriptions'] as $reference) {
+                $patient = DB::table('patient_records')
+                    ->where('id', $reference['patient_id'])
+                    ->where('branch_id', $branchId)
+                    ->first(['id', 'folder_id', 'name']);
+
+                if (! $patient) {
+                    abort(404, 'A selected prescription patient was not found in this branch.');
+                }
+
+                if ($reference['source'] === 'legacy') {
+                    $prescriptionQuery = DB::table('glasses_prescriptions')
+                        ->where('patient_id', $reference['row_id'])
+                        ->where('folder_id', $patient->folder_id)
+                        ->whereNull('deleted_at');
+                    if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
+                        $prescriptionQuery->where('branch_id', $branchId);
+                    }
+                    $prescription = $prescriptionQuery->first();
+
+                    if (! $prescription) {
+                        abort(404, 'A selected glasses prescription was not found or was already deleted.');
+                    }
+
+                    $prescriptionQuery->update([
+                        'deleted_at' => now(),
+                        'deleted_by_user_id' => $request->user()?->id,
+                    ]);
+
+                    $deletedRecords[] = [
+                        'source' => 'legacy',
+                        'patient_id' => $patient->id,
+                        'folder_id' => $patient->folder_id,
+                        'row_id' => $reference['row_id'],
+                        'date' => $prescription->date,
+                    ];
+
+                    continue;
+                }
+
+                $formQuery = $this->patientFormQuery($patient->folder_id, $branchId)
+                    ->where('id', $reference['form_id'])
+                    ->whereNull('prescription_deleted_at');
+                $form = $formQuery->first(['id', 'version', 'status']);
+
+                if (! $form) {
+                    abort(404, 'A selected exam-form prescription was not found or was already deleted.');
+                }
+
+                $formQuery->update([
+                    'prescription_deleted_at' => now(),
+                    'prescription_deleted_by_user_id' => $request->user()?->id,
+                ]);
+
+                $deletedRecords[] = [
+                    'source' => 'exam_form',
+                    'patient_id' => $patient->id,
+                    'folder_id' => $patient->folder_id,
+                    'form_id' => $form->id,
+                    'version' => $form->version,
+                ];
+            }
+
+            return $deletedRecords;
+        });
+
+        return response()->json([
+            'message' => count($deleted).' prescription record(s) deleted. The clinical history remains available and the deletion was recorded in Audit Log.',
+            'deleted_count' => count($deleted),
+            'deleted' => $deleted,
         ]);
     }
 
@@ -974,7 +1120,8 @@ class PatientRecordController extends Controller
 
         $prescriptionQuery = DB::table('glasses_prescriptions')
             ->where('patient_id', $prescriptionId)
-            ->where('folder_id', $record->folder_id);
+            ->where('folder_id', $record->folder_id)
+            ->whereNull('deleted_at');
 
         if (Schema::hasColumn('glasses_prescriptions', 'branch_id')) {
             $prescriptionQuery->where('branch_id', $branchId);
@@ -1031,6 +1178,8 @@ class PatientRecordController extends Controller
             'edited_by_name' => fn (Blueprint $table) => $table->string('edited_by_name', 255)->nullable(),
             'edited_by_role' => fn (Blueprint $table) => $table->string('edited_by_role', 100)->nullable(),
             'edited_at' => fn (Blueprint $table) => $table->timestamp('edited_at')->nullable(),
+            'deleted_at' => fn (Blueprint $table) => $table->timestamp('deleted_at')->nullable(),
+            'deleted_by_user_id' => fn (Blueprint $table) => $table->unsignedBigInteger('deleted_by_user_id')->nullable(),
         ];
 
         foreach ($columns as $name => $definition) {
@@ -1176,7 +1325,9 @@ class PatientRecordController extends Controller
     {
         $this->ensureLensOrderRequestsTable();
         $this->ensurePrescriptionAuditColumns();
+        $this->ensurePatientFormDataTable();
         $branchId = $this->resolveBranchId($request);
+        $activeOnly = $request->boolean('active_only');
         $search = trim($request->string('search')->toString());
         $dateFrom = $request->string('date_from')->toString();
         $dateTo = $request->string('date_to')->toString();
@@ -1217,11 +1368,12 @@ class PatientRecordController extends Controller
             ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id');
         $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
         $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
+        $legacyQuery->whereNull('gp.deleted_at');
         $hasLensPayment($legacyQuery, 'gp.folder_id');
-        if ($dateFrom !== '') {
+        if (! $activeOnly && $dateFrom !== '') {
             $legacyQuery->whereDate('gp.date', '>=', $dateFrom);
         }
-        if ($dateTo !== '') {
+        if (! $activeOnly && $dateTo !== '') {
             $legacyQuery->whereDate('gp.date', '<=', $dateTo);
         }
 
@@ -1242,6 +1394,7 @@ class PatientRecordController extends Controller
             ->get([
                 'gp.prescription_id',
                 'gp.patient_id',
+                'gp.patient_id as row_id',
                 'gp.folder_id',
                 'gp.date',
                 'gp.sph_od',
@@ -1274,13 +1427,6 @@ class PatientRecordController extends Controller
         $this->applyBranchScope($formQuery, 'pfd.branch_id', $branchId);
         $this->applyBranchScope($formQuery, 'pr.branch_id', $branchId);
         $hasLensPayment($formQuery, 'pfd.folder_id');
-        if ($dateFrom !== '') {
-            $formQuery->whereDate('pfd.updated_at', '>=', $dateFrom);
-        }
-        if ($dateTo !== '') {
-            $formQuery->whereDate('pfd.updated_at', '<=', $dateTo);
-        }
-
         if ($search !== '') {
             $searchTerm = '%'.$search.'%';
             $formQuery->where(function ($query) use ($searchTerm): void {
@@ -1292,7 +1438,7 @@ class PatientRecordController extends Controller
             });
         }
 
-        $formPrescriptions = $formQuery
+        $formRows = $formQuery
             ->orderByDesc('pfd.version')
             ->orderByDesc('pfd.updated_at')
             ->get([
@@ -1302,13 +1448,31 @@ class PatientRecordController extends Controller
                 'pfd.status',
                 'pfd.updated_at',
                 'pfd.form_data',
+                'pfd.prescription_deleted_at',
                 'pr.id as patient_id',
                 'pr.surname',
                 'pr.firstname',
                 'pr.othernames',
                 'pr.name',
                 'pr.status as patient_status',
-            ])
+            ]);
+
+        $visibleFormRows = $formRows->filter(fn ($form) => empty($form->prescription_deleted_at));
+        $activeFormIds = $visibleFormRows
+            ->where('status', 'completed')
+            ->groupBy('patient_id')
+            ->map(fn ($versions) => $versions->first()?->form_id)
+            ->filter()
+            ->all();
+        $activeFormPatientIds = $visibleFormRows
+            ->where('status', 'completed')
+            ->groupBy('patient_id')
+            ->filter(fn ($versions) => (bool) $this->extractPrescriptionFromFormData($versions->first()?->form_data))
+            ->keys()
+            ->map(fn ($patientId) => (string) $patientId)
+            ->all();
+
+        $formPrescriptions = $formRows
             ->map(function ($item) {
                 $record = (object) [
                     'id' => $item->patient_id,
@@ -1326,12 +1490,58 @@ class PatientRecordController extends Controller
                     'status' => $item->status,
                     'updated_at' => $item->updated_at,
                     'form_data' => $item->form_data,
+                    'prescription_deleted_at' => $item->prescription_deleted_at,
                 ];
 
                 return $this->formatExamFormPrescriptionRow($record, $form);
             })
             ->filter()
+            ->filter(fn (array $item) => empty($item['prescription_deleted_at']))
+            ->map(function (array $item) use ($activeFormIds): array {
+                $isActive = ($item['status'] ?? null) === 'completed'
+                    && (string) ($activeFormIds[$item['patient_id']] ?? '') === (string) ($item['form_id'] ?? '');
+
+                return [
+                    ...$item,
+                    'is_active_prescription' => $isActive,
+                    'prescription_state' => $isActive
+                        ? 'active'
+                        : (($item['status'] ?? null) === 'draft' ? 'draft' : 'superseded'),
+                ];
+            })
+            ->filter(function (array $item) use ($activeOnly, $dateFrom, $dateTo): bool {
+                if ($activeOnly && ! $item['is_active_prescription']) {
+                    return false;
+                }
+
+                $date = $item['date'] ?? null;
+                if ($dateFrom !== '' && ($date === null || $date < $dateFrom)) {
+                    return false;
+                }
+                if ($dateTo !== '' && ($date === null || $date > $dateTo)) {
+                    return false;
+                }
+
+                return true;
+            })
             ->values();
+
+        if ($activeOnly) {
+            $legacyPrescriptions = $legacyPrescriptions
+                ->reject(fn ($item) => in_array((string) $item->patient_id, $activeFormPatientIds, true))
+                ->unique('patient_id')
+                ->filter(function ($item) use ($dateFrom, $dateTo): bool {
+                    if ($dateFrom !== '' && $item->date < $dateFrom) {
+                        return false;
+                    }
+                    if ($dateTo !== '' && $item->date > $dateTo) {
+                        return false;
+                    }
+
+                    return true;
+                })
+                ->values();
+        }
 
         $combined = $formPrescriptions
             ->concat($legacyPrescriptions->map(fn ($item) => (array) $item))
@@ -1407,11 +1617,20 @@ class PatientRecordController extends Controller
         $latestForm = $formVersions->first();
         $latestSummary = $this->extractMedicalSummaryFromFormData($latestForm?->form_data);
 
-        $versions = $formVersions->map(function ($item) {
+        $activeForm = $this->latestCompletedPatientFormRow($record->folder_id, $branchId);
+        $activePrescriptionFormId = $activeForm && $this->extractPrescriptionFromFormData($activeForm->form_data)
+            ? $activeForm->id
+            : null;
+        $versions = $formVersions->map(function ($item) use ($activePrescriptionFormId) {
             return [
                 'id' => $item->id,
                 'version' => $item->version,
                 'status' => $item->status,
+                'prescription_state' => (string) $item->id === (string) $activePrescriptionFormId
+                    ? 'active'
+                    : (($item->status ?? null) === 'draft'
+                        ? 'draft'
+                        : ($this->extractPrescriptionFromFormData($item->form_data) ? 'superseded' : 'completed')),
                 'updated_at' => $item->updated_at,
                 'summary' => $this->extractMedicalSummaryFromFormData($item->form_data),
             ];
@@ -1462,11 +1681,20 @@ class PatientRecordController extends Controller
                     'form_data',
                 ])
             : $latestForm;
-        $versions = $formVersions->map(function ($item) {
+        $activeForm = $this->latestCompletedPatientFormRow($record->folder_id, $branchId);
+        $activePrescriptionFormId = $activeForm && $this->extractPrescriptionFromFormData($activeForm->form_data)
+                ? $activeForm->id
+                : null;
+        $versions = $formVersions->map(function ($item) use ($activePrescriptionFormId) {
             return [
                 'id' => $item->id,
                 'version' => $item->version,
                 'status' => $item->status,
+                'prescription_state' => (string) $item->id === (string) $activePrescriptionFormId
+                    ? 'active'
+                    : (($item->status ?? null) === 'draft'
+                        ? 'draft'
+                        : ($this->extractPrescriptionFromFormData($item->form_data) ? 'superseded' : 'completed')),
                 'updated_at' => $item->updated_at,
                 'summary' => $this->extractMedicalSummaryFromFormData($item->form_data),
             ];
@@ -1490,6 +1718,7 @@ class PatientRecordController extends Controller
                 'updated_at' => $selectedForm?->updated_at,
                 'form_data' => $this->decodePatientFormData($selectedForm?->form_data),
             ],
+            'latest_completed_order_placed' => $this->latestCompletedFormOrderIsPlaced($record->id, $record->folder_id, $branchId),
             'form_versions' => $versions,
         ]);
     }
@@ -1508,6 +1737,8 @@ class PatientRecordController extends Controller
         $validated = $request->validate([
             'form_data' => ['required', 'array'],
             'status' => ['required', 'in:draft,completed'],
+            'replace_placed_order' => ['sometimes', 'boolean'],
+            'create_new_version' => ['sometimes', 'boolean'],
         ]);
 
         $this->ensurePatientFormDataTable();
@@ -1516,66 +1747,98 @@ class PatientRecordController extends Controller
         $status = $validated['status'];
         $userId = $request->user()?->id;
         $latestForm = $this->latestPatientFormRow($record->folder_id, $branchId);
+        $latestCompletedForm = $this->latestCompletedPatientFormRow($record->folder_id, $branchId);
+        $previousOrderPlaced = $latestCompletedForm
+            && $this->formOrderIsPlaced($record->id, $latestCompletedForm, $branchId);
+        $createNewVersion = ! empty($validated['create_new_version']);
 
-        if ($latestForm && $latestForm->status === 'draft') {
-            $updatePayload = [
-                'status' => $status,
-                'form_data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-                'updated_by' => $userId,
-                'updated_at' => now(),
-            ];
-
-            if ($this->patientFormDataHasColumn('patient_record_id')) {
-                $updatePayload['patient_record_id'] = $record->id;
-            }
-            if ($this->patientFormDataHasColumn('user_id')) {
-                $updatePayload['user_id'] = $userId;
-            }
-
-            $this->patientFormQuery($record->folder_id, $branchId)
-                ->where('id', $latestForm->id)
-                ->update($updatePayload);
-
-            $savedId = $latestForm->id;
-            $savedVersion = (int) $latestForm->version;
-        } else {
-            $nextVersion = $latestForm ? ((int) $latestForm->version + 1) : 1;
-            $insertPayload = [
-                'folder_id' => $record->folder_id,
-                'version' => $nextVersion,
-                'status' => $status,
-                'form_data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-
-            if ($this->patientFormDataHasColumn('branch_id')) {
-                $insertPayload['branch_id'] = $branchId;
-            }
-            if ($this->patientFormDataHasColumn('patient_record_id')) {
-                $insertPayload['patient_record_id'] = $record->id;
-            }
-            if ($this->patientFormDataHasColumn('user_id')) {
-                $insertPayload['user_id'] = $userId;
-            }
-            if ($this->patientFormDataHasColumn('created_by')) {
-                $insertPayload['created_by'] = $userId;
-            }
-            if ($this->patientFormDataHasColumn('updated_by')) {
-                $insertPayload['updated_by'] = $userId;
-            }
-
-            $savedId = DB::table('patient_form_data')->insertGetId($insertPayload);
-            $savedVersion = $nextVersion;
+        if ($status === 'completed' && $previousOrderPlaced && empty($validated['replace_placed_order'])) {
+            return response()->json([
+                'message' => 'A lens order is already placed for the current prescription. Confirm that this new completed version replaces that order.',
+                'requires_order_replacement_confirmation' => true,
+            ], 409);
         }
 
-        $savedForm = DB::table('patient_form_data')->where('id', $savedId)->first([
-            'id',
-            'version',
-            'status',
-            'updated_at',
-            'form_data',
-        ]);
+        [$savedId, $savedVersion, $savedForm] = DB::transaction(function () use ($latestForm, $latestCompletedForm, $record, $branchId, $status, $payload, $userId, $previousOrderPlaced, $createNewVersion): array {
+            if ($latestForm && $latestForm->status === 'draft' && ! $createNewVersion) {
+                $updatePayload = [
+                    'status' => $status,
+                    'form_data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+                    'updated_by' => $userId,
+                    'updated_at' => now(),
+                ];
+
+                if ($this->patientFormDataHasColumn('patient_record_id')) {
+                    $updatePayload['patient_record_id'] = $record->id;
+                }
+                if ($this->patientFormDataHasColumn('user_id')) {
+                    $updatePayload['user_id'] = $userId;
+                }
+
+                $this->patientFormQuery($record->folder_id, $branchId)
+                    ->where('id', $latestForm->id)
+                    ->update($updatePayload);
+
+                $savedId = $latestForm->id;
+                $savedVersion = (int) $latestForm->version;
+            } else {
+                $nextVersion = $latestForm ? ((int) $latestForm->version + 1) : 1;
+                $insertPayload = [
+                    'folder_id' => $record->folder_id,
+                    'version' => $nextVersion,
+                    'status' => $status,
+                    'form_data' => json_encode($payload, JSON_UNESCAPED_UNICODE),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                if ($this->patientFormDataHasColumn('branch_id')) {
+                    $insertPayload['branch_id'] = $branchId;
+                }
+                if ($this->patientFormDataHasColumn('patient_record_id')) {
+                    $insertPayload['patient_record_id'] = $record->id;
+                }
+                if ($this->patientFormDataHasColumn('user_id')) {
+                    $insertPayload['user_id'] = $userId;
+                }
+                if ($this->patientFormDataHasColumn('created_by')) {
+                    $insertPayload['created_by'] = $userId;
+                }
+                if ($this->patientFormDataHasColumn('updated_by')) {
+                    $insertPayload['updated_by'] = $userId;
+                }
+
+                $savedId = DB::table('patient_form_data')->insertGetId($insertPayload);
+                $savedVersion = $nextVersion;
+            }
+
+            $savedForm = DB::table('patient_form_data')->where('id', $savedId)->first([
+                'id',
+                'version',
+                'status',
+                'updated_at',
+                'form_data',
+            ]);
+
+            if ($status === 'completed' && $previousOrderPlaced && $latestCompletedForm) {
+                $replacedOrderQuery = DB::table('lens_order_requests')
+                    ->where('branch_id', $branchId)
+                    ->where('source', 'exam_form')
+                    ->where('source_id', 'FORM-'.$record->id.'-'.$latestCompletedForm->version)
+                    ->where('status', 'placed');
+
+                if (Schema::hasColumn('lens_order_requests', 'pickup_status')) {
+                    $replacedOrderQuery->where('pickup_status', '!=', 'picked_up');
+                }
+
+                $replacedOrderQuery->update([
+                    'status' => 'superseded',
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return [$savedId, $savedVersion, $savedForm];
+        });
 
         return response()->json([
             'message' => $status === 'draft'
@@ -1588,12 +1851,14 @@ class PatientRecordController extends Controller
                 'updated_at' => $savedForm?->updated_at,
                 'form_data' => $this->decodePatientFormData($savedForm?->form_data) ?? $payload,
             ],
+            'replaced_placed_order' => $status === 'completed' && $previousOrderPlaced,
         ]);
     }
 
     public function formPrescriptionSearch(Request $request): JsonResponse
     {
         $this->ensurePrescriptionAuditColumns();
+        $this->ensurePatientFormDataTable();
         $branchId = $this->resolveBranchId($request);
         $search = trim($request->string('search')->toString());
 
@@ -1643,8 +1908,13 @@ class PatientRecordController extends Controller
 
         $records = $patientRecords
             ->flatMap(function ($record) use ($branchId) {
+                $latestCompletedForm = $this->latestCompletedPatientFormRow($record->folder_id, $branchId);
+                $activeFormId = $latestCompletedForm && $this->extractPrescriptionFromFormData($latestCompletedForm->form_data)
+                    ? $latestCompletedForm->id
+                    : null;
                 $formQuery = DB::table('patient_form_data')
                     ->where('folder_id', $record->folder_id)
+                    ->whereNull('prescription_deleted_at')
                     ->orderByDesc('version')
                     ->orderByDesc('updated_at');
 
@@ -1660,7 +1930,7 @@ class PatientRecordController extends Controller
                         'updated_at',
                         'form_data',
                     ])
-                    ->map(function ($form) use ($record) {
+                    ->map(function ($form) use ($record, $activeFormId) {
                         $prescription = $this->extractPrescriptionFromFormData($form->form_data);
 
                         if (! $prescription) {
@@ -1688,6 +1958,7 @@ class PatientRecordController extends Controller
                             'latest_form_status' => $form->status,
                             'latest_form_updated_at' => $form->updated_at,
                             'prescription' => $prescription,
+                            'form_id' => $form->id,
                             'prescription_id' => 'FORM-'.$record->id.'-'.$form->version,
                             'date' => $form->updated_at ? substr((string) $form->updated_at, 0, 10) : null,
                             'sph_od' => $prescription['od']['sphere'] ?? '',
@@ -1702,6 +1973,10 @@ class PatientRecordController extends Controller
                             'lens_type' => $prescription['od']['lens_type'] ?? ($prescription['os']['lens_type'] ?? ''),
                             'notes' => $prescription['prescription_notes'] ?? '',
                             'source' => 'exam_form',
+                            'is_active_prescription' => (string) $form->id === (string) $activeFormId,
+                            'prescription_state' => (string) $form->id === (string) $activeFormId
+                                    ? 'active'
+                                    : ($form->status === 'draft' ? 'draft' : 'superseded'),
                         ];
                     })
                     ->filter()
@@ -1781,6 +2056,7 @@ class PatientRecordController extends Controller
                             'edited_by_role' => $item->edited_by_role,
                             'edited_at' => $item->edited_at,
                             'source' => 'legacy',
+                            'row_id' => $item->row_id,
                         ];
                     })
                     ->values();
@@ -1902,6 +2178,8 @@ class PatientRecordController extends Controller
                 $table->unsignedInteger('version')->default(1);
                 $table->string('status', 30)->default('draft')->index();
                 $table->longText('form_data')->nullable();
+                $table->timestamp('prescription_deleted_at')->nullable();
+                $table->unsignedBigInteger('prescription_deleted_by_user_id')->nullable();
                 $table->unsignedBigInteger('created_by')->nullable()->index();
                 $table->unsignedBigInteger('updated_by')->nullable()->index();
                 $table->timestamps();
@@ -1928,6 +2206,12 @@ class PatientRecordController extends Controller
             }
             if (! Schema::hasColumn('patient_form_data', 'form_data')) {
                 $table->longText('form_data')->nullable()->after('status');
+            }
+            if (! Schema::hasColumn('patient_form_data', 'prescription_deleted_at')) {
+                $table->timestamp('prescription_deleted_at')->nullable()->after('form_data');
+            }
+            if (! Schema::hasColumn('patient_form_data', 'prescription_deleted_by_user_id')) {
+                $table->unsignedBigInteger('prescription_deleted_by_user_id')->nullable()->after('prescription_deleted_at');
             }
             if (! Schema::hasColumn('patient_form_data', 'created_by')) {
                 $table->unsignedBigInteger('created_by')->nullable()->index()->after('form_data');
@@ -2412,6 +2696,7 @@ class PatientRecordController extends Controller
             'notes' => $prescription['prescription_notes'] ?? '',
             'status' => $form->status ?? 'completed',
             'created_at' => $form->updated_at,
+            'form_id' => $form->id,
             'prescription_id' => 'FORM-'.$record->id.'-'.$form->version,
             'source' => 'exam_form',
             'form_version' => $form->version,
@@ -2422,6 +2707,7 @@ class PatientRecordController extends Controller
             'patient_status' => property_exists($record, 'status') ? ($record->status ?? null) : null,
             'assigned_optometrist_id' => property_exists($record, 'assigned_optometrist_id') ? ($record->assigned_optometrist_id ?? null) : null,
             'assigned_optometrist_name' => property_exists($record, 'assigned_optometrist_name') ? ($record->assigned_optometrist_name ?? null) : null,
+            'prescription_deleted_at' => $form->prescription_deleted_at ?? null,
         ];
     }
 

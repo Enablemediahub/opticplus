@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\BsmiTransactionService;
+use App\Services\ManagerPushNotificationService;
 use App\Support\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1824,7 +1825,7 @@ class FinanceController extends Controller
         ]);
     }
 
-    public function storeExpense(Request $request): JsonResponse
+    public function storeExpense(Request $request, ManagerPushNotificationService $pushNotifications): JsonResponse
     {
         $this->ensureExpenseCategoriesSchema();
         $this->ensureExpenseRecorderSchema();
@@ -1959,6 +1960,8 @@ class FinanceController extends Controller
                 'branch_id' => $branchId,
                 'document_type' => $documentType,
             ], 202);
+
+            $pushNotifications->notifyBranchManagers($branchId, 'expense');
 
             return response()->json([
                 'message' => 'Expense submitted to the General Manager for approval. It will not appear in expense totals until approved.',

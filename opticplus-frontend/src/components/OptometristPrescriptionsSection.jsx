@@ -6,12 +6,16 @@ export default function OptometristPrescriptionsSection({
   dashboard,
   patientData,
   fetchGlassesPrescriptions,
-  fetchFormPrescriptionSearch,
+  deleteGlassesPrescriptions,
   updatePatientPrescription,
+  fetchPatientExamForm,
+  savePatientExamForm,
   companyProfile,
 }) {
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ search: '', date_from: '', date_to: '' })
+  const [query, setQuery] = useState({ search: '', date_from: '', date_to: '' })
   const [records, setRecords] = useState([])
+  const [selectedRecords, setSelectedRecords] = useState([])
   const [pagination, setPagination] = useState({
     page: 1,
     per_page: 15,
@@ -20,11 +24,19 @@ export default function OptometristPrescriptionsSection({
   })
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
   const [selectedPrescription, setSelectedPrescription] = useState(null)
   const sortedRecords = useMemo(
     () => [...records].sort(comparePrescriptionRecency),
     [records],
   )
+  const selectedKeys = useMemo(
+    () => new Set(selectedRecords.map((record) => getPrescriptionRowKey(record))),
+    [selectedRecords],
+  )
+  const pageKeys = sortedRecords.map((record) => getPrescriptionRowKey(record))
+  const allPageSelected = pageKeys.length > 0 && pageKeys.every((key) => selectedKeys.has(key))
 
   const stats = [
     {
@@ -57,29 +69,21 @@ export default function OptometristPrescriptionsSection({
       setLoadError('')
 
       try {
-        const query = search.trim()
-        const response = query.length >= 2
-          ? await fetchFormPrescriptionSearch(query)
-          : await fetchGlassesPrescriptions({
-              search: query,
-              page: pagination.page,
-              perPage: pagination.per_page,
-            })
+        const response = await fetchGlassesPrescriptions({
+          search: query.search,
+          page: pagination.page,
+          perPage: pagination.per_page,
+          dateFrom: query.date_from,
+          dateTo: query.date_to,
+        })
 
         if (!cancelled) {
           const nextRecords = response.records ?? response.prescriptions ?? []
           setRecords(nextRecords)
-          setPagination((current) => query.length >= 2
-            ? {
-                ...current,
-                page: 1,
-                total: nextRecords.length,
-                total_pages: 1,
-              }
-            : {
-                ...current,
-                ...(response.pagination ?? {}),
-              })
+          setPagination((current) => ({
+            ...current,
+            ...(response.pagination ?? {}),
+          }))
         }
       } catch (error) {
         if (!cancelled) {
@@ -97,19 +101,151 @@ export default function OptometristPrescriptionsSection({
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [fetchFormPrescriptionSearch, fetchGlassesPrescriptions, pagination.page, pagination.per_page, search])
+  }, [fetchGlassesPrescriptions, pagination.page, pagination.per_page, query, refreshKey])
 
   const resultCountLabel = useMemo(() => {
     if (isLoading) return 'Loading...'
     return `${pagination.total ?? 0} total`
   }, [isLoading, pagination.total])
 
-  function onSearchChange(value) {
-    setSearch(value)
-    setPagination((current) => ({
-      ...current,
-      page: 1,
-    }))
+  function applyFilters(event) {
+    event.preventDefault()
+    setPagination((current) => ({ ...current, page: 1 }))
+    setQuery({ ...filters })
+    setSelectedRecords([])
+    setSuccessMessage('')
+  }
+
+  function resetFilters() {
+    const cleared = { search: '', date_from: '', date_to: '' }
+    setFilters(cleared)
+    setQuery(cleared)
+    setPagination((current) => ({ ...current, page: 1 }))
+    setSelectedRecords([])
+    setSuccessMessage('')
+  }
+
+  function toggleRecord(record) {
+    const key = getPrescriptionRowKey(record)
+    if (!selectedKeys.has(key) && selectedRecords.length >= 100) {
+      setLoadError('You can delete up to 100 prescriptions in one bulk action.')
+      return
+    }
+
+    setLoadError('')
+    setSelectedRecords((current) => current.some((item) => getPrescriptionRowKey(item) === key)
+      ? current.filter((item) => getPrescriptionRowKey(item) !== key)
+      : [...current, record])
+  }
+
+  function togglePageSelection() {
+    if (!allPageSelected) {
+      const currentKeys = new Set(selectedRecords.map((item) => getPrescriptionRowKey(item)))
+      const newSelectionCount = sortedRecords.filter((item) => !currentKeys.has(getPrescriptionRowKey(item))).length
+      if (selectedRecords.length + newSelectionCount > 100) {
+        setLoadError('You can delete up to 100 prescriptions in one bulk action.')
+        return
+      }
+    }
+
+    setLoadError('')
+    setSelectedRecords((current) => {
+      if (allPageSelected) {
+        return current.filter((item) => !pageKeys.includes(getPrescriptionRowKey(item)))
+      }
+
+      const currentKeys = new Set(current.map((item) => getPrescriptionRowKey(item)))
+      return [...current, ...sortedRecords.filter((item) => !currentKeys.has(getPrescriptionRowKey(item)))]
+    })
+  }
+
+  async function deleteSelected(recordsToDelete) {
+    if (!recordsToDelete.length) return
+    if (recordsToDelete.length > 100) {
+      setLoadError('You can delete up to 100 prescriptions in one bulk action.')
+      return
+    }
+    const countLabel = recordsToDelete.length === 1 ? 'this prescription' : `${recordsToDelete.length} prescriptions`
+    if (!window.confirm(`Delete ${countLabel}? Deleted prescriptions are hidden from the list, and the deletion will be recorded in Audit Log.`)) return
+
+    setIsLoading(true)
+    setLoadError('')
+    setSuccessMessage('')
+    try {
+      await deleteGlassesPrescriptions(recordsToDelete.map(toPrescriptionReference))
+      setSelectedRecords([])
+      setRefreshKey((current) => current + 1)
+      setSuccessMessage(`${recordsToDelete.length} prescription${recordsToDelete.length === 1 ? '' : 's'} deleted. The action is recorded in Audit Log.`)
+    } catch (error) {
+      setLoadError(error.message || 'Could not delete the selected prescriptions.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function savePrescriptionEdit(record, editForm) {
+    if (record.source === 'exam_form') {
+      const response = await fetchPatientExamForm(record.patient_id, { formId: record.form_id })
+      const selectedForm = response.selected_form ?? response.latest_form
+      if (!selectedForm?.form_data) {
+        throw new Error('The saved examination form could not be loaded.')
+      }
+
+      const isDraft = selectedForm.status === 'draft'
+      const latestForm = response.latest_form
+      if (isDraft && String(selectedForm.id) !== String(latestForm?.id)) {
+        throw new Error('This draft is not the latest version. Open the examination history to edit it safely.')
+      }
+
+      const formData = structuredClone(selectedForm.form_data)
+      formData.spectacle_rx ??= {}
+      formData.spectacle_rx.od ??= {}
+      formData.spectacle_rx.os ??= {}
+      for (const [field, formField] of [
+        ['sph_od', 'sphere'],
+        ['cyl_od', 'cylinder'],
+        ['axis_od', 'axis'],
+        ['add_od', 'add'],
+        ['sph_os', 'sphere'],
+        ['cyl_os', 'cylinder'],
+        ['axis_os', 'axis'],
+        ['add_os', 'add'],
+      ]) {
+        const eye = field.endsWith('_od') ? 'od' : 'os'
+        formData.spectacle_rx[eye][formField] = editForm[field]
+      }
+      formData.spectacle_rx.od.lens_type = editForm.lens_type
+      formData.spectacle_rx.os.lens_type = editForm.lens_type
+      formData.diagnosis ??= {}
+      formData.diagnosis.prescription = editForm.notes
+
+      const payload = {
+        status: isDraft ? 'draft' : 'completed',
+        form_data: formData,
+        ...(!isDraft ? { create_new_version: true } : {}),
+      }
+      try {
+        await savePatientExamForm(record.patient_id, payload)
+      } catch (error) {
+        if (!error.data?.requires_order_replacement_confirmation || !window.confirm(
+          'A lens order has already been placed for the current prescription. Saving this revision will mark that order as superseded. Continue?',
+        )) {
+          throw error
+        }
+        await savePatientExamForm(record.patient_id, { ...payload, replace_placed_order: true })
+      }
+    } else {
+      if (!record.row_id) {
+        throw new Error('This prescription is missing its row identifier and cannot be edited.')
+      }
+      await updatePatientPrescription(record.patient_id, record.row_id, editForm)
+    }
+
+    setRefreshKey((current) => current + 1)
+    setSuccessMessage(record.source === 'exam_form'
+      ? 'Prescription updated. Completed exam-form edits are saved as a new version, and the change is recorded in Audit Log.'
+      : 'Prescription updated successfully. The change is recorded in Audit Log.')
+    setSelectedPrescription(null)
   }
 
   function changePage(nextPage) {
@@ -154,17 +290,53 @@ export default function OptometristPrescriptionsSection({
             <span className="panel-tag">{resultCountLabel}</span>
           </div>
 
-          <label className="patient-search-shell">
-            <span className="patient-search-icon" aria-hidden="true">⌕</span>
-            <input
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search by folder ID or patient name"
-            />
-            <span className="patient-search-hint">live search</span>
-          </label>
+          <form className="patient-filter-grid table-attached-filter" onSubmit={applyFilters}>
+            <label>
+              Search
+              <input
+                value={filters.search}
+                onChange={(event) => {
+                  const search = event.target.value
+                  setFilters((current) => ({ ...current, search }))
+                  setQuery((current) => ({ ...current, search }))
+                  setPagination((current) => ({ ...current, page: 1 }))
+                  setSelectedRecords([])
+                }}
+                placeholder="Folder ID or patient name"
+              />
+            </label>
+            <label>
+              Date from
+              <input
+                type="date"
+                value={filters.date_from}
+                onChange={(event) => setFilters((current) => ({ ...current, date_from: event.target.value }))}
+              />
+            </label>
+            <label>
+              Date to
+              <input
+                type="date"
+                value={filters.date_to}
+                onChange={(event) => setFilters((current) => ({ ...current, date_to: event.target.value }))}
+              />
+            </label>
+            <div className="filter-actions-row full-span">
+              <button type="submit" className="primary-button" disabled={isLoading}>Apply filters</button>
+              <button type="button" className="ghost-button" onClick={resetFilters} disabled={isLoading}>Reset</button>
+            </div>
+          </form>
 
           {loadError ? <p className="muted-copy">{loadError}</p> : null}
+          {successMessage ? <p className="muted-copy" role="status">{successMessage}</p> : null}
+          {selectedRecords.length > 0 ? (
+            <div className="optometrist-inline-actions">
+              <span className="panel-tag">{selectedRecords.length} selected</span>
+              <button type="button" className="ghost-button" onClick={() => deleteSelected(selectedRecords)} disabled={isLoading}>
+                Delete selected
+              </button>
+            </div>
+          ) : null}
 
           {isLoading ? (
             <p className="muted-copy">Loading prescriptions...</p>
@@ -179,6 +351,14 @@ export default function OptometristPrescriptionsSection({
               <table className="portal-table inventory-table-wide">
                 <thead>
                   <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all prescriptions on this page"
+                        checked={allPageSelected}
+                        onChange={togglePageSelection}
+                      />
+                    </th>
                     <th>Date</th>
                     <th>Patient</th>
                     <th>Folder ID</th>
@@ -193,6 +373,14 @@ export default function OptometristPrescriptionsSection({
                 <tbody>
                   {sortedRecords.map((record, index) => (
                     <tr key={getPrescriptionRowKey(record, index)}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select prescription for ${formatPatientName(record)}`}
+                          checked={selectedKeys.has(getPrescriptionRowKey(record, index))}
+                          onChange={() => toggleRecord(record)}
+                        />
+                      </td>
                       <td>{formatDate(record.date)}</td>
                       <td><strong>{formatPatientName(record)}</strong></td>
                       <td>{record.folder_id || 'N/A'}</td>
@@ -209,11 +397,26 @@ export default function OptometristPrescriptionsSection({
                           {getPatientSeenStatus(record)}
                         </span>
                       </td>
-                      <td>{record.source === 'exam_form' ? `Exam Form${record.latest_form_version ? ` V${record.latest_form_version}` : (record.form_version ? ` V${record.form_version}` : '')}` : 'Glasses Table'}</td>
                       <td>
-                        <button type="button" className="ghost-button" onClick={() => setSelectedPrescription(record)}>
-                          Prescription
-                        </button>
+                        {record.source === 'exam_form'
+                          ? `Exam Form${record.latest_form_version ? ` V${record.latest_form_version}` : (record.form_version ? ` V${record.form_version}` : '')} • ${
+                              record.prescription_state === 'active'
+                                ? 'Current'
+                                : record.prescription_state === 'superseded'
+                                  ? 'Superseded'
+                                  : 'Draft'
+                            }`
+                          : 'Glasses Table'}
+                      </td>
+                      <td>
+                        <div className="optometrist-inline-actions">
+                          <button type="button" className="ghost-button" onClick={() => setSelectedPrescription(record)}>
+                            Prescription
+                          </button>
+                          <button type="button" className="ghost-button" onClick={() => deleteSelected([record])} disabled={isLoading}>
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -253,7 +456,7 @@ export default function OptometristPrescriptionsSection({
         <PrescriptionModal
           prescription={selectedPrescription}
           companyProfile={companyProfile}
-          updatePatientPrescription={updatePatientPrescription}
+          onSave={savePrescriptionEdit}
           onClose={() => setSelectedPrescription(null)}
         />
       ) : null}
@@ -261,7 +464,12 @@ export default function OptometristPrescriptionsSection({
   )
 }
 
-function PrescriptionModal({ prescription, companyProfile, updatePatientPrescription, onClose }) {
+function PrescriptionModal({
+  prescription,
+  companyProfile,
+  onSave,
+  onClose,
+}) {
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState(() => createPrescriptionEditForm(prescription))
   const [isSaving, setIsSaving] = useState(false)
@@ -279,14 +487,8 @@ function PrescriptionModal({ prescription, companyProfile, updatePatientPrescrip
     setEditMessage('')
 
     try {
-      await updatePatientPrescription(prescription.patient_id, prescription.patient_id, editForm)
-      Object.assign(prescription, editForm, {
-        edited_by_name: 'You',
-        edited_by_role: 'optometrist',
-        edited_at: new Date().toISOString(),
-      })
+      await onSave(prescription, editForm)
       setIsEditing(false)
-      setEditMessage('Prescription updated successfully. The editor is recorded in Audit Log.')
     } catch (error) {
       setEditMessage(error.message || 'Could not update prescription.')
     } finally {
@@ -325,7 +527,7 @@ function PrescriptionModal({ prescription, companyProfile, updatePatientPrescrip
           <div className="modal-actions">
             <button type="button" className="ghost-button" onClick={handlePrint}>Print</button>
             <button type="button" className="primary-button" onClick={handleExportPdf}>Export PDF</button>
-            {prescription.source !== 'exam_form' && prescription.patient_id ? (
+            {prescription.patient_id ? (
               <button type="button" className="ghost-button" onClick={beginEditing}>Edit Prescription</button>
             ) : null}
             <button type="button" className="ghost-button" onClick={onClose}>Close</button>
@@ -343,7 +545,17 @@ function PrescriptionModal({ prescription, companyProfile, updatePatientPrescrip
             </div>
             <div className="prescription-sheet-meta">
               <strong>Status: {status}</strong>
-              <span>Source: {prescription.source === 'exam_form' ? 'Exam Form' : 'Glasses Table'}</span>
+              <span>
+                Source: {prescription.source === 'exam_form'
+                  ? `Exam Form V${prescription.form_version ?? prescription.latest_form_version ?? '—'} • ${
+                      prescription.prescription_state === 'active'
+                        ? 'Current'
+                        : prescription.prescription_state === 'superseded'
+                          ? 'Superseded'
+                          : 'Draft'
+                    }`
+                  : 'Glasses Table'}
+              </span>
             </div>
           </header>
 
@@ -405,11 +617,19 @@ function PrescriptionModal({ prescription, companyProfile, updatePatientPrescrip
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Edit Prescription</p>
-                <h4>Update saved glasses prescription</h4>
+                <h4>{prescription.source === 'exam_form' ? 'Update exam-form prescription' : 'Update saved glasses prescription'}</h4>
+                {prescription.source === 'exam_form' ? (
+                  <p className="muted-copy">
+                    Completed edits are saved as a new version so prior examination history is retained.
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="optometrist-exam-grid">
-              {['date', 'ipd', 'sph_od', 'cyl_od', 'axis_od', 'add_od', 'sph_os', 'cyl_os', 'axis_os', 'add_os', 'lens_type', 'lens_material', 'color'].map((field) => (
+              {(prescription.source === 'exam_form'
+                ? ['sph_od', 'cyl_od', 'axis_od', 'add_od', 'sph_os', 'cyl_os', 'axis_os', 'add_os', 'lens_type']
+                : ['date', 'ipd', 'sph_od', 'cyl_od', 'axis_od', 'add_od', 'sph_os', 'cyl_os', 'axis_os', 'add_os', 'lens_type', 'lens_material', 'color']
+              ).map((field) => (
                 <label key={field}>
                   {field.replaceAll('_', ' ').toUpperCase()}
                   <input type={field === 'date' ? 'date' : 'text'} value={editForm[field] || ''} onChange={(event) => setEditForm((current) => ({ ...current, [field]: event.target.value }))} />
@@ -496,18 +716,32 @@ function buildPrescriptionRecencyStamp(record) {
 }
 
 function getPrescriptionRowKey(record, index = 0) {
-  const directKey = meaningfulKeyPart(record?.prescription_id) || meaningfulKeyPart(record?.form_id) || meaningfulKeyPart(record?.billing_id)
+  const source = record?.source === 'exam_form' ? 'exam_form' : 'legacy'
+  const directKey = meaningfulKeyPart(record?.row_id)
+    || meaningfulKeyPart(record?.form_id)
+    || meaningfulKeyPart(record?.prescription_id)
+    || meaningfulKeyPart(record?.billing_id)
   if (directKey) {
-    return directKey
+    return `${source}-${directKey}`
   }
 
   return [
-    'prescription',
+    source,
     meaningfulKeyPart(record?.patient_id) || meaningfulKeyPart(record?.id) || 'patient',
     meaningfulKeyPart(record?.folder_id) || 'folder',
     meaningfulKeyPart(record?.date) || meaningfulKeyPart(record?.latest_form_updated_at) || meaningfulKeyPart(record?.created_at) || 'nodate',
     meaningfulKeyPart(record?.created_at) || meaningfulKeyPart(record?.latest_form_updated_at) || `row-${index}`,
   ].join('-')
+}
+
+function toPrescriptionReference(record) {
+  return {
+    source: record.source === 'exam_form' ? 'exam_form' : 'legacy',
+    patient_id: Number(record.patient_id),
+    ...(record.source === 'exam_form'
+      ? { form_id: Number(record.form_id) }
+      : { row_id: Number(record.row_id) }),
+  }
 }
 
 function meaningfulKeyPart(value) {

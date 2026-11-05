@@ -10,9 +10,9 @@ function normalizeValue(value) {
 function buildPrescriptionKey(record) {
   const patientId = normalizeValue(record?.patient_id ?? record?.id)
   const folderId = normalizeValue(record?.folder_id)
-  const date = normalizeValue(record?.date ?? record?.updated_at)?.slice(0, 10)
   const source = normalizeValue(record?.source)
-  return [source || 'prescription', folderId || patientId || 'unknown', date || 'nodate'].join('-')
+  const sourceId = buildSourceId(record)
+  return [source || 'prescription', folderId || patientId || 'unknown', sourceId || 'no-reference'].join('-')
 }
 
 function buildSourceId(record) {
@@ -118,7 +118,7 @@ export default function PlaceLensOrderSection({ fetchGlassesPrescriptions, place
       setError('')
 
       try {
-        const response = await fetchGlassesPrescriptions({ search, page: 1, perPage: 50, dateFrom, dateTo })
+        const response = await fetchGlassesPrescriptions({ search, page: 1, perPage: 50, dateFrom, dateTo, activeOnly: true })
         if (!cancelled) {
           const nextRecords = response?.prescriptions ?? []
           setRecords(nextRecords)
@@ -218,7 +218,7 @@ export default function PlaceLensOrderSection({ fetchGlassesPrescriptions, place
           <p className="eyebrow">Front Desk</p>
           <h3>Place Lens Order</h3>
           <p className="header-copy">
-            Review the latest optometrist prescriptions and queue the ones ready for technician processing.
+            Review the current completed prescription for each patient and queue it for technician processing.
           </p>
         </div>
       </div>

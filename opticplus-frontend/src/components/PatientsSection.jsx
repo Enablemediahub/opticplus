@@ -107,6 +107,7 @@ export default function PatientsSection({
   updatePatientDetails,
   deletePatientRecord,
   fetchPatientPrescriptions,
+  deleteGlassesPrescriptions,
   fetchPatientPayments,
   addPatientPrescription,
   updatePatientPrescription,
@@ -170,6 +171,7 @@ export default function PatientsSection({
         updatePatientDetails={updatePatientDetails}
           deletePatientRecord={deletePatientRecord}
           fetchPatientPrescriptions={fetchPatientPrescriptions}
+          deleteGlassesPrescriptions={deleteGlassesPrescriptions}
           fetchPatientPayments={fetchPatientPayments}
           addPatientPrescription={addPatientPrescription}
           updatePatientPrescription={updatePatientPrescription}
@@ -1505,6 +1507,7 @@ function ManagerPatientsWorkspace({
   updatePatientDetails,
   deletePatientRecord,
   fetchPatientPrescriptions,
+  deleteGlassesPrescriptions,
   fetchPatientPayments,
   addPatientPrescription,
   updatePatientPrescription,
@@ -1847,6 +1850,7 @@ function OptometristPatientsWorkspace({
   updatePatientDetails,
   deletePatientRecord,
   fetchPatientPrescriptions,
+  deleteGlassesPrescriptions,
   fetchPatientPayments,
   addPatientPrescription,
   updatePatientPrescription,
@@ -2252,6 +2256,7 @@ function OptometristPatientsWorkspace({
             fetchPatientExamForm={fetchPatientExamForm}
             addPatientPrescription={addPatientPrescription}
             updatePatientPrescription={updatePatientPrescription}
+            deleteGlassesPrescriptions={deleteGlassesPrescriptions}
             fetchPatientDocuments={fetchPatientDocuments}
             uploadPatientDocuments={uploadPatientDocuments}
           />
@@ -2787,6 +2792,8 @@ function OptometristPatientsWorkspace({
                   fetchPatientPrescriptions={fetchPatientPrescriptions}
                   fetchPatientExamForm={fetchPatientExamForm}
                   addPatientPrescription={addPatientPrescription}
+                  updatePatientPrescription={updatePatientPrescription}
+                  deleteGlassesPrescriptions={deleteGlassesPrescriptions}
                   fetchPatientDocuments={fetchPatientDocuments}
                   uploadPatientDocuments={uploadPatientDocuments}
                 />
@@ -2864,6 +2871,8 @@ function OptometristPatientsWorkspace({
           fetchPatientPrescriptions={fetchPatientPrescriptions}
           fetchPatientExamForm={fetchPatientExamForm}
           addPatientPrescription={addPatientPrescription}
+          updatePatientPrescription={updatePatientPrescription}
+          deleteGlassesPrescriptions={deleteGlassesPrescriptions}
           fetchPatientDocuments={fetchPatientDocuments}
           uploadPatientDocuments={uploadPatientDocuments}
         />
@@ -3716,6 +3725,15 @@ function OptometristReviewView({
                     <span>{version.updated_at || 'No update date'}</span>
                   </div>
                   <span className={`status-pill status-${String(version.status || '').toLowerCase()}`}>{version.status || 'draft'}</span>
+                  {version.prescription_state && version.prescription_state !== 'completed' ? (
+                    <span className="status-pill">
+                      {version.prescription_state === 'active'
+                        ? 'Active prescription'
+                        : version.prescription_state === 'superseded'
+                          ? 'Superseded'
+                          : 'Draft'}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="muted-copy"><strong>Chief Complaint:</strong> {version.summary?.chief_complaint || 'N/A'}</p>
                 <p className="muted-copy"><strong>Diagnosis:</strong> {version.summary?.diagnosis || 'N/A'}</p>
@@ -4011,6 +4029,15 @@ function OptometristRecordsView({ record, setActiveView, openExamModal, openExam
                     <span>{version.updated_at || 'No update date'}</span>
                   </div>
                   <span className={`status-pill status-${String(version.status || '').toLowerCase()}`}>{version.status || 'draft'}</span>
+                  {version.prescription_state && version.prescription_state !== 'completed' ? (
+                    <span className="status-pill">
+                      {version.prescription_state === 'active'
+                        ? 'Active prescription'
+                        : version.prescription_state === 'superseded'
+                          ? 'Superseded'
+                          : 'Draft'}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="muted-copy"><strong>Chief Complaint:</strong> {version.summary?.chief_complaint || 'N/A'}</p>
                 <p className="muted-copy"><strong>Diagnosis:</strong> {version.summary?.diagnosis || 'N/A'}</p>
@@ -4382,6 +4409,7 @@ function PatientPrescriptionWorkspace({
   fetchPatientExamForm,
   addPatientPrescription,
   updatePatientPrescription,
+  deleteGlassesPrescriptions,
   fetchPatientDocuments,
   uploadPatientDocuments,
 }) {
@@ -4389,6 +4417,7 @@ function PatientPrescriptionWorkspace({
   const [documents, setDocuments] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSavingPrescription, setIsSavingPrescription] = useState(false)
+  const [deletingPrescriptionId, setDeletingPrescriptionId] = useState(null)
   const [isUploadingDocuments, setIsUploadingDocuments] = useState(false)
   const [newPrescription, setNewPrescription] = useState(defaultNewPrescription())
   const [documentType, setDocumentType] = useState('Clinical Attachment')
@@ -4468,6 +4497,37 @@ function PatientPrescriptionWorkspace({
       setMessage(error.message || 'Could not save prescription.')
     } finally {
       setIsSavingPrescription(false)
+    }
+  }
+
+  async function handleDeletePrescription(item) {
+    const source = item.source === 'exam_form' ? 'exam_form' : 'legacy'
+    const identifier = source === 'exam_form' ? item.form_id : item.row_id
+    if (!deleteGlassesPrescriptions || !identifier) {
+      setMessage('This prescription cannot be deleted because its record identifier is missing.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Delete this ${source === 'exam_form' ? 'exam-form' : 'legacy'} prescription for ${patient.patient_name || patient.name || 'this patient'}? The clinical record will remain in history, and this action will be recorded in Audit Log.`,
+    )
+    if (!confirmed) return
+
+    setDeletingPrescriptionId(identifier)
+    setMessage('')
+    try {
+      await deleteGlassesPrescriptions([{
+        source,
+        patient_id: patient.id,
+        ...(source === 'exam_form' ? { form_id: item.form_id } : { row_id: item.row_id }),
+      }])
+      const refreshed = await fetchPatientPrescriptions(patient.id)
+      setPrescriptions(refreshed.prescriptions ?? [])
+      setMessage('Prescription deleted. The deletion is recorded in Audit Log.')
+    } catch (error) {
+      setMessage(error.message || 'Could not delete the prescription.')
+    } finally {
+      setDeletingPrescriptionId(null)
     }
   }
 
@@ -4623,7 +4683,7 @@ function PatientPrescriptionWorkspace({
               {prescriptions.length ? (
                 <div className="optometrist-prescription-history">
                   {prescriptions.map((item) => (
-                    <article key={`${item.prescription_id}-${item.date}`} className="optometrist-prescription-card">
+                    <article key={`${item.source || 'legacy'}-${item.form_id || item.row_id || item.patient_id}-${item.date}`} className="optometrist-prescription-card">
                       <div className="patient-record-top">
                         <div>
                           <strong>{item.date || 'No date'}</strong>
@@ -4656,6 +4716,18 @@ function PatientPrescriptionWorkspace({
                       ) : (
                         <p className="muted-copy">Exam form prescription. Edit it from Patient Form to preserve clinical version history.</p>
                       )}
+                      {deleteGlassesPrescriptions ? (
+                        <div className="optometrist-inline-actions">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            disabled={deletingPrescriptionId !== null}
+                            onClick={() => handleDeletePrescription(item)}
+                          >
+                            {deletingPrescriptionId === (item.form_id || item.row_id) ? 'Deleting...' : 'Delete Prescription'}
+                          </button>
+                        </div>
+                      ) : null}
                     </article>
                   ))}
                 </div>
@@ -4787,6 +4859,7 @@ function PatientPrescriptionModal({
   fetchPatientExamForm,
   addPatientPrescription,
   updatePatientPrescription,
+  deleteGlassesPrescriptions,
   fetchPatientDocuments,
   uploadPatientDocuments,
 }) {
@@ -4813,6 +4886,7 @@ function PatientPrescriptionModal({
           fetchPatientExamForm={fetchPatientExamForm}
           addPatientPrescription={addPatientPrescription}
           updatePatientPrescription={updatePatientPrescription}
+          deleteGlassesPrescriptions={deleteGlassesPrescriptions}
           fetchPatientDocuments={fetchPatientDocuments}
           uploadPatientDocuments={uploadPatientDocuments}
         />
@@ -4855,6 +4929,7 @@ function PatientExamWorkspace({
   const [formVersion, setFormVersion] = useState(null)
   const [formStatus, setFormStatus] = useState('')
   const [formUpdatedAt, setFormUpdatedAt] = useState('')
+  const [latestCompletedOrderPlaced, setLatestCompletedOrderPlaced] = useState(false)
   const [isLoadingSavedForm, setIsLoadingSavedForm] = useState(false)
   const [isSavingForm, setIsSavingForm] = useState(false)
   const [saveAction, setSaveAction] = useState('')
@@ -4878,6 +4953,7 @@ function PatientExamWorkspace({
     setFormVersion(null)
     setFormStatus('')
     setFormUpdatedAt('')
+    setLatestCompletedOrderPlaced(false)
     setSaveAction('')
     setSaveMessage('')
     setSaveTone('idle')
@@ -4898,6 +4974,7 @@ function PatientExamWorkspace({
         setFormVersion(selectedForm?.version ?? null)
         setFormStatus(selectedForm?.status ?? '')
         setFormUpdatedAt(selectedForm?.updated_at ?? '')
+        setLatestCompletedOrderPlaced(Boolean(response.latest_completed_order_placed))
       })
       .catch(() => {
         if (!cancelled) {
@@ -4920,6 +4997,14 @@ function PatientExamWorkspace({
   }
 
   async function persistForm(status) {
+    let replacePlacedOrder = false
+    if (status === 'completed' && latestCompletedOrderPlaced) {
+      replacePlacedOrder = window.confirm(
+        'A lens order has already been placed for the current prescription. Completing this examination will mark that order as superseded. Continue?',
+      )
+      if (!replacePlacedOrder) return
+    }
+
     setIsSavingForm(true)
     setSaveAction(status)
     setSaveMessage('')
@@ -4929,6 +5014,7 @@ function PatientExamWorkspace({
       const response = await savePatientExamForm(patient.id, {
         status,
         form_data: formState,
+        ...(replacePlacedOrder ? { replace_placed_order: true } : {}),
       })
       const savedState = response.form?.form_data
       const nextState = savedState ? mergeExamFormState(createExamFormState(patient), savedState) : formState
@@ -4938,12 +5024,31 @@ function PatientExamWorkspace({
       setFormVersion(response.form?.version ?? null)
       setFormStatus(response.form?.status ?? status)
       setFormUpdatedAt(response.form?.updated_at ?? '')
-      setSaveMessage(response.message || (status === 'draft' ? 'Examination draft saved successfully.' : 'Examination saved successfully.'))
-      setSaveTone('success')
+      setLatestCompletedOrderPlaced(false)
+      let historyRefreshError = ''
+      try {
+        const history = await fetchPatientExamForm(patient.id)
+        setFormVersions(history.form_versions ?? [])
+        setLatestCompletedOrderPlaced(Boolean(history.latest_completed_order_placed))
+      } catch (refreshError) {
+        historyRefreshError = refreshError.message || 'Version history could not be refreshed.'
+      }
+      setSaveMessage(response.replaced_placed_order
+        ? 'New prescription saved. The previous lens order was marked superseded.'
+        : (response.message || (status === 'draft' ? 'Examination draft saved successfully.' : 'Examination saved successfully.')))
+      if (historyRefreshError) {
+        setSaveMessage(`${response.message || 'Examination saved successfully.'} ${historyRefreshError}`)
+        setSaveTone('error')
+      } else {
+        setSaveTone('success')
+      }
       const nextLearnedValues = mergeLearnedExamValues(learnedValues, collectLearnedExamValues(nextState))
       setLearnedValues(nextLearnedValues)
       storeLearnedExamValues(nextLearnedValues)
     } catch (error) {
+      if (error.data?.requires_order_replacement_confirmation) {
+        setLatestCompletedOrderPlaced(true)
+      }
       setSaveMessage(error.message || 'Could not save examination form.')
       setSaveTone('error')
     } finally {
@@ -5002,6 +5107,15 @@ function PatientExamWorkspace({
                         <span>{version.updated_at || 'No update date'}</span>
                       </div>
                       <span className={`status-pill status-${String(version.status || '').toLowerCase()}`}>{version.status || 'draft'}</span>
+                      {version.prescription_state && version.prescription_state !== 'completed' ? (
+                        <span className="status-pill">
+                          {version.prescription_state === 'active'
+                            ? 'Active prescription'
+                            : version.prescription_state === 'superseded'
+                              ? 'Superseded'
+                              : 'Draft'}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="muted-copy"><strong>Chief Complaint:</strong> {version.summary?.chief_complaint || 'N/A'}</p>
                     <p className="muted-copy"><strong>Diagnosis:</strong> {version.summary?.diagnosis || 'N/A'}</p>
@@ -5028,6 +5142,7 @@ function PatientExamWorkspace({
                               setFormVersion(selectedForm?.version ?? null)
                               setFormStatus(selectedForm?.status ?? '')
                               setFormUpdatedAt(selectedForm?.updated_at ?? '')
+                              setLatestCompletedOrderPlaced(Boolean(response.latest_completed_order_placed))
                             })
                             .catch((error) => {
                               setSaveMessage(error.message || 'Could not load the selected examination version.')
@@ -5091,6 +5206,9 @@ function PatientExamWorkspace({
               {formStatus ? ` • ${labelize(formStatus)}` : ''}
             </span>
             <strong>{formUpdatedAt ? `Last saved ${formatExamTimestamp(formUpdatedAt)}` : 'No saved version yet'}</strong>
+            {latestCompletedOrderPlaced ? (
+              <p className="form-feedback error">A lens order is already placed for the current prescription. Confirm replacement when completing a revised examination.</p>
+            ) : null}
             {saveMessage ? (
               <p className={saveTone === 'error' ? 'form-feedback error' : 'form-feedback success'}>
                 {saveMessage}

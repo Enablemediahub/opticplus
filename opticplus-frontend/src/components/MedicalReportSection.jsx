@@ -102,7 +102,7 @@ export default function MedicalReportSection({
       ? (report.form_versions ?? []).map((version) => `
           <div class="version-row">
             <div><strong>Version ${safe(version.version)}</strong> • ${safe(version.updated_at || 'N/A')}</div>
-            <div>Status: ${safe(version.status || 'draft')}</div>
+            <div>Status: ${safe(version.status || 'draft')} • ${safe(version.prescription_state === 'active' ? 'Active prescription' : version.prescription_state === 'superseded' ? 'Superseded' : version.prescription_state === 'draft' ? 'Draft' : 'No prescription status')}</div>
             <div>Chief Complaint: ${safe(version.summary?.chief_complaint || 'N/A')}</div>
             <div>Diagnosis: ${safe(version.summary?.diagnosis || 'N/A')}</div>
           </div>
@@ -395,6 +395,15 @@ export default function MedicalReportSection({
                           <span>Updated: {version.updated_at || 'N/A'}</span>
                         </div>
                         <span className={`status-pill status-${String(version.status || '').toLowerCase()}`}>{version.status || 'draft'}</span>
+                        {version.prescription_state && version.prescription_state !== 'completed' ? (
+                          <span className="status-pill">
+                            {version.prescription_state === 'active'
+                              ? 'Active prescription'
+                              : version.prescription_state === 'superseded'
+                                ? 'Superseded'
+                                : 'Draft'}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="muted-copy"><strong>Chief Complaint:</strong> {version.summary?.chief_complaint || 'N/A'}</p>
                       <p className="muted-copy"><strong>Diagnosis:</strong> {version.summary?.diagnosis || 'N/A'}</p>

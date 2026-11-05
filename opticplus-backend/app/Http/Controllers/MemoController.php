@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ManagerPushNotificationService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -343,7 +344,7 @@ class MemoController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, ManagerPushNotificationService $pushNotifications): JsonResponse
     {
         $this->ensureMemoTables();
 
@@ -440,6 +441,10 @@ class MemoController extends Controller
             ], 422);
         }
 
+        if (! $saveAsDraft && $requiresApproval) {
+            $pushNotifications->notifyBranchManagers($branchId, 'memo');
+        }
+
         return response()->json([
             'message' => $saveAsDraft ? 'Memo draft saved successfully.' : 'Memo saved and forwarded for approval.',
             'memo_id' => $memoId,
@@ -447,7 +452,7 @@ class MemoController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, int $memoId): JsonResponse
+    public function update(Request $request, int $memoId, ManagerPushNotificationService $pushNotifications): JsonResponse
     {
         $this->ensureMemoTables();
 
@@ -563,6 +568,10 @@ class MemoController extends Controller
                 'message' => 'Unable to update the memo right now.',
                 'error' => $e->getMessage(),
             ], 422);
+        }
+
+        if (! $saveAsDraft && $requiresApproval) {
+            $pushNotifications->notifyBranchManagers($branchId, 'memo');
         }
 
         return response()->json([

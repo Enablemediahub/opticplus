@@ -42,6 +42,7 @@ import StaffAppraisalManagerPanel from './components/StaffAppraisalManagerPanel.
 import TechnicianDashboardSection from './components/TechnicianDashboardSection.jsx'
 import UsersManagementSection from './components/UsersManagementSection.jsx'
 import WorkingCapitalLiabilitiesSection from './components/WorkingCapitalLiabilitiesSection.jsx'
+import useManagerNotifications from './useManagerNotifications.js'
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
@@ -850,6 +851,12 @@ function App() {
   const isMergedView = session?.is_admin && selectedBranchId === 0
   const canSwitchBranch = session?.is_admin || isTechnician
   const scopedBranchId = canSwitchBranch ? selectedBranchId : session?.branch_id
+  const managerNotifications = useManagerNotifications({
+    apiFetch,
+    token,
+    session,
+    branchId: scopedBranchId,
+  })
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
   const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Selling Pricelist', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
@@ -3567,7 +3574,7 @@ function App() {
     })
   }
 
-  async function fetchGlassesPrescriptions({ search = '', page = 1, perPage = 15, dateFrom = '', dateTo = '' } = {}) {
+  async function fetchGlassesPrescriptions({ search = '', page = 1, perPage = 15, dateFrom = '', dateTo = '', activeOnly = false } = {}) {
     const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
     const params = new URLSearchParams({
       branch_id: String(branchId ?? 1),
@@ -3575,11 +3582,25 @@ function App() {
       page: String(page),
       per_page: String(perPage),
     })
+    if (activeOnly) params.set('active_only', '1')
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
 
     return apiFetch(`/glasses-prescriptions?${params.toString()}`, {
       token,
+    })
+  }
+
+  async function deleteGlassesPrescriptions(prescriptions) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+
+    return apiFetch('/glasses-prescriptions', {
+      method: 'DELETE',
+      token,
+      body: {
+        branch_id: branchId,
+        prescriptions,
+      },
     })
   }
 
@@ -3598,18 +3619,6 @@ function App() {
       method: 'DELETE',
       token,
       body: { ...payload, branch_id: branchId },
-    })
-  }
-
-  async function fetchFormPrescriptionSearch(search) {
-    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
-    const params = new URLSearchParams({
-      branch_id: String(branchId ?? 1),
-      search,
-    })
-
-    return apiFetch(`/patients/form-prescriptions/search?${params.toString()}`, {
-      token,
     })
   }
 
@@ -5215,6 +5224,11 @@ function App() {
                       >
                         <PortalIcon name={item.icon} className="nav-icon" />
                         <span>{item.navLabel ?? item.label}</span>
+                        {isGeneralManager && managerNotifications.navCounts[item.label] > 0 ? (
+                          <span className="sidebar-notification-count" aria-label={`${managerNotifications.navCounts[item.label]} pending`}>
+                            {managerNotifications.navCounts[item.label] > 99 ? '99+' : managerNotifications.navCounts[item.label]}
+                          </span>
+                        ) : null}
                       </button>
                     ))}
                   </div>
@@ -5244,6 +5258,41 @@ function App() {
           ) : null}
 
           <div className={isChromeHiddenView ? `portal-main ${isDatabaseFullscreen ? 'database-fullscreen-main' : 'patient-form-fullscreen-main'}` : `portal-main${activeView === 'Lens Orders' ? ' lens-orders-main' : ''}`}>
+            {isGeneralManager && managerNotifications.isBannerOpen ? (
+              <section className="manager-approval-slide" role="status" aria-live="polite">
+                <div className="manager-approval-slide-heading">
+                  <span className="manager-approval-slide-mark" aria-hidden="true">!</span>
+                  <div>
+                    <p className="eyebrow">Needs your attention</p>
+                    <h3>{managerNotifications.counts.total} item{managerNotifications.counts.total === 1 ? '' : 's'} need{managerNotifications.counts.total === 1 ? 's' : ''} your review</h3>
+                  </div>
+                  <button type="button" className="manager-approval-slide-dismiss" aria-label="Dismiss notifications" onClick={managerNotifications.dismissBanner}>×</button>
+                </div>
+                <div className="manager-approval-slide-links">
+                  {managerNotifications.counts.memos > 0 ? (
+                    <button type="button" onClick={() => setActiveView('Memos')}>
+                      <strong>{managerNotifications.counts.memos}</strong><span>Memo approvals</span><b>Review</b>
+                    </button>
+                  ) : null}
+                  {managerNotifications.counts.expenses > 0 ? (
+                    <button type="button" onClick={() => setActiveView('Expenses')}>
+                      <strong>{managerNotifications.counts.expenses}</strong><span>Expense approvals</span><b>Review</b>
+                    </button>
+                  ) : null}
+                  {managerNotifications.counts.sms_reviews > 0 ? (
+                    <button type="button" onClick={() => setActiveView('Bank Deposits')}>
+                      <strong>{managerNotifications.counts.sms_reviews}</strong><span>SMS Review Queue</span><b>Review</b>
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+            {isGeneralManager && managerNotifications.pushMessage ? (
+              <p className="manager-push-feedback" role="status">{managerNotifications.pushMessage}</p>
+            ) : null}
+            {isGeneralManager && managerNotifications.error ? (
+              <div className="message-banner error manager-notification-error" role="alert">{managerNotifications.error}</div>
+            ) : null}
             {!isChromeHiddenView ? (
             <header className="portal-header">
               <div
@@ -5286,6 +5335,30 @@ function App() {
                   </div>
 
                   <div className="header-actions portal-hero-actions">
+                    {isGeneralManager ? (
+                      <button
+                        type="button"
+                        className={`manager-push-toggle${managerNotifications.isSubscribed ? ' is-enabled' : ''}`}
+                        onClick={managerNotifications.isSubscribed
+                          ? managerNotifications.disablePhoneNotifications
+                          : managerNotifications.enablePhoneNotifications}
+                        disabled={managerNotifications.isUpdatingPush || !managerNotifications.pushSupported || (!managerNotifications.isSubscribed && !managerNotifications.pushEnabled)}
+                        title={!managerNotifications.pushSupported
+                          ? 'Phone notifications require an installed app and a supported HTTPS browser.'
+                          : managerNotifications.isSubscribed
+                            ? 'Disable phone notifications on this device'
+                            : !managerNotifications.pushEnabled
+                              ? 'Phone notifications are not configured on the server.'
+                              : 'Enable phone notifications on this device'}
+                      >
+                        <PortalIcon name="alert" className="nav-icon" />
+                        <span>{managerNotifications.isUpdatingPush
+                          ? 'Saving...'
+                          : managerNotifications.isSubscribed
+                            ? 'Phone alerts on'
+                            : 'Enable phone alerts'}</span>
+                      </button>
+                    ) : null}
                     {session.is_admin ? (
                       <label className="branch-select">
                         Branch
@@ -5534,6 +5607,7 @@ function App() {
                 updatePatientDetails={updatePatientDetails}
                 deletePatientRecord={deletePatientRecord}
                 fetchPatientPrescriptions={fetchPatientPrescriptions}
+                deleteGlassesPrescriptions={deleteGlassesPrescriptions}
                 fetchPatientPayments={fetchPatientPayments}
                 addPatientPrescription={addPatientPrescription}
                 updatePatientPrescription={updatePatientPrescription}
@@ -6277,8 +6351,10 @@ function App() {
                 dashboard={dashboard}
                 patientData={patientData}
                 fetchGlassesPrescriptions={fetchGlassesPrescriptions}
-                fetchFormPrescriptionSearch={fetchFormPrescriptionSearch}
+                deleteGlassesPrescriptions={deleteGlassesPrescriptions}
                 updatePatientPrescription={updatePatientPrescription}
+                fetchPatientExamForm={fetchPatientExamForm}
+                savePatientExamForm={savePatientExamForm}
                 companyProfile={companyProfileForm}
               />
             ) : null}

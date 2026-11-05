@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ManagerPushNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -453,7 +454,7 @@ class BankAlertController extends Controller
         ], 201);
     }
 
-    public function ingest(Request $request): JsonResponse
+    public function ingest(Request $request, ManagerPushNotificationService $pushNotifications): JsonResponse
     {
         $validated = $request->validate([
             'sender' => ['required', 'string', Rule::in(array_keys(self::SENDER_BANKS))],
@@ -553,6 +554,8 @@ class BankAlertController extends Controller
         }
 
         DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
+
+        $pushNotifications->notifyBranchManagers((int) $device->branch_id, 'sms_review');
 
         return response()->json([
             'message' => 'Alert received for review.',
