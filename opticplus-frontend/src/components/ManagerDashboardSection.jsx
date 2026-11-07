@@ -135,10 +135,10 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
               <section className="manager-presence-branch" key={branchName}>
                 <div className="manager-presence-branch-heading">
                   <h4>{branchName}</h4>
-                  <span>{users.filter((user) => user.is_online).length} online of {users.length} users</span>
+                  <span>{users.filter((user) => user.is_online).length} online · {users.filter((user) => !user.is_online).length} offline</span>
                 </div>
                 <div className="manager-presence-list">
-                  {users.map((user) => (
+                  {users.filter((user) => user.is_online).map((user) => (
                     <article className="manager-presence-user" key={user.id}>
                       <div className="manager-presence-user-name">
                         <span className={`presence-indicator${user.is_online ? ' is-online' : ''}`} aria-label={user.is_online ? 'Online' : 'Offline'} />
@@ -153,7 +153,32 @@ export default function ManagerDashboardSection({ token, selectedBranchId, apiFe
                       </div>
                     </article>
                   ))}
+                  {!users.some((user) => user.is_online) ? (
+                    <p className="muted-copy manager-presence-empty">No users are online in this branch.</p>
+                  ) : null}
                 </div>
+                {users.some((user) => !user.is_online) ? (
+                  <details className="manager-presence-offline">
+                    <summary>Offline users ({users.filter((user) => !user.is_online).length})</summary>
+                    <div className="manager-presence-list">
+                      {users.filter((user) => !user.is_online).map((user) => (
+                        <article className="manager-presence-user" key={user.id}>
+                          <div className="manager-presence-user-name">
+                            <span className="presence-indicator" aria-label="Offline" />
+                            <div>
+                              <strong>{user.name}</strong>
+                              <span>{user.username} · {titleize(user.role)}{user.employee_status === 'inactive' ? ' · Inactive account' : ''}</span>
+                            </div>
+                          </div>
+                          <div className="manager-presence-user-meta">
+                            <span className="presence-status">Offline</span>
+                            <span>Last login: {user.last_login_at ? formatDateTime(user.last_login_at) : 'Not recorded yet'}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </section>
             ))}
           </div>

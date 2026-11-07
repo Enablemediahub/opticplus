@@ -351,6 +351,7 @@ class ManagerController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->where(fn ($query) => $query->where('branch_id', $userBranchId)),
             ],
+            'profile_image' => ['nullable', 'image', 'max:4096'],
         ]);
 
         $role = $validated['role'];
@@ -367,6 +368,11 @@ class ManagerController extends Controller
             'branch' => $this->branchName($userBranchId),
             'profile_image' => 'default_profile.png',
         ]);
+
+        if ($request->hasFile('profile_image')) {
+            $profilePath = $this->storeUserProfileImage($request, (int) $userId);
+            DB::table('users')->where('id', $userId)->update(['profile_image' => $profilePath]);
+        }
 
         $user = DB::table('users')->where('id', $userId)->first();
 
@@ -1092,7 +1098,7 @@ class ManagerController extends Controller
             mkdir($directory, 0755, true);
         }
 
-        $filename = 'profile_'.$userId.'_'.time().'.'.$file->getClientOriginalExtension();
+        $filename = 'profile_'.$userId.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
         $file->move($directory, $filename);
 
         return 'uploads/profile-images/'.$filename;

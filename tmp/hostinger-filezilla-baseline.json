@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-11-01 14:28:32",
+  "generated_at": "2026-11-07 12:18:29",
   "files": {
     ".styleci.yml": {
       "length": 120,
       "last_write_utc_ticks": 639274383091312916
     },
     "composer.lock": {
-      "length": 310115,
-      "last_write_utc_ticks": 639274383091343225
+      "length": 325840,
+      "last_write_utc_ticks": 639294952628723066
     },
     "phpunit.xml": {
       "length": 1322,
@@ -26,8 +26,8 @@
       "last_write_utc_ticks": 639274383091308743
     },
     "README.md": {
-      "length": 3911,
-      "last_write_utc_ticks": 639274383091313935
+      "length": 5178,
+      "last_write_utc_ticks": 639296495986086121
     },
     "artisan": {
       "length": 425,
@@ -50,12 +50,12 @@
       "last_write_utc_ticks": 639274383091310024
     },
     ".env.example": {
-      "length": 1316,
-      "last_write_utc_ticks": 639274383091309154
+      "length": 1408,
+      "last_write_utc_ticks": 639294952628752894
     },
     "composer.json": {
-      "length": 2849,
-      "last_write_utc_ticks": 639274383091340843
+      "length": 2888,
+      "last_write_utc_ticks": 639294952628694487
     },
     ".phpunit.result.cache": {
       "length": 1036,
@@ -84,6 +84,10 @@
     "database/migrations/2026_10_11_000001_add_cost_price_to_products_table.php": {
       "length": 784,
       "last_write_utc_ticks": 639274903376315062
+    },
+    "database/migrations/2026_11_02_000001_add_public_registration_metadata_to_patient_records.php": {
+      "length": 1152,
+      "last_write_utc_ticks": 639292143429710031
     },
     "database/migrations/0001_01_01_000000_create_users_table.php": {
       "length": 1473,
@@ -137,9 +141,17 @@
       "length": 941,
       "last_write_utc_ticks": 639274383091354227
     },
+    "database/migrations/2026_11_02_000002_create_patient_folder_id_allocations_table.php": {
+      "length": 1818,
+      "last_write_utc_ticks": 639292194259058831
+    },
     "database/migrations/0001_01_01_000002_create_jobs_table.php": {
       "length": 1812,
       "last_write_utc_ticks": 639274383091351858
+    },
+    "database/migrations/2026_11_01_000001_create_staff_appraisal_tables.php": {
+      "length": 3547,
+      "last_write_utc_ticks": 639291691305122479
     },
     "database/migrations/2026_08_02_120000_create_monitor_budgets_table.php": {
       "length": 713,
@@ -160,6 +172,10 @@
     "database/migrations/2026_09_10_000005_make_working_capital_description_optional.php": {
       "length": 904,
       "last_write_utc_ticks": 639274383091356145
+    },
+    "database/migrations/2026_11_05_000001_create_push_subscriptions_table.php": {
+      "length": 773,
+      "last_write_utc_ticks": 639294961196973507
     },
     "database/migrations/2026_10_22_000002_align_billing_status_rounding.php": {
       "length": 778,
@@ -188,6 +204,10 @@
     "database/migrations/2026_09_10_000002_create_working_capital_liabilities_table.php": {
       "length": 1015,
       "last_write_utc_ticks": 639274383091354766
+    },
+    "database/migrations/2026_11_01_000002_add_assigned_role_to_staff_appraisal_tasks.php": {
+      "length": 1063,
+      "last_write_utc_ticks": 639291691305188929
     },
     "database/migrations/2026_05_03_120000_create_debt_management_tables.php": {
       "length": 4234,
@@ -265,6 +285,10 @@
       "length": 626,
       "last_write_utc_ticks": 639284434791354566
     },
+    "database/schema/add_staff_appraisal_assigned_role.mysql.sql": {
+      "length": 977,
+      "last_write_utc_ticks": 639291691305226620
+    },
     "database/schema/opticplus_full_schema.mysql.sql": {
       "length": 39700,
       "last_write_utc_ticks": 639282784508601814
@@ -281,6 +305,10 @@
       "length": 636,
       "last_write_utc_ticks": 639282784919304180
     },
+    "database/schema/create_patient_folder_id_allocations.mysql.sql": {
+      "length": 1666,
+      "last_write_utc_ticks": 639292194305163401
+    },
     "database/schema/add_bank_sms_sync_request_versions.mysql.sql": {
       "length": 261,
       "last_write_utc_ticks": 639287990197234544
@@ -289,9 +317,17 @@
       "length": 106,
       "last_write_utc_ticks": 639284712272077362
     },
+    "database/schema/staff_appraisal_tables.mysql.sql": {
+      "length": 3918,
+      "last_write_utc_ticks": 639291691305193611
+    },
     "database/schema/hostinger_frame_tracker_schema.mysql.sql": {
       "length": 1222,
       "last_write_utc_ticks": 639275016774955317
+    },
+    "database/schema/add_public_patient_registration_metadata.mysql.sql": {
+      "length": 1184,
+      "last_write_utc_ticks": 639292143503707310
     },
     "database/schema/working_capital_liabilities.mysql.sql": {
       "length": 1235,
@@ -325,6 +361,10 @@
       "length": 1124,
       "last_write_utc_ticks": 639284582714231040
     },
+    "database/schema/staff_appraisal_manual_install.mysql.sql": {
+      "length": 4357,
+      "last_write_utc_ticks": 639291719872189681
+    },
     "database/schema/lens_selling_pricelist_catalogue_update.sql": {
       "length": 3934,
       "last_write_utc_ticks": 639289937736754021
@@ -353,6 +393,10 @@
       "length": 1044,
       "last_write_utc_ticks": 639274383091350122
     },
+    "database/manual_sql/create_push_subscriptions.sql": {
+      "length": 599,
+      "last_write_utc_ticks": 639294961196813419
+    },
     "bootstrap/app.php": {
       "length": 939,
       "last_write_utc_ticks": 639285360968109591
@@ -360,6 +404,14 @@
     "bootstrap/providers.php": {
       "length": 89,
       "last_write_utc_ticks": 639274383091340388
+    },
+    "bootstrap/cache/services.php": {
+      "length": 21893,
+      "last_write_utc_ticks": 639294953109176640
+    },
+    "bootstrap/cache/packages.php": {
+      "length": 827,
+      "last_write_utc_ticks": 639294953108950394
     },
     "bootstrap/cache/.gitignore": {
       "length": 14,
@@ -414,8 +466,8 @@
       "last_write_utc_ticks": 639274383091327754
     },
     "app/Http/Controllers/DebtController.php": {
-      "length": 68004,
-      "last_write_utc_ticks": 639287020538392838
+      "length": 71464,
+      "last_write_utc_ticks": 639291481139781811
     },
     "app/Http/Controllers/CompanyProfileController.php": {
       "length": 11398,
@@ -430,12 +482,16 @@
       "last_write_utc_ticks": 639274383091319038
     },
     "app/Http/Controllers/PatientRecordController.php": {
-      "length": 91902,
-      "last_write_utc_ticks": 639287366010381191
+      "length": 113473,
+      "last_write_utc_ticks": 639294321276620783
+    },
+    "app/Http/Controllers/ManagerNotificationController.php": {
+      "length": 6764,
+      "last_write_utc_ticks": 639294954032392645
     },
     "app/Http/Controllers/CustomerServiceController.php": {
-      "length": 40185,
-      "last_write_utc_ticks": 639286062449966813
+      "length": 40153,
+      "last_write_utc_ticks": 639292274284091864
     },
     "app/Http/Controllers/DashboardController.php": {
       "length": 12791,
@@ -446,8 +502,8 @@
       "last_write_utc_ticks": 639285448845355945
     },
     "app/Http/Controllers/FinanceController.php": {
-      "length": 218606,
-      "last_write_utc_ticks": 639286958880993481
+      "length": 219207,
+      "last_write_utc_ticks": 639294952628461531
     },
     "app/Http/Controllers/ExecutiveReportController.php": {
       "length": 20289,
@@ -458,8 +514,8 @@
       "last_write_utc_ticks": 639274383091333183
     },
     "app/Http/Controllers/BankAlertController.php": {
-      "length": 31024,
-      "last_write_utc_ticks": 639289941558504591
+      "length": 32015,
+      "last_write_utc_ticks": 639296495985925480
     },
     "app/Http/Controllers/InventoryController.php": {
       "length": 106913,
@@ -469,21 +525,37 @@
       "length": 55808,
       "last_write_utc_ticks": 639284468945966955
     },
+    "app/Http/Controllers/StaffAppraisalController.php": {
+      "length": 32990,
+      "last_write_utc_ticks": 639292123956765210
+    },
+    "app/Http/Controllers/ExecutiveBankBalanceController.php": {
+      "length": 5027,
+      "last_write_utc_ticks": 639296495985988655
+    },
     "app/Http/Controllers/ManagerController.php": {
-      "length": 49437,
-      "last_write_utc_ticks": 639287382251979203
+      "length": 49748,
+      "last_write_utc_ticks": 639296495985957959
     },
     "app/Http/Controllers/MemoController.php": {
-      "length": 47614,
-      "last_write_utc_ticks": 639284787484079013
+      "length": 48035,
+      "last_write_utc_ticks": 639294952628493249
     },
     "app/Services/BsmiTransactionService.php": {
       "length": 5121,
       "last_write_utc_ticks": 639274383091337523
     },
+    "app/Services/ManagerPushNotificationService.php": {
+      "length": 6056,
+      "last_write_utc_ticks": 639296495986019441
+    },
     "app/Console/Commands/SyncBsmiTransactionsCommand.php": {
       "length": 1274,
       "last_write_utc_ticks": 639274383091315109
+    },
+    "app/Console/Commands/GenerateWebPushKeysCommand.php": {
+      "length": 639,
+      "last_write_utc_ticks": 639294952628583249
     },
     "config/auth.php": {
       "length": 4040,
@@ -498,8 +570,8 @@
       "last_write_utc_ticks": 639274383091347272
     },
     "config/services.php": {
-      "length": 1559,
-      "last_write_utc_ticks": 639274383091348206
+      "length": 1735,
+      "last_write_utc_ticks": 639294952628641716
     },
     "config/database.php": {
       "length": 6982,
@@ -586,8 +658,8 @@
       "last_write_utc_ticks": 639274383091365263
     },
     "public/index.html": {
-      "length": 465,
-      "last_write_utc_ticks": 639291401013537940
+      "length": 1039,
+      "last_write_utc_ticks": 639296507020907778
     },
     "public/index.php": {
       "length": 543,
@@ -599,11 +671,15 @@
     },
     "public/bealet-logo.png": {
       "length": 110545,
-      "last_write_utc_ticks": 639289936804687292
+      "last_write_utc_ticks": 639292201051481888
     },
     "public/robots.txt": {
       "length": 24,
       "last_write_utc_ticks": 639274383091366131
+    },
+    "public/manifest.webmanifest": {
+      "length": 534,
+      "last_write_utc_ticks": 639294955333166940
     },
     "public/icons.svg": {
       "length": 5031,
@@ -611,15 +687,23 @@
     },
     "public/opticplus-logo.png": {
       "length": 834721,
-      "last_write_utc_ticks": 639289936804748415
+      "last_write_utc_ticks": 639292201051570475
     },
     "public/favicon.svg": {
       "length": 9522,
-      "last_write_utc_ticks": 639289936804691222
+      "last_write_utc_ticks": 639292201051485456
+    },
+    "public/sw.js": {
+      "length": 2878,
+      "last_write_utc_ticks": 639296495986139487
     },
     "public/.htaccess": {
-      "length": 781,
-      "last_write_utc_ticks": 639274383091365069
+      "length": 1986,
+      "last_write_utc_ticks": 639292163638380654
+    },
+    "public/registration/index.html": {
+      "length": 1039,
+      "last_write_utc_ticks": 639294955333033643
     },
     "public/images/banks/prudential-bank.png": {
       "length": 15802,
@@ -709,13 +793,49 @@
       "length": 26993,
       "last_write_utc_ticks": 639274383091396648
     },
-    "public/assets/index-DuvfRR8E.css": {
-      "length": 244572,
-      "last_write_utc_ticks": 639291401013536835
+    "public/icons/opticplus-180.png": {
+      "length": 23672,
+      "last_write_utc_ticks": 639294955333193874
     },
-    "public/assets/index-BvL_Jy-a.js": {
-      "length": 2240725,
-      "last_write_utc_ticks": 639291401013534254
+    "public/icons/opticplus-192.png": {
+      "length": 27379,
+      "last_write_utc_ticks": 639294955333196813
+    },
+    "public/icons/opticplus-512.png": {
+      "length": 224571,
+      "last_write_utc_ticks": 639294955333199983
+    },
+    "public/assets/index-Ba3uYAmt.js": {
+      "length": 182364,
+      "last_write_utc_ticks": 639296507020969121
+    },
+    "public/assets/PublicRegistrationPage-Dz0BMLh-.js": {
+      "length": 26465,
+      "last_write_utc_ticks": 639296507020963822
+    },
+    "public/assets/index-C-2ResrQ.css": {
+      "length": 1141,
+      "last_write_utc_ticks": 639296507020972589
+    },
+    "public/assets/PublicPatientIdCard-D-lPSdAY.css": {
+      "length": 17358,
+      "last_write_utc_ticks": 639296507020959157
+    },
+    "public/assets/react-dom-CNfC-q5X.js": {
+      "length": 3546,
+      "last_write_utc_ticks": 639296507020978932
+    },
+    "public/assets/App-CzYFiH5i.css": {
+      "length": 296312,
+      "last_write_utc_ticks": 639296507020942204
+    },
+    "public/assets/jsx-runtime-CQVmOSz-.js": {
+      "length": 8789,
+      "last_write_utc_ticks": 639296507020976114
+    },
+    "public/assets/App-DO0nV3j2.js": {
+      "length": 2117770,
+      "last_write_utc_ticks": 639296507020952040
     },
     ".github/workflows/update-changelog.yml": {
       "length": 204,
@@ -742,8 +862,8 @@
       "last_write_utc_ticks": 639274383091405384
     },
     "routes/api.php": {
-      "length": 21167,
-      "last_write_utc_ticks": 639289403653099633
+      "length": 23613,
+      "last_write_utc_ticks": 639296495986044540
     },
     "vendor/autoload.php": {
       "length": 748,
@@ -4326,40 +4446,40 @@
       "last_write_utc_ticks": 639184946850000000
     },
     "vendor/composer/autoload_psr4.php": {
-      "length": 7087,
-      "last_write_utc_ticks": 639274385982539677
+      "length": 7474,
+      "last_write_utc_ticks": 639294952705955693
     },
     "vendor/composer/autoload_classmap.php": {
-      "length": 839702,
-      "last_write_utc_ticks": 639274385982540544
+      "length": 921975,
+      "last_write_utc_ticks": 639294952705963691
     },
     "vendor/composer/platform_check.php": {
       "length": 917,
       "last_write_utc_ticks": 639274385982656017
     },
     "vendor/composer/autoload_static.php": {
-      "length": 918092,
-      "last_write_utc_ticks": 639274385982651981
+      "length": 1006104,
+      "last_write_utc_ticks": 639294952706210949
     },
     "vendor/composer/autoload_real.php": {
       "length": 1672,
       "last_write_utc_ticks": 639274385982656984
     },
     "vendor/composer/installed.json": {
-      "length": 326472,
-      "last_write_utc_ticks": 639274385969663415
+      "length": 342921,
+      "last_write_utc_ticks": 639294952681831975
     },
     "vendor/composer/autoload_files.php": {
-      "length": 3738,
-      "last_write_utc_ticks": 639274385982542160
+      "length": 3834,
+      "last_write_utc_ticks": 639294952705973256
     },
     "vendor/composer/InstalledVersions.php": {
       "length": 17395,
       "last_write_utc_ticks": 639274385962265583
     },
     "vendor/composer/installed.php": {
-      "length": 51254,
-      "last_write_utc_ticks": 639274385969668446
+      "length": 53150,
+      "last_write_utc_ticks": 639294952681841217
     },
     "vendor/psy/psysh/LICENSE": {
       "length": 1086,
@@ -5920,6 +6040,46 @@
     "vendor/fruitcake/php-cors/src/Exceptions/InvalidOptionException.php": {
       "length": 325,
       "last_write_utc_ticks": 639003512270000000
+    },
+    "vendor/minishlink/web-push/LICENSE": {
+      "length": 1059,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/composer.json": {
+      "length": 1658,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/Subscription.php": {
+      "length": 2772,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/MessageSentReport.php": {
+      "length": 2397,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/Encryption.php": {
+      "length": 11159,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/SubscriptionInterface.php": {
+      "length": 580,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/WebPush.php": {
+      "length": 14935,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/VAPID.php": {
+      "length": 6573,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/Utils.php": {
+      "length": 4898,
+      "last_write_utc_ticks": 639009720120000000
+    },
+    "vendor/minishlink/web-push/src/Notification.php": {
+      "length": 1629,
+      "last_write_utc_ticks": 639009720120000000
     },
     "vendor/league/mime-type-detection/LICENSE": {
       "length": 1063,
@@ -11664,6 +11824,1214 @@
     "vendor/nesbot/carbon/src/Carbon/Laravel/ServiceProvider.php": {
       "length": 4720,
       "last_write_utc_ticks": 639111526740000000
+    },
+    "vendor/spomky-labs/base64url/LICENSE": {
+      "length": 1084,
+      "last_write_utc_ticks": 637399914250000000
+    },
+    "vendor/spomky-labs/base64url/composer.json": {
+      "length": 1008,
+      "last_write_utc_ticks": 637399914250000000
+    },
+    "vendor/spomky-labs/base64url/.github/FUNDING.yml": {
+      "length": 40,
+      "last_write_utc_ticks": 637399914250000000
+    },
+    "vendor/spomky-labs/base64url/src/Base64Url.php": {
+      "length": 1353,
+      "last_write_utc_ticks": 637399914250000000
+    },
+    "vendor/spomky-labs/pki-framework/LICENSE": {
+      "length": 1107,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/README.md": {
+      "length": 6920,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/composer.json": {
+      "length": 2947,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/SECURITY.md": {
+      "length": 2860,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Element.php": {
+      "length": 20108,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/DERData.php": {
+      "length": 1984,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Util/BigInt.php": {
+      "length": 2918,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Util/Flags.php": {
+      "length": 4850,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Component/Identifier.php": {
+      "length": 8909,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Component/Length.php": {
+      "length": 7871,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/PrimitiveType.php": {
+      "length": 283,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/BaseString.php": {
+      "length": 1203,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/TimeType.php": {
+      "length": 300,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/PrimitiveString.php": {
+      "length": 1167,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Structure.php": {
+      "length": 8851,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/BaseTime.php": {
+      "length": 1173,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/UnspecifiedType.php": {
+      "length": 15723,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/TaggedType.php": {
+      "length": 2291,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/StringType.php": {
+      "length": 361,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/UniversalClass.php": {
+      "length": 353,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/BMPString.php": {
+      "length": 1444,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/Boolean.php": {
+      "length": 1485,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/Integer.php": {
+      "length": 4321,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/RelativeOID.php": {
+      "length": 5936,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/VisibleString.php": {
+      "length": 657,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/Number.php": {
+      "length": 2365,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/UTF8String.php": {
+      "length": 700,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/BitString.php": {
+      "length": 6037,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/IA5String.php": {
+      "length": 645,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/UniversalString.php": {
+      "length": 1440,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/GraphicString.php": {
+      "length": 646,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/ObjectDescriptor.php": {
+      "length": 685,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/Real.php": {
+      "length": 21798,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/PrintableString.php": {
+      "length": 809,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/EOC.php": {
+      "length": 1185,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/NullType.php": {
+      "length": 1182,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/ObjectIdentifier.php": {
+      "length": 7605,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/Enumerated.php": {
+      "length": 547,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/NumericString.php": {
+      "length": 651,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/OctetString.php": {
+      "length": 519,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/GeneralizedTime.php": {
+      "length": 4232,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/UTCTime.php": {
+      "length": 3229,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/VideotexString.php": {
+      "length": 649,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/CharacterString.php": {
+      "length": 531,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/T61String.php": {
+      "length": 730,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Primitive/GeneralString.php": {
+      "length": 646,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/ImplicitTagging.php": {
+      "length": 596,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/ContextSpecificType.php": {
+      "length": 209,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/ExplicitlyTaggedType.php": {
+      "length": 1242,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/PrivateType.php": {
+      "length": 202,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/ApplicationType.php": {
+      "length": 212,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/ImplicitlyTaggedType.php": {
+      "length": 1889,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/DERTaggedType.php": {
+      "length": 4698,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/TaggedTypeWrap.php": {
+      "length": 533,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Tagged/ExplicitTagging.php": {
+      "length": 391,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Constructed/Sequence.php": {
+      "length": 2815,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Constructed/Set.php": {
+      "length": 3870,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Type/Constructed/ConstructedString.php": {
+      "length": 6136,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Feature/ElementBase.php": {
+      "length": 1907,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Feature/Stringable.php": {
+      "length": 355,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Feature/Encodable.php": {
+      "length": 240,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/ASN1/Exception/DecodeException.php": {
+      "length": 203,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoEncoding/PEM.php": {
+      "length": 4669,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoEncoding/PEMBundle.php": {
+      "length": 4117,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoBridge/Crypto.php": {
+      "length": 2943,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoBridge/Crypto/OpenSSLCrypto.php": {
+      "length": 15532,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Time.php": {
+      "length": 2792,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Certificate.php": {
+      "length": 8905,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/UniqueIdentifier.php": {
+      "length": 1198,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/CertificateChain.php": {
+      "length": 2962,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Validity.php": {
+      "length": 1645,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/CertificateBundle.php": {
+      "length": 6493,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/TBSCertificate.php": {
+      "length": 23274,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extensions.php": {
+      "length": 9966,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CRLDistributionPointsExtension.php": {
+      "length": 2750,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/SubjectDirectoryAttributesExtension.php": {
+      "length": 2989,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/NoRevocationAvailableExtension.php": {
+      "length": 852,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/PolicyConstraintsExtension.php": {
+      "length": 3016,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/AuthorityInformationAccessExtension.php": {
+      "length": 2517,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/SubjectInformationAccessExtension.php": {
+      "length": 2545,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/TargetInformationExtension.php": {
+      "length": 3378,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/KeyUsageExtension.php": {
+      "length": 3242,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/NameConstraintsExtension.php": {
+      "length": 2995,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/FreshestCRLExtension.php": {
+      "length": 567,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/UnknownExtension.php": {
+      "length": 1525,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/IssuerAlternativeNameExtension.php": {
+      "length": 1114,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePoliciesExtension.php": {
+      "length": 3410,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/InhibitAnyPolicyExtension.php": {
+      "length": 1085,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/ExtendedKeyUsageExtension.php": {
+      "length": 4186,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/AAControlsExtension.php": {
+      "length": 5563,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/PolicyMappingsExtension.php": {
+      "length": 4823,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/Extension.php": {
+      "length": 10915,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/AuthorityKeyIdentifierExtension.php": {
+      "length": 5250,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/SubjectAlternativeNameExtension.php": {
+      "length": 1117,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/BasicConstraintsExtension.php": {
+      "length": 2437,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/SubjectKeyIdentifierExtension.php": {
+      "length": 1194,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/AccessDescription/SubjectAccessDescription.php": {
+      "length": 1344,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/AccessDescription/AccessDescription.php": {
+      "length": 1426,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/AccessDescription/AuthorityAccessDescription.php": {
+      "length": 1299,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/Target/TargetName.php": {
+      "length": 1163,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/Target/Targets.php": {
+      "length": 2726,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/Target/Target.php": {
+      "length": 1873,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/Target/TargetGroup.php": {
+      "length": 1205,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/PolicyMappings/PolicyMapping.php": {
+      "length": 1956,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/DistributionPoint/RelativeName.php": {
+      "length": 835,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/DistributionPoint/DistributionPoint.php": {
+      "length": 5013,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/DistributionPoint/FullName.php": {
+      "length": 1152,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/DistributionPoint/ReasonFlags.php": {
+      "length": 2955,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/DistributionPoint/DistributionPointName.php": {
+      "length": 1729,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/NameConstraints/GeneralSubtrees.php": {
+      "length": 2249,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/NameConstraints/GeneralSubtree.php": {
+      "length": 2747,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePolicy/NoticeReference.php": {
+      "length": 1907,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePolicy/PolicyQualifierInfo.php": {
+      "length": 1974,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePolicy/UserNoticeQualifier.php": {
+      "length": 2471,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePolicy/PolicyInformation.php": {
+      "length": 4584,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePolicy/DisplayText.php": {
+      "length": 2046,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Certificate/Extension/CertificatePolicy/CPSQualifier.php": {
+      "length": 1050,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/RegisteredID.php": {
+      "length": 1349,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/DirectoryName.php": {
+      "length": 1565,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/EDIPartyName.php": {
+      "length": 1200,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/OtherName.php": {
+      "length": 1946,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/IPAddress.php": {
+      "length": 3347,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/X400Address.php": {
+      "length": 1159,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/IPv4Address.php": {
+      "length": 1961,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/GeneralNames.php": {
+      "length": 4737,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/UniformResourceIdentifier.php": {
+      "length": 1264,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/RFC822Name.php": {
+      "length": 1243,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/GeneralName.php": {
+      "length": 4370,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/IPv6Address.php": {
+      "length": 2193,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/GeneralName/DNSName.php": {
+      "length": 1621,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Feature/SignedDER.php": {
+      "length": 2507,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Feature/DateTimeHelper.php": {
+      "length": 1661,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/CertificationPath.php": {
+      "length": 9616,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathValidation/PathValidationConfig.php": {
+      "length": 13664,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathValidation/PathValidationResult.php": {
+      "length": 2888,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathValidation/ValidatorState.php": {
+      "length": 12065,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathValidation/SignaturePolicy.php": {
+      "length": 2422,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathValidation/PathValidator.php": {
+      "length": 27744,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathValidation/NameConstraintsMatcher.php": {
+      "length": 11649,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/PathBuilding/CertificationPathBuilder.php": {
+      "length": 10303,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/Exception/PathBuildingException.php": {
+      "length": 246,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/Exception/PathValidationException.php": {
+      "length": 294,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/Policy/PolicyNode.php": {
+      "length": 5400,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationPath/Policy/PolicyTree.php": {
+      "length": 15400,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/Exception/X509ValidationException.php": {
+      "length": 157,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attributes.php": {
+      "length": 4539,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/IssuerSerial.php": {
+      "length": 3793,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Holder.php": {
+      "length": 6731,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/V2Form.php": {
+      "length": 3402,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/AttributeCertificateInfo.php": {
+      "length": 11517,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/ObjectDigestInfo.php": {
+      "length": 2464,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/AttCertIssuer.php": {
+      "length": 2010,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/AttributeCertificate.php": {
+      "length": 6831,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/AttCertValidityPeriod.php": {
+      "length": 2130,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/AccessIdentityAttributeValue.php": {
+      "length": 1303,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/IetfAttrValue.php": {
+      "length": 3216,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/SvceAuthInfo.php": {
+      "length": 2361,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/AuthenticationInfoAttributeValue.php": {
+      "length": 1328,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/ChargingIdentityAttributeValue.php": {
+      "length": 462,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/GroupAttributeValue.php": {
+      "length": 439,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/IetfAttrSyntax.php": {
+      "length": 4251,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Attribute/RoleAttributeValue.php": {
+      "length": 3638,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Validation/ACValidator.php": {
+      "length": 10790,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Validation/ACValidationConfig.php": {
+      "length": 7214,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/AttributeCertificate/Validation/Exception/ACValidationException.php": {
+      "length": 237,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationRequest/CertificationRequest.php": {
+      "length": 5723,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationRequest/Attributes.php": {
+      "length": 1934,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationRequest/CertificationRequestInfo.php": {
+      "length": 5209,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X509/CertificationRequest/Attribute/ExtensionRequestValue.php": {
+      "length": 1760,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/RDN.php": {
+      "length": 6259,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeType.php": {
+      "length": 17370,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/Attribute.php": {
+      "length": 5175,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeTypeAndValue.php": {
+      "length": 4438,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/Name.php": {
+      "length": 5363,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/Collection/SequenceOfAttributes.php": {
+      "length": 1245,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/Collection/SetOfAttributes.php": {
+      "length": 1270,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/Collection/AttributeCollection.php": {
+      "length": 4590,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/LocalityNameValue.php": {
+      "length": 627,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/GivenNameValue.php": {
+      "length": 615,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/OrganizationNameValue.php": {
+      "length": 643,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/TitleValue.php": {
+      "length": 598,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/SerialNumberValue.php": {
+      "length": 923,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/AttributeValue.php": {
+      "length": 4277,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/DescriptionValue.php": {
+      "length": 622,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/CountryNameValue.php": {
+      "length": 919,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/CommonNameValue.php": {
+      "length": 619,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/SurnameValue.php": {
+      "length": 606,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/PseudonymValue.php": {
+      "length": 614,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/StateOrProvinceNameValue.php": {
+      "length": 657,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/UnknownAttributeValue.php": {
+      "length": 2311,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/OrganizationalUnitNameValue.php": {
+      "length": 668,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/NameValue.php": {
+      "length": 594,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/Feature/PrintableStringValue.php": {
+      "length": 1365,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/ASN1/AttributeValue/Feature/DirectoryString.php": {
+      "length": 4027,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/DN/DNParser.php": {
+      "length": 10320,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/MatchingRule/MatchingRule.php": {
+      "length": 1146,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/MatchingRule/CaseIgnoreMatch.php": {
+      "length": 666,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/MatchingRule/CaseExactMatch.php": {
+      "length": 618,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/MatchingRule/StringPrepMatchingRule.php": {
+      "length": 1386,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/MatchingRule/BinaryMatch.php": {
+      "length": 528,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/MapStep.php": {
+      "length": 3031,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/NormalizeStep.php": {
+      "length": 961,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/PrepareStep.php": {
+      "length": 486,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/TranscodeStep.php": {
+      "length": 2399,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/CheckBidiStep.php": {
+      "length": 477,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/StringPreparer.php": {
+      "length": 1890,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/ProhibitStep.php": {
+      "length": 1846,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/InsignificantNonSubstringSpaceStep.php": {
+      "length": 1033,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/X501/StringPrep/Exception/StringPreparationException.php": {
+      "length": 787,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Signature/Ed25519Signature.php": {
+      "length": 937,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Signature/Ed448Signature.php": {
+      "length": 933,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Signature/GenericSignature.php": {
+      "length": 1064,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Signature/ECSignature.php": {
+      "length": 3473,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Signature/RSASignature.php": {
+      "length": 1035,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Signature/Signature.php": {
+      "length": 1639,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/OneAsymmetricKey.php": {
+      "length": 10865,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/PublicKey.php": {
+      "length": 1513,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/PrivateKeyInfo.php": {
+      "length": 997,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/PublicKeyInfo.php": {
+      "length": 5668,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/PrivateKey.php": {
+      "length": 2022,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/Attribute/OneAsymmetricKeyAttributes.php": {
+      "length": 751,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RSA/RSAPublicKey.php": {
+      "length": 3304,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RSA/RSAPrivateKey.php": {
+      "length": 5640,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RSA/RSASSAPSSPrivateKey.php": {
+      "length": 5667,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/EC/ECPublicKey.php": {
+      "length": 6164,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/EC/ECPrivateKey.php": {
+      "length": 5175,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/EC/ECConversion.php": {
+      "length": 3213,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/RFC8410PrivateKey.php": {
+      "length": 2634,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/RFC8410PublicKey.php": {
+      "length": 930,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve448/X448PublicKey.php": {
+      "length": 1129,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve448/Ed448PublicKey.php": {
+      "length": 1134,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve448/X448PrivateKey.php": {
+      "length": 2194,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve448/Ed448PrivateKey.php": {
+      "length": 2201,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve25519/X25519PublicKey.php": {
+      "length": 696,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve25519/Curve25519PublicKey.php": {
+      "length": 753,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve25519/X25519PrivateKey.php": {
+      "length": 1477,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve25519/Curve25519PrivateKey.php": {
+      "length": 1046,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve25519/Ed25519PublicKey.php": {
+      "length": 700,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/Asymmetric/RFC8410/Curve25519/Ed25519PrivateKey.php": {
+      "length": 1482,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/SpecificAlgorithmIdentifier.php": {
+      "length": 569,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/AlgorithmIdentifier.php": {
+      "length": 4181,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/AlgorithmIdentifierFactory.php": {
+      "length": 8998,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/AlgorithmIdentifierProvider.php": {
+      "length": 941,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/GenericAlgorithmIdentifier.php": {
+      "length": 995,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/SHA384WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 960,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/MD2WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 912,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/ECDSAWithSHA256AlgorithmIdentifier.php": {
+      "length": 907,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/ECDSAWithSHA224AlgorithmIdentifier.php": {
+      "length": 907,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/MD5WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 912,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/RFC3279RSASignatureAlgorithmIdentifier.php": {
+      "length": 727,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/MD4WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 909,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/RFC4055RSASignatureAlgorithmIdentifier.php": {
+      "length": 866,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/ECDSAWithSHA512AlgorithmIdentifier.php": {
+      "length": 907,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/RSASignatureAlgorithmIdentifier.php": {
+      "length": 680,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/SHA256WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 958,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/ECDSAWithSHA1AlgorithmIdentifier.php": {
+      "length": 901,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/ECDSAWithSHA384AlgorithmIdentifier.php": {
+      "length": 907,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/ECSignatureAlgorithmIdentifier.php": {
+      "length": 1187,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/SHA512WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 958,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/SHA1WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 946,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Signature/SHA224WithRSAEncryptionAlgorithmIdentifier.php": {
+      "length": 958,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/HMACWithSHA224AlgorithmIdentifier.php": {
+      "length": 971,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/SHA224AlgorithmIdentifier.php": {
+      "length": 1166,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/HMACWithSHA256AlgorithmIdentifier.php": {
+      "length": 971,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/SHA256AlgorithmIdentifier.php": {
+      "length": 1112,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/RFC4231HMACAlgorithmIdentifier.php": {
+      "length": 1068,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/HMACWithSHA512AlgorithmIdentifier.php": {
+      "length": 971,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/SHA512AlgorithmIdentifier.php": {
+      "length": 1112,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/HMACWithSHA1AlgorithmIdentifier.php": {
+      "length": 1652,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/SHA2AlgorithmIdentifier.php": {
+      "length": 1162,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/MD5AlgorithmIdentifier.php": {
+      "length": 1877,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/SHA1AlgorithmIdentifier.php": {
+      "length": 1826,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/HMACWithSHA384AlgorithmIdentifier.php": {
+      "length": 967,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Hash/SHA384AlgorithmIdentifier.php": {
+      "length": 1112,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/RC2CBCAlgorithmIdentifier.php": {
+      "length": 6428,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/DESEDE3CBCAlgorithmIdentifier.php": {
+      "length": 2092,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/AES192CBCAlgorithmIdentifier.php": {
+      "length": 1397,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/AESCBCAlgorithmIdentifier.php": {
+      "length": 973,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/CipherAlgorithmIdentifier.php": {
+      "length": 1581,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/DESCBCAlgorithmIdentifier.php": {
+      "length": 1996,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/BlockCipherAlgorithmIdentifier.php": {
+      "length": 340,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/AES128CBCAlgorithmIdentifier.php": {
+      "length": 1374,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Cipher/AES256CBCAlgorithmIdentifier.php": {
+      "length": 1395,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/ECPublicKeyAlgorithmIdentifier.php": {
+      "length": 7212,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/X25519AlgorithmIdentifier.php": {
+      "length": 1023,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/X448AlgorithmIdentifier.php": {
+      "length": 1015,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/RFC8410EdAlgorithmIdentifier.php": {
+      "length": 1455,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/RSAEncryptionAlgorithmIdentifier.php": {
+      "length": 1587,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/Ed448AlgorithmIdentifier.php": {
+      "length": 1406,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/RFC8410XAlgorithmIdentifier.php": {
+      "length": 1150,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/RSAPSSSSAEncryptionAlgorithmIdentifier.php": {
+      "length": 1609,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Asymmetric/Ed25519AlgorithmIdentifier.php": {
+      "length": 1416,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Feature/SignatureAlgorithmIdentifier.php": {
+      "length": 468,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Feature/PRFAlgorithmIdentifier.php": {
+      "length": 229,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Feature/AsymmetricCryptoAlgorithmIdentifier.php": {
+      "length": 254,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Feature/HashAlgorithmIdentifier.php": {
+      "length": 222,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Feature/EncryptionAlgorithmIdentifier.php": {
+      "length": 235,
+      "last_write_utc_ticks": 639248365690000000
+    },
+    "vendor/spomky-labs/pki-framework/src/CryptoTypes/AlgorithmIdentifier/Feature/AlgorithmIdentifierType.php": {
+      "length": 603,
+      "last_write_utc_ticks": 639248365690000000
     },
     "vendor/doctrine/lexer/LICENSE": {
       "length": 1065,
@@ -23505,6 +24873,74 @@
       "length": 535,
       "last_write_utc_ticks": 638862919750000000
     },
+    "vendor/symfony/polyfill-php82/LICENSE": {
+      "length": 1068,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/bootstrap.php": {
+      "length": 1299,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/README.md": {
+      "length": 1208,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/SensitiveParameterValue.php": {
+      "length": 916,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Php82.php": {
+      "length": 12772,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/NoDynamicProperties.php": {
+      "length": 475,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/composer.json": {
+      "length": 916,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/AllowDynamicProperties.php": {
+      "length": 422,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/SensitiveParameterValue.php": {
+      "length": 378,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/SensitiveParameter.php": {
+      "length": 422,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/Random/Engine.php": {
+      "length": 367,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/Random/RandomError.php": {
+      "length": 421,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/Random/CryptoSafeEngine.php": {
+      "length": 348,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/Random/BrokenRandomEngineError.php": {
+      "length": 356,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/Random/RandomException.php": {
+      "length": 429,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Resources/stubs/Random/Engine/Secure.php": {
+      "length": 433,
+      "last_write_utc_ticks": 639259482050000000
+    },
+    "vendor/symfony/polyfill-php82/Random/Engine/Secure.php": {
+      "length": 1192,
+      "last_write_utc_ticks": 639259482050000000
+    },
     "vendor/symfony/string/CodePointString.php": {
       "length": 7720,
       "last_write_utc_ticks": 639099547250000000
@@ -26084,6 +27520,858 @@
     "vendor/ramsey/uuid/src/Nonstandard/UuidV6.php": {
       "length": 3469,
       "last_write_utc_ticks": 639012842280000000
+    },
+    "vendor/web-token/jwt-library/LICENSE": {
+      "length": 1083,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/README.md": {
+      "length": 466,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/composer.json": {
+      "length": 2000,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWEDecrypterFactory.php": {
+      "length": 561,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Recipient.php": {
+      "length": 1313,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWEBuilderFactory.php": {
+      "length": 555,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWETokenSupport.php": {
+      "length": 933,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWEBuilder.php": {
+      "length": 21704,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWELoader.php": {
+      "length": 3460,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWEDecrypter.php": {
+      "length": 14121,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWE.php": {
+      "length": 5515,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/JWELoaderFactory.php": {
+      "length": 1125,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Serializer/JWESerializer.php": {
+      "length": 840,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Serializer/CompactSerializer.php": {
+      "length": 4088,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Serializer/JWESerializerManagerFactory.php": {
+      "length": 1401,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Serializer/JSONFlattenedSerializer.php": {
+      "length": 3769,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Serializer/JSONGeneralSerializer.php": {
+      "length": 4381,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Serializer/JWESerializerManager.php": {
+      "length": 2463,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryptionAlgorithm.php": {
+      "length": 478,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryptionAlgorithm.php": {
+      "length": 1735,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/AESKW.php": {
+      "length": 2115,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHESA256KW.php": {
+      "length": 489,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/KeyWrapping.php": {
+      "length": 1422,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHSSA256KW.php": {
+      "length": 547,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/RSA15.php": {
+      "length": 3246,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/RSAOAEP.php": {
+      "length": 535,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/RSAOAEP256.php": {
+      "length": 538,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/RSA.php": {
+      "length": 1843,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/PBES2HS512A256KW.php": {
+      "length": 597,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHSSA192KW.php": {
+      "length": 489,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHES.php": {
+      "length": 252,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/Dir.php": {
+      "length": 1175,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHSSA128KW.php": {
+      "length": 489,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/KeyAgreement.php": {
+      "length": 660,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/AESGCMKW.php": {
+      "length": 3551,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHESA192KW.php": {
+      "length": 489,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHESAESKW.php": {
+      "length": 1616,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHESA128KW.php": {
+      "length": 489,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/AbstractECDHAESKW.php": {
+      "length": 816,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/PBES2HS256A128KW.php": {
+      "length": 597,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/A256GCMKW.php": {
+      "length": 343,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/AbstractECDH.php": {
+      "length": 11535,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/A256KW.php": {
+      "length": 425,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/DirectEncryption.php": {
+      "length": 395,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/PBES2HS384A192KW.php": {
+      "length": 597,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHSS.php": {
+      "length": 1127,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/ECDHSSAESKW.php": {
+      "length": 1616,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/A192KW.php": {
+      "length": 425,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/A128KW.php": {
+      "length": 425,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/A128GCMKW.php": {
+      "length": 343,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/PBES2AESKW.php": {
+      "length": 5186,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/KeyAgreementWithKeyWrapping.php": {
+      "length": 1566,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/KeyEncryption.php": {
+      "length": 1381,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/A192GCMKW.php": {
+      "length": 343,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/Util/ConcatKDF.php": {
+      "length": 2614,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/KeyEncryption/Util/RSACrypt.php": {
+      "length": 10243,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/AESCBCHS.php": {
+      "length": 3435,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/A128GCM.php": {
+      "length": 438,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/A256GCM.php": {
+      "length": 438,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/A192CBCHS384.php": {
+      "length": 555,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/A192GCM.php": {
+      "length": 438,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/AESGCM.php": {
+      "length": 2255,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/A256CBCHS512.php": {
+      "length": 555,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Encryption/Algorithm/ContentEncryption/A128CBCHS256.php": {
+      "length": 555,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/JWK.php": {
+      "length": 3383,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/JWKSet.php": {
+      "length": 9325,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Algorithm.php": {
+      "length": 358,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/AlgorithmManager.php": {
+      "length": 1684,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/AlgorithmManagerFactory.php": {
+      "length": 2082,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/JWT.php": {
+      "length": 239,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Hash.php": {
+      "length": 1788,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Base64UrlSafe.php": {
+      "length": 9025,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/RSAKey.php": {
+      "length": 7766,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/BigInteger.php": {
+      "length": 3663,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/ECSignature.php": {
+      "length": 4201,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/KeyChecker.php": {
+      "length": 3363,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/JsonConverter.php": {
+      "length": 920,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/ECKey.php": {
+      "length": 16704,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/OKPKey.php": {
+      "length": 3882,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/EcDH.php": {
+      "length": 1647,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/PublicKey.php": {
+      "length": 1392,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/Point.php": {
+      "length": 4192,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/NistCurve.php": {
+      "length": 4863,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/Math.php": {
+      "length": 1189,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/ModularArithmetic.php": {
+      "length": 775,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/Curve.php": {
+      "length": 7333,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/BrainpoolCurve.php": {
+      "length": 4060,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Core/Util/Ecc/PrivateKey.php": {
+      "length": 1542,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSVerifier.php": {
+      "length": 6953,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSLoader.php": {
+      "length": 3719,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSLoaderFactory.php": {
+      "length": 1390,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSBuilder.php": {
+      "length": 10128,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSTokenSupport.php": {
+      "length": 1005,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSVerifierFactory.php": {
+      "length": 607,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWSBuilderFactory.php": {
+      "length": 623,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/JWS.php": {
+      "length": 3063,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Signature.php": {
+      "length": 2990,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/Serializer.php": {
+      "length": 423,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/CompactSerializer.php": {
+      "length": 3426,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/JSONFlattenedSerializer.php": {
+      "length": 3152,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/JSONGeneralSerializer.php": {
+      "length": 5254,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/JWSSerializer.php": {
+      "length": 589,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/JWSSerializerManagerFactory.php": {
+      "length": 1130,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Serializer/JWSSerializerManager.php": {
+      "length": 2181,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/RSAPKCS1.php": {
+      "length": 1892,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/ES256.php": {
+      "length": 432,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/RS384.php": {
+      "length": 330,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/PS256.php": {
+      "length": 328,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/MacAlgorithm.php": {
+      "length": 688,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/HS512.php": {
+      "length": 654,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/HMAC.php": {
+      "length": 1374,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/ECDSA.php": {
+      "length": 2324,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/PS384.php": {
+      "length": 328,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/RS256.php": {
+      "length": 330,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/ES384.php": {
+      "length": 432,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/RSAPSS.php": {
+      "length": 1653,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/RS512.php": {
+      "length": 330,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/HS384.php": {
+      "length": 654,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/EdDSA.php": {
+      "length": 3747,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/None.php": {
+      "length": 912,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/ES512.php": {
+      "length": 433,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/PS512.php": {
+      "length": 328,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/SignatureAlgorithm.php": {
+      "length": 694,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/HS256.php": {
+      "length": 654,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Signature/Algorithm/Util/RSA.php": {
+      "length": 6466,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/AlgorithmChecker.php": {
+      "length": 1214,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/ExpirationTimeChecker.php": {
+      "length": 1823,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/IsEqualChecker.php": {
+      "length": 1621,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/HeaderCheckerManager.php": {
+      "length": 6247,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/MissingMandatoryHeaderParameterException.php": {
+      "length": 488,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/TokenTypeSupport.php": {
+      "length": 1281,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/InvalidClaimException.php": {
+      "length": 742,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/IssuedAtChecker.php": {
+      "length": 1850,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/NotBeforeChecker.php": {
+      "length": 1832,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/ClaimChecker.php": {
+      "length": 431,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/UnencodedPayloadChecker.php": {
+      "length": 851,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/ClaimCheckerManagerFactory.php": {
+      "length": 1736,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/IssuerChecker.php": {
+      "length": 1512,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/AudienceChecker.php": {
+      "length": 1636,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/CallableChecker.php": {
+      "length": 1780,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/MissingMandatoryClaimException.php": {
+      "length": 586,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/ClaimCheckerManager.php": {
+      "length": 2340,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/HeaderChecker.php": {
+      "length": 612,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/HeaderCheckerManagerFactory.php": {
+      "length": 2524,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/ClaimExceptionInterface.php": {
+      "length": 339,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Checker/InvalidHeaderException.php": {
+      "length": 735,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/UrlKeySetFactory.php": {
+      "length": 2115,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/JKUFactory.php": {
+      "length": 707,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/X5UFactory.php": {
+      "length": 1467,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/JWKFactory.php": {
+      "length": 9752,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/KeyConverter/KeyConverter.php": {
+      "length": 19370,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/KeyConverter/RSAKey.php": {
+      "length": 7423,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/KeyConverter/ECKey.php": {
+      "length": 3409,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/MixedKeyTypes.php": {
+      "length": 942,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/HSKeyAnalyzer.php": {
+      "length": 1218,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/KeyAnalyzerManager.php": {
+      "length": 749,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/RsaAnalyzer.php": {
+      "length": 2106,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/ZxcvbnKeyAnalyzer.php": {
+      "length": 2862,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/HS256KeyAnalyzer.php": {
+      "length": 361,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/ES256KeyAnalyzer.php": {
+      "length": 645,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/OctAnalyzer.php": {
+      "length": 793,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/HS512KeyAnalyzer.php": {
+      "length": 361,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/ES512KeyAnalyzer.php": {
+      "length": 645,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/NoneAnalyzer.php": {
+      "length": 558,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/KeysetAnalyzerManager.php": {
+      "length": 783,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/ES384KeyAnalyzer.php": {
+      "length": 645,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/HS384KeyAnalyzer.php": {
+      "length": 361,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/MessageBag.php": {
+      "length": 1029,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/KeysetAnalyzer.php": {
+      "length": 320,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/MixedPublicAndPrivateKeys.php": {
+      "length": 981,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/KeyAnalyzer.php": {
+      "length": 304,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/AlgorithmAnalyzer.php": {
+      "length": 406,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/UsageAnalyzer.php": {
+      "length": 1994,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/KeyIdentifierAnalyzer.php": {
+      "length": 410,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/Message.php": {
+      "length": 1441,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/KeyManagement/Analyzer/ESKeyAnalyzer.php": {
+      "length": 2261,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/.github/FUNDING.yml": {
+      "length": 40,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/.github/stale.yml": {
+      "length": 271,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/.github/PULL_REQUEST_TEMPLATE.md": {
+      "length": 155,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/.github/CONTRIBUTING.md": {
+      "length": 223,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/.github/workflows/auto-switch-default-branch.yml": {
+      "length": 4865,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/NestedToken/NestedTokenBuilderFactory.php": {
+      "length": 1544,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/NestedToken/NestedTokenLoaderFactory.php": {
+      "length": 1231,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/NestedToken/NestedTokenBuilder.php": {
+      "length": 2622,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/NestedToken/NestedTokenLoader.php": {
+      "length": 2090,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/NoneKeyGeneratorCommand.php": {
+      "length": 812,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/OctKeysetGeneratorCommand.php": {
+      "length": 1576,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/SecretKeyGeneratorCommand.php": {
+      "length": 1918,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/ObjectOutputCommand.php": {
+      "length": 551,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/X5ULoaderCommand.php": {
+      "length": 1445,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/EcKeyGeneratorCommand.php": {
+      "length": 1177,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/OkpKeysetGeneratorCommand.php": {
+      "length": 1641,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/RsaKeyGeneratorCommand.php": {
+      "length": 1139,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/OctKeyGeneratorCommand.php": {
+      "length": 1142,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/JKULoaderCommand.php": {
+      "length": 1397,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/KeyAnalyzerCommand.php": {
+      "length": 2640,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/KeyFileLoaderCommand.php": {
+      "length": 1533,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/RotateKeysetCommand.php": {
+      "length": 2290,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/Pkcs8ConverterCommand.php": {
+      "length": 1933,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/X509CertificateLoaderCommand.php": {
+      "length": 1380,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/OkpKeyGeneratorCommand.php": {
+      "length": 1192,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/PublicKeyCommand.php": {
+      "length": 1597,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/EcKeysetGeneratorCommand.php": {
+      "length": 1606,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/MergeKeysetCommand.php": {
+      "length": 1750,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/P12CertificateLoaderCommand.php": {
+      "length": 1542,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/KeysetAnalyzerCommand.php": {
+      "length": 3351,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/PemConverterCommand.php": {
+      "length": 1594,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/AddKeyIntoKeysetCommand.php": {
+      "length": 2226,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/GeneratorCommand.php": {
+      "length": 1739,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/RsaKeysetGeneratorCommand.php": {
+      "length": 1574,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/OptimizeRsaKeyCommand.php": {
+      "length": 1435,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/GetThumbprintCommand.php": {
+      "length": 1606,
+      "last_write_utc_ticks": 639289948990000000
+    },
+    "vendor/web-token/jwt-library/Console/PublicKeysetCommand.php": {
+      "length": 1808,
+      "last_write_utc_ticks": 639289948990000000
     },
     "vendor/vlucas/phpdotenv/LICENSE": {
       "length": 1557,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ManagerPushNotificationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ use Illuminate\Validation\ValidationException;
 class BankAlertController extends Controller
 {
     private const BANKS = ['Ecobank', 'Prudential Bank', 'GTBank', 'MTN MoMo'];
+
     private const SENDER_BANKS = ['PRUDENTIAL' => 'Prudential Bank', 'MTN_MOMO' => 'MTN MoMo'];
 
     public function index(Request $request): JsonResponse
@@ -495,6 +497,7 @@ class BankAlertController extends Controller
         $source = $validated['sender'] === 'PRUDENTIAL' ? 'prudential' : 'momo';
         if (isset($device->alert_source) && $device->alert_source !== 'both' && $device->alert_source !== $source) {
             DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
+
             return response()->json(['message' => 'Alert ignored because this phone is not paired for this SMS source.', 'ignored' => true]);
         }
 
@@ -533,7 +536,7 @@ class BankAlertController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-        } catch (\Illuminate\Database\QueryException $exception) {
+        } catch (QueryException $exception) {
             $sqlState = $exception->errorInfo[0] ?? null;
             $driverCode = (int) ($exception->errorInfo[1] ?? 0);
             if (! ($sqlState === '23505' || ($sqlState === '23000' && $driverCode === 19) || $driverCode === 1062)) {
@@ -545,12 +548,27 @@ class BankAlertController extends Controller
             return response()->json(['message' => 'This bank alert was already received.', 'duplicate' => true]);
         }
 
+        $balanceChanged = false;
+        $updatedBalance = round((float) $validated['available_balance'], 2);
         if ($account && (! $account->reported_balance_at || $receivedAt->greaterThan($account->reported_balance_at))) {
+            $balanceChanged = $account->reported_balance === null
+                || round((float) $account->reported_balance, 2) !== $updatedBalance;
             DB::table('bank_accounts')->where('id', $account->id)->update([
-                'reported_balance' => round((float) $validated['available_balance'], 2),
+                'reported_balance' => $updatedBalance,
                 'reported_balance_at' => $receivedAt,
                 'updated_at' => now(),
             ]);
+            if ($balanceChanged) {
+                $pushNotifications->notifyCeoOfBankBalanceChange(
+                    (int) $account->id,
+                    (int) $account->branch_id,
+                    (string) $account->bank_name,
+                    (string) ($account->account_label ?: 'Account •••• '.$account->account_suffix),
+                    $account->reported_balance === null ? null : round((float) $account->reported_balance, 2),
+                    $updatedBalance,
+                    $receivedAt->toDateTimeString(),
+                );
+            }
         }
 
         DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
@@ -586,7 +604,7 @@ class BankAlertController extends Controller
             if ($validated['decision'] === 'approve' && $alert->sender === 'PRUDENTIAL') {
                 $amount = round((float) $alert->amount * ($alert->direction === 'debited' ? -1 : 1), 2);
                 $balanceQuery = DB::table('bank_balance');
-                if (\Illuminate\Support\Facades\Schema::hasColumn('bank_balance', 'branch_id')) {
+                if (Schema::hasColumn('bank_balance', 'branch_id')) {
                     $balanceQuery->where('branch_id', $alert->branch_id);
                 }
                 $balanceRow = $balanceQuery->orderByDesc('id')->lockForUpdate()->first();

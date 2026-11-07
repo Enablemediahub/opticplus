@@ -1160,6 +1160,8 @@
 }
 
 .portal-header {
+  position: relative;
+  z-index: 5;
   display: block;
   width: 100%;
 }
@@ -1193,7 +1195,7 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   padding: 28px 30px;
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1209,6 +1211,7 @@
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background:
     radial-gradient(circle at 16% 20%, rgba(34, 211, 238, 0.16), transparent 20%),
     radial-gradient(circle at 85% 70%, rgba(59, 130, 246, 0.18), transparent 24%);
@@ -1226,16 +1229,17 @@
 .portal-hero-main {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 470px);
+  align-items: start;
+  gap: 28px;
 }
 
 .portal-hero-copy {
   display: grid;
   gap: 14px;
   max-width: min(780px, 100%);
+  min-width: 0;
 }
 
 .portal-hero-copy h2 {
@@ -1299,8 +1303,31 @@
   color: #f8fbff;
 }
 
-.portal-hero-actions {
-  align-items: flex-start;
+.portal-hero .portal-hero-actions {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 14px;
+  width: auto;
+}
+
+.portal-hero-quick-controls,
+.portal-hero-alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+}
+
+.portal-hero-alert-actions {
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.portal-hero-quick-controls .profile-menu-shell {
+  z-index: 2;
 }
 
 .portal-hero .theme-toggle,
@@ -1329,6 +1356,10 @@
   color: #dff4ff;
 }
 
+:root[data-theme='light'] .portal-hero-alert-actions {
+  border-top-color: rgba(255, 255, 255, 0.3);
+}
+
 :root[data-theme='light'] .portal-hero .profile-chip-copy span,
 :root[data-theme='light'] .portal-hero .profile-chevron {
   color: #ffffff;
@@ -1352,6 +1383,22 @@
   background: rgba(255, 255, 255, 0.2);
   color: #f8fbff;
   border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 1160px) {
+  .portal-hero-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-hero .portal-hero-actions {
+    justify-items: start;
+    width: 100%;
+  }
+
+  .portal-hero-quick-controls,
+  .portal-hero-alert-actions {
+    justify-content: flex-start;
+  }
 }
 
 .notes-workspace {
@@ -7887,6 +7934,39 @@
   gap: 16px;
 }
 
+.bank-account-branch-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.bank-account-branch-group {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-soft) 64%, transparent);
+}
+
+.bank-account-branch-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.bank-account-branch-heading .eyebrow,
+.bank-account-branch-heading h4 {
+  margin: 0;
+}
+
+.bank-account-branch-heading h4 {
+  font-size: 16px;
+}
+
+.bank-account-branch-group .bank-account-card {
+  margin: 0;
+}
+
 .sms-device-list {
   display: grid;
   gap: 10px;
@@ -11665,6 +11745,36 @@
   gap: 12px;
 }
 
+.settings-catalog-disclosure {
+  gap: 16px;
+}
+
+.settings-catalog-disclosure > summary {
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-catalog-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-catalog-disclosure > summary::after {
+  content: '+';
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.settings-catalog-disclosure[open] > summary::after {
+  content: '−';
+}
+
+.settings-catalog-disclosure-content {
+  display: grid;
+  gap: 16px;
+}
+
 .settings-catalog-head h4 {
   margin: 6px 0 0;
 }
@@ -12892,6 +13002,23 @@ td.billing-balance-due,
   display: grid;
 }
 
+.manager-presence-empty {
+  margin: 0;
+  padding: 10px 0 2px;
+}
+
+.manager-presence-offline {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.manager-presence-offline > summary {
+  padding: 12px 0 2px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
 .manager-presence-user {
   justify-content: space-between;
   gap: 14px;
@@ -13876,10 +14003,6 @@ td.billing-balance-due,
   .portal-hero {
     padding: 22px;
     border-radius: 24px;
-  }
-
-  .portal-hero-main {
-    flex-direction: column;
   }
 
   .sidebar-toggle {
@@ -15583,10 +15706,6 @@ td.billing-balance-due,
 }
 
 @media (max-width: 760px) {
-  .database-page-hero .portal-hero-main {
-    flex-direction: column;
-  }
-
   .database-page-hero .portal-hero-actions {
     width: 100%;
   }
@@ -17364,4 +17483,69 @@ td.billing-balance-due,
 
 @media (prefers-reduced-motion: reduce) {
   .manager-approval-slide { animation-duration: .01ms; }
+}
+
+.executive-balance-notice {
+  position: fixed;
+  z-index: 1240;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(580px, calc(100vw - 28px));
+  padding: 17px 19px;
+  color: #f8fafc;
+  border: 1px solid rgba(96, 165, 250, .34);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(17, 47, 73, .98), rgba(17, 26, 42, .98));
+  box-shadow: 0 22px 65px rgba(2, 6, 23, .42);
+  animation: manager-approval-slide-in .5s cubic-bezier(.2, .85, .3, 1.15) both;
+  transform: translateX(-50%);
+}
+
+.executive-balance-notice-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.executive-balance-notice-heading .eyebrow {
+  margin: 0 0 2px;
+  color: #93c5fd;
+}
+
+.executive-balance-notice-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.executive-balance-notice-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.executive-balance-notice-list p {
+  margin: 0;
+  padding: 9px 11px;
+  color: #e2e8f0;
+  border: 1px solid rgba(248, 250, 252, .1);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, .06);
+  font-size: 12px;
+}
+
+.executive-balance-notice-list strong {
+  color: #bfdbfe;
+}
+
+@media (max-width: 640px) {
+  .executive-balance-notice {
+    width: calc(100vw - 16px);
+    padding: 14px;
+    border-radius: 0 0 17px 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .executive-balance-notice { animation-duration: .01ms; }
 }

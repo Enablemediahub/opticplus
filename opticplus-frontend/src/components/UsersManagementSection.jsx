@@ -202,10 +202,20 @@ export default function UsersManagementSection({ token, selectedBranchId, apiFet
         setSuccess(response?.message || 'User updated successfully.')
         closeModal(nextRecord)
       } else {
+        const body = new FormData()
+        body.append('name', payload.name)
+        body.append('username', payload.username)
+        body.append('role', payload.role)
+        body.append('employee_status', payload.employee_status)
+        body.append('phone', payload.phone || '')
+        body.append('email', payload.email || '')
+        body.append('password', form.password)
+        if (profileImageFile) body.append('profile_image', profileImageFile)
+
         const response = await apiFetch(`/manager/users?branch_id=${selectedBranchId}`, {
           method: 'POST',
           token,
-          body: { ...payload, password: form.password },
+          body,
         })
         setSuccess(response?.message || 'User added successfully.')
         closeModal()
@@ -416,21 +426,19 @@ export default function UsersManagementSection({ token, selectedBranchId, apiFet
 
             <form className="settings-grid" onSubmit={submitUser}>
               {error ? <div className="message-banner error full-span">{error}</div> : null}
-              {form.id ? (
-                <div className="full-span settings-avatar-block">
-                  <div className="settings-avatar-frame staff-profile-avatar">
-                    {profileImagePreview ? (
-                      <img src={profileImagePreview} alt={`${form.name} profile`} className="settings-avatar-image" />
-                    ) : (
-                      <span className="settings-avatar-fallback">{String(form.name || 'PR').slice(0, 2).toUpperCase()}</span>
-                    )}
-                  </div>
-                  <label className="staff-photo-upload">
-                    <span>Upload profile image</span>
-                    <input type="file" accept="image/*" onChange={handleProfileImageChange} />
-                  </label>
+              <div className="full-span settings-avatar-block">
+                <div className="settings-avatar-frame staff-profile-avatar">
+                  {profileImagePreview ? (
+                    <img src={profileImagePreview} alt={`${form.name} profile`} className="settings-avatar-image" />
+                  ) : (
+                    <span className="settings-avatar-fallback">{String(form.name || 'PR').slice(0, 2).toUpperCase()}</span>
+                  )}
                 </div>
-              ) : null}
+                <label className="staff-photo-upload">
+                  <span>Upload profile image</span>
+                  <input type="file" accept="image/*" onChange={handleProfileImageChange} />
+                </label>
+              </div>
               <label>
                 Full name
                 <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />

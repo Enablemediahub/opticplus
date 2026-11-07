@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -62,6 +63,63 @@ class ManagerPushNotificationService
                 'subscriptions.subscription_json',
             ]);
 
+        $this->sendToSubscriptions($subscriptions, $configuration, $message, [
+            'branch_id' => $branchId,
+            'kind' => $kind,
+        ]);
+    }
+
+    public function notifyCeoOfBankBalanceChange(
+        int $accountId,
+        int $branchId,
+        string $bankName,
+        string $accountLabel,
+        ?float $previousBalance,
+        float $balance,
+        string $changedAt,
+    ): void {
+        $configuration = config('services.webpush');
+        if (! $configuration['public_key'] || ! $configuration['private_key'] || ! $configuration['subject']) {
+            return;
+        }
+
+        if (! Schema::hasTable('push_subscriptions')) {
+            return;
+        }
+
+        $subscriptions = DB::table('push_subscriptions as subscriptions')
+            ->join('users', 'users.id', '=', 'subscriptions.user_id')
+            ->where('users.role', 'ceo')
+            ->whereIn('subscriptions.branch_id', array_values(array_unique([$branchId, 0])))
+            ->get([
+                'subscriptions.id',
+                'subscriptions.subscription_json',
+            ]);
+
+        $branchName = $branchId === 2 ? 'Madina' : 'Labadi';
+        $message = [
+            'type' => 'bank-balance-change',
+            'title' => 'Bank balance changed',
+            'body' => sprintf('%s · %s · %s: GHS %s', $bankName, $branchName, $accountLabel, number_format($balance, 2)),
+            'url' => '/#/dashboard',
+            'tag' => 'opticplus-bank-balance-'.$accountId,
+            'account_id' => $accountId,
+            'branch_id' => $branchId,
+            'bank_name' => $bankName,
+            'account_label' => $accountLabel,
+            'previous_balance' => $previousBalance,
+            'balance' => $balance,
+            'changed_at' => $changedAt,
+        ];
+
+        $this->sendToSubscriptions($subscriptions, $configuration, $message, [
+            'branch_id' => $branchId,
+            'kind' => 'bank_balance_change',
+        ]);
+    }
+
+    private function sendToSubscriptions(Collection $subscriptions, array $configuration, array $message, array $context): void
+    {
         if ($subscriptions->isEmpty()) {
             return;
         }
@@ -79,7 +137,7 @@ class ManagerPushNotificationService
             foreach ($subscriptions as $storedSubscription) {
                 $decoded = json_decode($storedSubscription->subscription_json, true);
                 if (! is_array($decoded)) {
-                    Log::warning('A manager push subscription could not be decoded.', [
+                    Log::warning('A push subscription could not be decoded.', [
                         'subscription_id' => $storedSubscription->id,
                     ]);
 
@@ -92,16 +150,15 @@ class ManagerPushNotificationService
                 if ($report->isSubscriptionExpired()) {
                     DB::table('push_subscriptions')->where('id', $storedSubscription->id)->delete();
                 } elseif (! $report->isSuccess()) {
-                    Log::warning('A manager push notification could not be delivered.', [
+                    Log::warning('A push notification could not be delivered.', [
                         'subscription_id' => $storedSubscription->id,
                         'reason' => $report->getReason(),
                     ]);
                 }
             }
         } catch (Throwable $exception) {
-            Log::warning('Manager push notification delivery failed.', [
-                'branch_id' => $branchId,
-                'kind' => $kind,
+            Log::warning('Push notification delivery failed.', [
+                ...$context,
                 'error' => $exception->getMessage(),
             ]);
         }

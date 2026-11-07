@@ -43,6 +43,7 @@ import TechnicianDashboardSection from './components/TechnicianDashboardSection.
 import UsersManagementSection from './components/UsersManagementSection.jsx'
 import WorkingCapitalLiabilitiesSection from './components/WorkingCapitalLiabilitiesSection.jsx'
 import useManagerNotifications from './useManagerNotifications.js'
+import useExecutiveBalanceNotifications from './useExecutiveBalanceNotifications.js'
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
@@ -847,6 +848,7 @@ function App() {
   const isOptometrist = session?.role === 'optometrist'
   const isTechnician = session?.role === 'technician'
   const isExecutive = ['ceo', 'director'].includes(session?.role)
+  const isCeo = session?.role === 'ceo'
   const canAccessSystemSettings = ['ceo', 'director', 'manager'].includes(session?.role)
   const isMergedView = session?.is_admin && selectedBranchId === 0
   const canSwitchBranch = session?.is_admin || isTechnician
@@ -856,6 +858,11 @@ function App() {
     token,
     session,
     branchId: scopedBranchId,
+  })
+  const executiveBalanceNotifications = useExecutiveBalanceNotifications({
+    apiFetch,
+    token,
+    session,
   })
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
   const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Selling Pricelist', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
@@ -5287,6 +5294,31 @@ function App() {
                 </div>
               </section>
             ) : null}
+            {isCeo && executiveBalanceNotifications.changes.length > 0 ? (
+              <section className="executive-balance-notice" role="status" aria-live="polite">
+                <div className="executive-balance-notice-heading">
+                  <div>
+                    <p className="eyebrow">Bank balance changed</p>
+                    <h3>{executiveBalanceNotifications.changes.length} account balance update{executiveBalanceNotifications.changes.length === 1 ? '' : 's'}</h3>
+                  </div>
+                  <button type="button" className="manager-approval-slide-dismiss" aria-label="Dismiss balance updates" onClick={executiveBalanceNotifications.dismissChanges}>×</button>
+                </div>
+                <div className="executive-balance-notice-list">
+                  {executiveBalanceNotifications.changes.slice(0, 4).map((change) => (
+                    <p key={change.key}>
+                      <strong>{change.bankName}</strong> · {change.branchName} · {change.accountLabel}: {currency.format(change.balance)}
+                      {change.previousBalance !== null ? ` (was ${currency.format(change.previousBalance)})` : ''}
+                    </p>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {isCeo && executiveBalanceNotifications.error ? (
+              <div className="message-banner error manager-notification-error" role="alert">{executiveBalanceNotifications.error}</div>
+            ) : null}
+            {isCeo && executiveBalanceNotifications.pushMessage ? (
+              <div className="message-banner manager-notification-error" role="status">{executiveBalanceNotifications.pushMessage}</div>
+            ) : null}
             {isGeneralManager && managerNotifications.pushMessage ? (
               <p className="manager-push-feedback" role="status">{managerNotifications.pushMessage}</p>
             ) : null}
@@ -5335,108 +5367,141 @@ function App() {
                   </div>
 
                   <div className="header-actions portal-hero-actions">
-                    {isGeneralManager ? (
+                    <div className="portal-hero-quick-controls">
+                      {session.is_admin ? (
+                        <label className="branch-select">
+                          Branch
+                          <select
+                            value={selectedBranchId}
+                            onChange={(event) => setSelectedBranchId(Number(event.target.value))}
+                          >
+                            {branchOptions.map((branch) => (
+                              <option key={branch.id} value={branch.id}>
+                                {branch.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+
                       <button
                         type="button"
-                        className={`manager-push-toggle${managerNotifications.isSubscribed ? ' is-enabled' : ''}`}
-                        onClick={managerNotifications.isSubscribed
-                          ? managerNotifications.disablePhoneNotifications
-                          : managerNotifications.enablePhoneNotifications}
-                        disabled={managerNotifications.isUpdatingPush || !managerNotifications.pushSupported || (!managerNotifications.isSubscribed && !managerNotifications.pushEnabled)}
-                        title={!managerNotifications.pushSupported
-                          ? 'Phone notifications require an installed app and a supported HTTPS browser.'
-                          : managerNotifications.isSubscribed
-                            ? 'Disable phone notifications on this device'
-                            : !managerNotifications.pushEnabled
-                              ? 'Phone notifications are not configured on the server.'
-                              : 'Enable phone notifications on this device'}
+                        className="theme-toggle icon-button"
+                        onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+                        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                       >
-                        <PortalIcon name="alert" className="nav-icon" />
-                        <span>{managerNotifications.isUpdatingPush
-                          ? 'Saving...'
-                          : managerNotifications.isSubscribed
-                            ? 'Phone alerts on'
-                            : 'Enable phone alerts'}</span>
+                        <PortalIcon name={theme === 'dark' ? 'sun' : 'moon'} className="nav-icon" />
                       </button>
-                    ) : null}
-                    {session.is_admin ? (
-                      <label className="branch-select">
-                        Branch
-                        <select
-                          value={selectedBranchId}
-                          onChange={(event) => setSelectedBranchId(Number(event.target.value))}
+
+                      <div className="profile-menu-shell" ref={profileMenuRef}>
+                        <button
+                          type="button"
+                          className="profile-chip"
+                          onClick={() => setIsProfileMenuOpen((current) => !current)}
+                          aria-expanded={isProfileMenuOpen}
+                          aria-haspopup="menu"
                         >
-                          {branchOptions.map((branch) => (
-                            <option key={branch.id} value={branch.id}>
-                              {branch.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
+                          <div className="profile-chip-avatar">
+                            {headerProfile.imageUrl ? (
+                              <img src={headerProfile.imageUrl} alt={`${headerProfile.name} profile`} className="profile-chip-image" />
+                            ) : (
+                              <PortalIcon name="patients" className="profile-chip-icon" />
+                            )}
+                          </div>
+                          <div className="profile-chip-copy">
+                            <strong>{String(headerProfile.name || '').split(' ')[0] || 'Profile'}</strong>
+                            <span>{headerProfile.subtitle}</span>
+                          </div>
+                          <PortalIcon name="chevron-down" className={isProfileMenuOpen ? 'profile-chevron open' : 'profile-chevron'} />
+                        </button>
 
-                    <button
-                      type="button"
-                      className="theme-toggle icon-button"
-                      onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-                      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                      title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                    >
-                      <PortalIcon name={theme === 'dark' ? 'sun' : 'moon'} className="nav-icon" />
-                    </button>
+                        {isProfileMenuOpen ? (
+                          <div className="profile-dropdown" role="menu">
+                            {canAccessSystemSettings ? (
+                              <button
+                                type="button"
+                                className="profile-dropdown-item"
+                                onClick={() => {
+                                  setActiveView('Settings')
+                                  setIsProfileMenuOpen(false)
+                                }}
+                              >
+                                <PortalIcon name="settings" className="nav-icon" />
+                                <span>Settings</span>
+                              </button>
+                            ) : null}
 
-                    <div className="profile-menu-shell" ref={profileMenuRef}>
-                      <button
-                        type="button"
-                        className="profile-chip"
-                        onClick={() => setIsProfileMenuOpen((current) => !current)}
-                        aria-expanded={isProfileMenuOpen}
-                        aria-haspopup="menu"
-                      >
-                        <div className="profile-chip-avatar">
-                          {headerProfile.imageUrl ? (
-                            <img src={headerProfile.imageUrl} alt={`${headerProfile.name} profile`} className="profile-chip-image" />
-                          ) : (
-                            <PortalIcon name="patients" className="profile-chip-icon" />
-                          )}
-                        </div>
-                        <div className="profile-chip-copy">
-                          <strong>{String(headerProfile.name || '').split(' ')[0] || 'Profile'}</strong>
-                          <span>{headerProfile.subtitle}</span>
-                        </div>
-                        <PortalIcon name="chevron-down" className={isProfileMenuOpen ? 'profile-chevron open' : 'profile-chevron'} />
-                      </button>
-
-                      {isProfileMenuOpen ? (
-                        <div className="profile-dropdown" role="menu">
-                          {canAccessSystemSettings ? (
                             <button
                               type="button"
-                              className="profile-dropdown-item"
+                              className="profile-dropdown-item danger"
                               onClick={() => {
-                                setActiveView('Settings')
                                 setIsProfileMenuOpen(false)
+                                handleLogout()
                               }}
                             >
-                              <PortalIcon name="settings" className="nav-icon" />
-                              <span>Settings</span>
+                              <PortalIcon name="logout" className="nav-icon" />
+                              <span>Logout</span>
                             </button>
-                          ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
 
+                    {isGeneralManager || isCeo ? (
+                      <div className="portal-hero-alert-actions">
+                        {isGeneralManager ? (
                           <button
                             type="button"
-                            className="profile-dropdown-item danger"
-                            onClick={() => {
-                              setIsProfileMenuOpen(false)
-                              handleLogout()
-                            }}
+                            className={`manager-push-toggle${managerNotifications.isSubscribed ? ' is-enabled' : ''}`}
+                            onClick={managerNotifications.isSubscribed
+                              ? managerNotifications.disablePhoneNotifications
+                              : managerNotifications.enablePhoneNotifications}
+                            disabled={managerNotifications.isUpdatingPush || !managerNotifications.pushSupported || (!managerNotifications.isSubscribed && !managerNotifications.pushEnabled)}
+                            title={!managerNotifications.pushSupported
+                              ? 'Phone notifications require an installed app and a supported HTTPS browser.'
+                              : managerNotifications.isSubscribed
+                                ? 'Disable phone notifications on this device'
+                                : !managerNotifications.pushEnabled
+                                  ? 'Phone notifications are not configured on the server.'
+                                  : 'Enable phone notifications on this device'}
                           >
-                            <PortalIcon name="logout" className="nav-icon" />
-                            <span>Logout</span>
+                            <PortalIcon name="alert" className="nav-icon" />
+                            <span>{managerNotifications.isUpdatingPush
+                              ? 'Saving...'
+                              : managerNotifications.isSubscribed
+                                ? 'Phone alerts on'
+                                : 'Enable phone alerts'}</span>
                           </button>
-                        </div>
-                      ) : null}
-                    </div>
+                        ) : null}
+                        {isCeo ? (
+                          <button
+                            type="button"
+                            className={`manager-push-toggle${executiveBalanceNotifications.isSubscribed ? ' is-enabled' : ''}`}
+                            onClick={executiveBalanceNotifications.isSubscribed
+                              ? executiveBalanceNotifications.disablePhoneNotifications
+                              : executiveBalanceNotifications.enablePhoneNotifications}
+                            disabled={executiveBalanceNotifications.isUpdatingPush
+                              || !executiveBalanceNotifications.pushSupported
+                              || (!executiveBalanceNotifications.isSubscribed && !executiveBalanceNotifications.pushEnabled)}
+                            title={!executiveBalanceNotifications.pushSupported
+                              ? 'Phone balance alerts require a supported HTTPS browser.'
+                              : executiveBalanceNotifications.isSubscribed
+                                ? 'Disable bank and MoMo balance alerts on this device'
+                                : !executiveBalanceNotifications.pushEnabled
+                                  ? 'Phone balance alerts are not configured on the server.'
+                                  : 'Enable bank and MoMo balance alerts on this device'}
+                          >
+                            <PortalIcon name="alert" className="nav-icon" />
+                            <span>{executiveBalanceNotifications.isUpdatingPush
+                              ? 'Saving...'
+                              : executiveBalanceNotifications.isSubscribed
+                                ? 'Balance alerts on'
+                                : 'Enable balance alerts'}</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -5484,6 +5549,9 @@ function App() {
                   isLoadingInsuranceData={isLoadingInsuranceData}
                   setActiveView={setActiveView}
                   session={session}
+                  apiFetch={apiFetch}
+                  token={token}
+                  selectedBranchId={selectedBranchId}
                 />
               ) : isAccountant ? (
                 <AccountantDashboardSection

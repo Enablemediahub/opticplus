@@ -419,119 +419,123 @@ export default function SettingsSection({
             </div>
 
             <div className="settings-catalog-grid">
-              <section className="settings-catalog-card">
-                <div className="settings-catalog-head">
+              <details className="settings-catalog-card settings-catalog-disclosure">
+                <summary className="settings-catalog-head">
                   <div>
                     <p className="eyebrow">Insurance Companies</p>
                     <h4>Signed insurance providers</h4>
                   </div>
                   <span className="panel-tag">{insuranceProviderCatalog.length}</span>
-                </div>
+                </summary>
 
-                <form
-                  className="settings-inline-form"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    saveInsuranceProvider(insuranceProviderName)
-                    setInsuranceProviderName('')
-                  }}
-                >
-                  <label className="full-span">
-                    Add insurance company
-                    <input
-                      value={insuranceProviderName}
-                      onChange={(event) => setInsuranceProviderName(event.target.value)}
-                      placeholder="e.g. GLICO, ACACIA, OTHER"
-                      required
-                    />
-                  </label>
-                  <div className="filter-actions-row full-span">
-                    <button type="submit" className="primary-button" disabled={isSavingInsuranceProvider}>
-                      {isSavingInsuranceProvider ? 'Saving...' : 'Add insurance company'}
-                    </button>
-                  </div>
-                </form>
-
-                <div className="settings-catalog-list">
-                  {isLoadingSettingsCatalog ? <p className="muted-copy">Loading insurance companies...</p> : null}
-                  {!isLoadingSettingsCatalog && insuranceProviderCatalog.length ? insuranceProviderCatalog.map((provider) => (
-                    <div key={provider.id} className="settings-catalog-item">
-                      <div>
-                        <strong>{provider.name}</strong>
-                        <span>{provider.created_at ? `Added ${new Date(provider.created_at).toLocaleDateString()}` : 'Existing provider'}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="ghost-button danger-outline"
-                        disabled={isDeletingInsuranceProviderId === provider.id}
-                        onClick={() => deleteInsuranceProvider(provider.id)}
-                      >
-                        {isDeletingInsuranceProviderId === provider.id ? 'Deleting...' : 'Delete'}
+                <div className="settings-catalog-disclosure-content">
+                  <form
+                    className="settings-inline-form"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      saveInsuranceProvider(insuranceProviderName)
+                      setInsuranceProviderName('')
+                    }}
+                  >
+                    <label className="full-span">
+                      Add insurance company
+                      <input
+                        value={insuranceProviderName}
+                        onChange={(event) => setInsuranceProviderName(event.target.value)}
+                        placeholder="e.g. GLICO, ACACIA, OTHER"
+                        required
+                      />
+                    </label>
+                    <div className="filter-actions-row full-span">
+                      <button type="submit" className="primary-button" disabled={isSavingInsuranceProvider}>
+                        {isSavingInsuranceProvider ? 'Saving...' : 'Add insurance company'}
                       </button>
                     </div>
-                  )) : null}
-                  {!isLoadingSettingsCatalog && !insuranceProviderCatalog.length ? (
-                    <p className="muted-copy">No insurance companies have been configured yet.</p>
-                  ) : null}
-                </div>
-              </section>
+                  </form>
 
-              <section className="settings-catalog-card">
-                <div className="settings-catalog-head">
+                  <div className="settings-catalog-list">
+                    {isLoadingSettingsCatalog ? <p className="muted-copy">Loading insurance companies...</p> : null}
+                    {!isLoadingSettingsCatalog && insuranceProviderCatalog.length ? insuranceProviderCatalog.map((provider) => (
+                      <div key={provider.id} className="settings-catalog-item">
+                        <div>
+                          <strong>{provider.name}</strong>
+                          <span>{provider.created_at ? `Added ${new Date(provider.created_at).toLocaleDateString()}` : 'Existing provider'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button danger-outline"
+                          disabled={isDeletingInsuranceProviderId === provider.id}
+                          onClick={() => deleteInsuranceProvider(provider.id)}
+                        >
+                          {isDeletingInsuranceProviderId === provider.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    )) : null}
+                    {!isLoadingSettingsCatalog && !insuranceProviderCatalog.length ? (
+                      <p className="muted-copy">No insurance companies have been configured yet.</p>
+                    ) : null}
+                  </div>
+                </div>
+              </details>
+
+              <details className="settings-catalog-card settings-catalog-disclosure">
+                <summary className="settings-catalog-head">
                   <div>
                     <p className="eyebrow">Expense Categories</p>
                     <h4>Current category list</h4>
                   </div>
                   <span className="panel-tag">{expenseCategoryCatalog.length}</span>
-                </div>
+                </summary>
 
-                <form
-                  className="settings-inline-form"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    saveExpenseCategory(expenseCategoryName)
-                    setExpenseCategoryName('')
-                  }}
-                >
-                  <label className="full-span">
-                    Add expense category
-                    <input
-                      value={expenseCategoryName}
-                      onChange={(event) => setExpenseCategoryName(event.target.value)}
-                      placeholder="e.g. Utilities, Repairs, Optical Supplies"
-                      required
-                    />
-                  </label>
-                  <div className="filter-actions-row full-span">
-                    <button type="submit" className="primary-button" disabled={isSavingExpenseCategory}>
-                      {isSavingExpenseCategory ? 'Saving...' : 'Add expense category'}
-                    </button>
-                  </div>
-                </form>
-
-                <div className="settings-catalog-list">
-                  {isLoadingSettingsCatalog ? <p className="muted-copy">Loading expense categories...</p> : null}
-                  {!isLoadingSettingsCatalog && expenseCategoryCatalog.length ? expenseCategoryCatalog.map((category) => (
-                    <div key={category.id} className="settings-catalog-item">
-                      <div>
-                        <strong>{category.name}</strong>
-                        <span>{category.created_at ? `Added ${new Date(category.created_at).toLocaleDateString()}` : 'Active category'}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="ghost-button danger-outline"
-                        disabled={isDeletingExpenseCategoryId === category.id}
-                        onClick={() => deleteExpenseCategory(category.id)}
-                      >
-                        {isDeletingExpenseCategoryId === category.id ? 'Deleting...' : 'Delete'}
+                <div className="settings-catalog-disclosure-content">
+                  <form
+                    className="settings-inline-form"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      saveExpenseCategory(expenseCategoryName)
+                      setExpenseCategoryName('')
+                    }}
+                  >
+                    <label className="full-span">
+                      Add expense category
+                      <input
+                        value={expenseCategoryName}
+                        onChange={(event) => setExpenseCategoryName(event.target.value)}
+                        placeholder="e.g. Utilities, Repairs, Optical Supplies"
+                        required
+                      />
+                    </label>
+                    <div className="filter-actions-row full-span">
+                      <button type="submit" className="primary-button" disabled={isSavingExpenseCategory}>
+                        {isSavingExpenseCategory ? 'Saving...' : 'Add expense category'}
                       </button>
                     </div>
-                  )) : null}
-                  {!isLoadingSettingsCatalog && !expenseCategoryCatalog.length ? (
-                    <p className="muted-copy">No expense categories are available yet.</p>
-                  ) : null}
+                  </form>
+
+                  <div className="settings-catalog-list">
+                    {isLoadingSettingsCatalog ? <p className="muted-copy">Loading expense categories...</p> : null}
+                    {!isLoadingSettingsCatalog && expenseCategoryCatalog.length ? expenseCategoryCatalog.map((category) => (
+                      <div key={category.id} className="settings-catalog-item">
+                        <div>
+                          <strong>{category.name}</strong>
+                          <span>{category.created_at ? `Added ${new Date(category.created_at).toLocaleDateString()}` : 'Active category'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button danger-outline"
+                          disabled={isDeletingExpenseCategoryId === category.id}
+                          onClick={() => deleteExpenseCategory(category.id)}
+                        >
+                          {isDeletingExpenseCategoryId === category.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    )) : null}
+                    {!isLoadingSettingsCatalog && !expenseCategoryCatalog.length ? (
+                      <p className="muted-copy">No expense categories are available yet.</p>
+                    ) : null}
+                  </div>
                 </div>
-              </section>
+              </details>
             </div>
           </article>
         ) : null}

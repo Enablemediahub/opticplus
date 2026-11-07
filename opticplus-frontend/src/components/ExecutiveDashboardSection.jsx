@@ -1,5 +1,6 @@
 import StatWidget from './StatWidget.jsx'
 import PortalIcon from './PortalIcon.jsx'
+import BankBalanceCards from './BankBalanceCards.jsx'
 
 const currency = new Intl.NumberFormat('en-GH', {
   style: 'currency',
@@ -41,7 +42,7 @@ export default function ExecutiveDashboardSection(props) {
           <p className="eyebrow">Executive Dashboard</p>
           <h3>Daily company visibility for directors and the CEO</h3>
           <p className="header-copy">
-            Review sales, revenue, expenses, insurance exposure, and formal reports from a read-only executive workspace.
+            Review sales, expenses, and insurance exposure. CEOs can also monitor bank and MoMo balances by branch.
           </p>
         </div>
       </div>
@@ -58,6 +59,16 @@ export default function ExecutiveDashboardSection(props) {
           />
         ))}
       </section>
+
+      {props.session?.role === 'ceo' ? (
+        <BankBalanceCards
+          apiFetch={props.apiFetch}
+          token={props.token}
+          branchId={props.selectedBranchId}
+          endpoint="/executive/bank-balances"
+          executiveBranchLayout
+        />
+      ) : null}
 
       <section className="content-grid manager-dashboard-grid executive-dashboard-grid">
         <article className="panel panel-wide">

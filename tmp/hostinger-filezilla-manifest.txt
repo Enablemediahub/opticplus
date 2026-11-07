@@ -1,62 +1,17 @@
-General Manager notification and phone push update
-Last updated: 2026-11-05
+Dashboard hero layout update only
+Last updated: 2026-11-07
 Paths are relative to tmp/hostinger-package; Hostinger document root is public.
 
 UPLOAD / REPLACE
-app/Console/Commands/GenerateWebPushKeysCommand.php
-app/Http/Controllers/BankAlertController.php
-app/Http/Controllers/FinanceController.php
-app/Http/Controllers/MemoController.php
-app/Http/Controllers/ManagerNotificationController.php
-app/Services/ManagerPushNotificationService.php
-config/services.php
-routes/api.php
-composer.json
-composer.lock
-vendor/
-  Upload the updated vendor tree recursively, including vendor/composer autoload files.
 public/index.html
-public/registration/index.html
-public/manifest.webmanifest
-public/sw.js
-public/icons/opticplus-180.png
-public/icons/opticplus-192.png
-public/icons/opticplus-512.png
-public/assets/App-BDQiWz19.css
-public/assets/App-DNycOMKq.js
-public/assets/index-B6dQmwum.js
-
-DATABASE SETUP (run once in Hostinger phpMyAdmin; do not FTP this SQL file)
-Open database/manual_sql/create_push_subscriptions.sql from the package, select the
-Hostinger database, and run the SQL in phpMyAdmin's SQL tab. This creates the table
-needed for phone push subscriptions. It intentionally has no foreign key to the legacy
-users table, avoiding Hostinger schema/engine mismatches. Do not run it a second time
-after the table exists. The equivalent Laravel migration is in the backend source for
-environments that use Artisan migrations.
+public/assets/App-DO0nV3j2.js
+public/assets/App-CzYFiH5i.css
+public/assets/index-Ba3uYAmt.js
 
 DELETE OLD ASSETS FROM HOSTINGER
-public/assets/App-CnjjY7UW.js
-public/assets/App-gFw5R2yx.css
-public/assets/index-UmHZ5F5g.js
-public/assets/App-D72KasyW.js
-public/assets/index-C6yJGU_I.js
-public/assets/App-BN9iT6ab.js
-public/assets/index-CObGzy0g.js
-public/assets/App-CRCogHRs.js
-public/assets/index-jq06Zsh0.js
-public/assets/App-BY2jjeBP.js
-public/assets/index-CKKulYtv.js
+public/assets/App-DznSKw6t.js
+public/assets/App-De0MInxP.css
+public/assets/index-GhjDJtOe.js
 
-SERVER SETUP (not files to upload)
-1. In a trusted server terminal, run: php artisan webpush:generate-vapid
-2. Add the generated WEBPUSH_PUBLIC_KEY and WEBPUSH_PRIVATE_KEY to the server .env.
-   Also set WEBPUSH_SUBJECT to a valid mailto: address or the portal URL.
-   Never upload, commit, or share the private key.
-3. Use Hostinger SSH/Terminal to run: php artisan config:clear
-   (if SSH/Terminal is unavailable, check with Hostinger support how to clear Laravel's
-   cached configuration; changing .env alone does not update a cached config.)
-4. Ensure the portal is served over HTTPS. Managers enable notifications from their account
-   on each phone/browser, and must allow notifications in the device/browser settings.
-
-In-app counts and slide-in notifications do not require VAPID keys. Phone push and app-icon
-badges depend on browser/operating-system support.
+No backend files, database changes, or server configuration changes are required for
+this update.

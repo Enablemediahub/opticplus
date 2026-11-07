@@ -1,14 +1,15 @@
 <?php
 
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BankAlertController;
 use App\Http\Controllers\BillingController;
-use App\Http\Controllers\CustomerServiceController;
 use App\Http\Controllers\CompanyProfileController;
-use App\Http\Controllers\DatabaseAdminController;
+use App\Http\Controllers\CustomerServiceController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DatabaseAdminController;
 use App\Http\Controllers\DebtController;
+use App\Http\Controllers\ExecutiveBankBalanceController;
 use App\Http\Controllers\ExecutiveReportController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\InsuranceController;
@@ -18,13 +19,14 @@ use App\Http\Controllers\ManagerController;
 use App\Http\Controllers\ManagerNotificationController;
 use App\Http\Controllers\MemoController;
 use App\Http\Controllers\PatientRecordController;
-use App\Http\Controllers\StaffAppraisalController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\StaffAppraisalController;
 use App\Http\Controllers\WorkingCapitalLiabilityController;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('idempotency')->group(function (): void {
-    Route::get('/', function (): \Illuminate\Http\JsonResponse {
+    Route::get('/', function (): JsonResponse {
         return response()->json([
             'name' => 'opticplus-api',
             'version' => 'v1',
@@ -203,6 +205,9 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/manager/notifications', [ManagerNotificationController::class, 'summary']);
         Route::post('/manager/notifications/subscription', [ManagerNotificationController::class, 'subscribe']);
         Route::delete('/manager/notifications/subscription', [ManagerNotificationController::class, 'unsubscribe']);
+        Route::get('/executive/bank-balances', [ExecutiveBankBalanceController::class, 'index']);
+        Route::post('/executive/bank-balances/subscription', [ExecutiveBankBalanceController::class, 'subscribe']);
+        Route::delete('/executive/bank-balances/subscription', [ExecutiveBankBalanceController::class, 'unsubscribe']);
         Route::get('/manager/user-presence', [ManagerController::class, 'userPresence']);
         Route::get('/manager/audit-logs', [AuditLogController::class, 'index']);
         Route::get('/manager/users', [ManagerController::class, 'users']);
