@@ -203,10 +203,14 @@ function makePdfBytes(image) {
   return output
 }
 
-export async function downloadPatientIdCardPdf(card) {
+export async function createPatientIdCardPdf(card) {
   const image = await renderPatientCardJpeg(card)
-  const pdf = makePdfBytes(image)
-  const blobUrl = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
+  return new Blob([makePdfBytes(image)], { type: 'application/pdf' })
+}
+
+export async function downloadPatientIdCardPdf(card) {
+  const blob = await createPatientIdCardPdf(card)
+  const blobUrl = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = blobUrl
   anchor.download = `bealet-patient-card-${String(card.folderId).replaceAll('/', '-')}.pdf`

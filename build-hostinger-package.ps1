@@ -31,6 +31,10 @@ finally {
     Pop-Location
 }
 
+$registrationDistPath = Join-Path $frontendDistPath 'registration'
+New-Item -ItemType Directory -Path $registrationDistPath -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $frontendDistPath 'index.html') -Destination (Join-Path $registrationDistPath 'index.html') -Force
+
 New-Item -ItemType Directory -Path $deployPath -Force | Out-Null
 New-Item -ItemType Directory -Path $deployLaravelPublic -Force | Out-Null
 
@@ -133,6 +137,9 @@ if ($deletedFiles.Count -eq 0) {
     }
 }
 $manifestLines.Add('')
+$manifestLines.Add('Upload all new and changed files before deleting any listed obsolete files.')
+$manifestLines.Add('If the bank SMS approval changes are part of this upload, run database/manual_sql/bank_sms_approval_policy.sql in phpMyAdmin instead of running migrations.')
+$manifestLines.Add('The registration page shell is generated at public/registration/index.html; upload it with public/.htaccess and the referenced frontend assets.')
 $manifestLines.Add('The local .env and Laravel runtime logs/cache/session/view files are excluded.')
 $manifestLines.Add('Incremental comparison uses file size and last-write time; use -FullUpload if unsure about a same-size, preserved-time edit.')
 $manifestLines.Add('Review the list before uploading. A local baseline cannot confirm what is currently on Hostinger.')

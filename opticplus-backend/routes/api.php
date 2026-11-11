@@ -66,6 +66,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::patch('/staff-appraisals/assignments/{assignmentId}', [StaffAppraisalController::class, 'updateProgress']);
         Route::get('/bank-alerts', [BankAlertController::class, 'index']);
         Route::get('/bank-alerts/history', [BankAlertController::class, 'history']);
+        Route::put('/bank-alerts/approval-policy', [BankAlertController::class, 'updateApprovalPolicy']);
         Route::post('/bank-alerts/accounts', [BankAlertController::class, 'storeAccount']);
         Route::delete('/bank-alerts/accounts/{accountId}', [BankAlertController::class, 'destroyAccount']);
         Route::post('/bank-alerts/devices', [BankAlertController::class, 'issueDevice']);

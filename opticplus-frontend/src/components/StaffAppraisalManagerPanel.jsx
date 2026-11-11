@@ -19,7 +19,7 @@ function StaffAvatar({ staff }) {
   return <span className="staff-appraisal-avatar">{staff.photo_url && !imageFailed ? <img src={staff.photo_url} alt={`${staff.name} profile`} onError={() => setImageFailed(true)} /> : <span>{initials(staff.name)}</span>}</span>
 }
 
-export default function StaffAppraisalManagerPanel({ apiFetch, token, branchId }) {
+export default function StaffAppraisalManagerPanel({ apiFetch, token, branchId, onOverallScoreChange }) {
   const [data, setData] = useState(null)
   const [form, setForm] = useState(() => ({ title: '', ...periodDefaults(), tasks: [blankTask()] }))
   const [formBranchId, setFormBranchId] = useState(Number(branchId) || 0)
@@ -239,7 +239,21 @@ export default function StaffAppraisalManagerPanel({ apiFetch, token, branchId }
   const hiddenStaff = staffOptions.filter((staff) => hiddenStaffIds.includes(Number(staff.id)))
   const selectedScores = data?.score_summary?.[scorePeriod] ?? {}
   const scoreLabel = scorePeriod === 'week' ? 'This week' : scorePeriod === 'year' ? 'This year' : 'This month'
+  const scoredStaff = Object.values(selectedScores).filter((score) => Number(score?.total_weight) > 0)
+  const totalScoreWeight = scoredStaff.reduce((total, score) => total + Number(score.total_weight), 0)
+  const overallScore = totalScoreWeight > 0
+    ? scoredStaff.reduce((total, score) => total + Number(score.weighted_points ?? 0), 0) / totalScoreWeight
+    : null
   const branchLabel = Number(branchId) === 1 ? 'Labadi branch' : Number(branchId) === 2 ? 'Madina branch' : 'both branches'
+
+  useEffect(() => {
+    onOverallScoreChange?.({
+      score: overallScore,
+      label: 'Team overall',
+      period: scoreLabel,
+      scope: 'team',
+    })
+  }, [onOverallScoreChange, overallScore, scoreLabel])
 
   return (
     <section className="panel staff-appraisal-manager-panel staff-appraisal-command-center">
@@ -252,6 +266,16 @@ export default function StaffAppraisalManagerPanel({ apiFetch, token, branchId }
             <p className="staff-appraisal-hero-kicker"><span />People & Performance</p>
             <h3>Grow people. Recognize progress.</h3>
             <p>Set clear goals, support your team, and keep performance moving across {branchLabel}.</p>
+          </div>
+        </div>
+        <div className="staff-appraisal-hero-overall">
+          <div className="staff-appraisal-hero-overall-heading">
+            <span>Team overall</span>
+            <strong>{overallScore === null ? '—' : `${overallScore.toFixed(1)}%`}</strong>
+          </div>
+          <span className="staff-appraisal-hero-overall-caption">{scoreLabel} · {scoredStaff.length} {scoredStaff.length === 1 ? 'staff member' : 'staff members'}</span>
+          <div className="staff-appraisal-score-period staff-appraisal-hero-score-period" role="group" aria-label="Overall score period">
+            {[['week', 'Week'], ['month', 'Month'], ['year', 'Year']].map(([value, label]) => <button type="button" key={value} className={scorePeriod === value ? 'is-selected' : ''} onClick={() => setScorePeriod(value)} aria-pressed={scorePeriod === value}>{label}</button>)}
           </div>
         </div>
         <div className="staff-appraisal-hero-status">
@@ -277,11 +301,8 @@ export default function StaffAppraisalManagerPanel({ apiFetch, token, branchId }
       <section className="staff-appraisal-team-overview" aria-labelledby="staff-appraisal-team-title">
         <div className="staff-appraisal-team-heading">
           <div><p className="staff-appraisal-section-kicker">Your people</p><h4 id="staff-appraisal-team-title">Team performance</h4><p>Choose a person to start an appraisal task. Scores update from submitted progress and your reviews.</p></div>
-          <div className="staff-appraisal-score-period" role="group" aria-label="Score period">
-            {[['week', 'Week'], ['month', 'Month'], ['year', 'Year']].map(([value, label]) => <button type="button" key={value} className={scorePeriod === value ? 'is-selected' : ''} onClick={() => setScorePeriod(value)} aria-pressed={scorePeriod === value}>{label}</button>)}
-          </div>
         </div>
-        <div className="staff-appraisal-team-period-note"><span className="staff-appraisal-period-live-dot" /> Overall score · {scoreLabel}</div>
+        <div className="staff-appraisal-team-period-note"><span className="staff-appraisal-period-live-dot" /> Individual scores · {scoreLabel}</div>
         {visibleStaff.length ? <div className="staff-appraisal-staff-grid">
           {visibleStaff.map((staff) => {
             const score = selectedScores[staff.id]

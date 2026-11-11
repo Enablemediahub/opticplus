@@ -1,873 +1,869 @@
 {
-  "generated_at": "2026-11-07 12:18:29",
+  "generated_at": "2026-11-11 12:13:24",
   "files": {
     ".styleci.yml": {
       "length": 120,
-      "last_write_utc_ticks": 639274383091312916
+      "last_write_utc_ticks": 639274383090000000
     },
     "composer.lock": {
       "length": 325840,
-      "last_write_utc_ticks": 639294952628723066
+      "last_write_utc_ticks": 639294947640000000
+    },
+    ".DS_Store": {
+      "length": 8196,
+      "last_write_utc_ticks": 639289643140000000
     },
     "phpunit.xml": {
       "length": 1322,
-      "last_write_utc_ticks": 639274383091364341
+      "last_write_utc_ticks": 639274383090000000
     },
     "CHANGELOG.md": {
       "length": 11818,
-      "last_write_utc_ticks": 639274383091313504
+      "last_write_utc_ticks": 639274383090000000
     },
     "vite.config.js": {
       "length": 436,
-      "last_write_utc_ticks": 639274383091413844
+      "last_write_utc_ticks": 639274383090000000
     },
     ".editorconfig": {
       "length": 252,
-      "last_write_utc_ticks": 639274383091308743
+      "last_write_utc_ticks": 639274383090000000
     },
     "README.md": {
       "length": 5178,
-      "last_write_utc_ticks": 639296495986086121
+      "last_write_utc_ticks": 639296475880000000
     },
     "artisan": {
       "length": 425,
-      "last_write_utc_ticks": 639274383091338776
+      "last_write_utc_ticks": 639274383090000000
     },
     ".gitignore": {
       "length": 283,
-      "last_write_utc_ticks": 639274383091312523
+      "last_write_utc_ticks": 639274383090000000
     },
     "package.json": {
       "length": 414,
-      "last_write_utc_ticks": 639274383091363803
+      "last_write_utc_ticks": 639274383090000000
     },
     ".env.hostinger.example": {
       "length": 1254,
-      "last_write_utc_ticks": 639274383091309604
+      "last_write_utc_ticks": 639274383090000000
     },
     ".gitattributes": {
       "length": 186,
-      "last_write_utc_ticks": 639274383091310024
+      "last_write_utc_ticks": 639274383090000000
     },
     ".env.example": {
       "length": 1408,
-      "last_write_utc_ticks": 639294952628752894
+      "last_write_utc_ticks": 639294950450000000
     },
     "composer.json": {
       "length": 2888,
-      "last_write_utc_ticks": 639294952628694487
+      "last_write_utc_ticks": 639294947620000000
     },
     ".phpunit.result.cache": {
-      "length": 1036,
-      "last_write_utc_ticks": 639287342816300638
+      "length": 1035,
+      "last_write_utc_ticks": 639299139090000000
     },
     "database/.gitignore": {
       "length": 10,
-      "last_write_utc_ticks": 639274383091349390
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_24_000005_add_receipt_unavailable_to_expenses_table.php": {
       "length": 793,
-      "last_write_utc_ticks": 639284712254085299
+      "last_write_utc_ticks": 639284712250000000
     },
     "database/migrations/2026_10_24_000004_create_memo_user_signatures_table.php": {
       "length": 672,
-      "last_write_utc_ticks": 639284705390757332
+      "last_write_utc_ticks": 639284705390000000
     },
     "database/migrations/2026_09_12_000001_add_pickup_status_to_lens_order_requests_table.php": {
       "length": 863,
-      "last_write_utc_ticks": 639274383091356599
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_14_000003_backfill_patient_type_from_comments.php": {
       "length": 1102,
-      "last_write_utc_ticks": 639275774467253216
+      "last_write_utc_ticks": 639275774460000000
     },
     "database/migrations/2026_10_11_000001_add_cost_price_to_products_table.php": {
       "length": 784,
-      "last_write_utc_ticks": 639274903376315062
+      "last_write_utc_ticks": 639274903370000000
     },
     "database/migrations/2026_11_02_000001_add_public_registration_metadata_to_patient_records.php": {
       "length": 1152,
-      "last_write_utc_ticks": 639292143429710031
+      "last_write_utc_ticks": 639292143420000000
     },
     "database/migrations/0001_01_01_000000_create_users_table.php": {
       "length": 1473,
-      "last_write_utc_ticks": 639274383091350860
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_08_19_000001_add_expense_performance_indexes.php": {
       "length": 2306,
-      "last_write_utc_ticks": 639274383091353819
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_26_000002_create_sales_allocation_items_table.php": {
       "length": 1066,
-      "last_write_utc_ticks": 639286324246220675
+      "last_write_utc_ticks": 639286324240000000
     },
     "database/migrations/2026_10_13_000001_create_frame_cost_reservations_table.php": {
       "length": 934,
-      "last_write_utc_ticks": 639274962671651734
+      "last_write_utc_ticks": 639274962670000000
     },
     "database/migrations/2026_10_14_000002_add_patient_type_to_patient_records_table.php": {
       "length": 890,
-      "last_write_utc_ticks": 639275757545037317
+      "last_write_utc_ticks": 639275757540000000
     },
     "database/migrations/2026_10_30_000001_add_alert_source_to_bank_sms_devices.php": {
       "length": 757,
-      "last_write_utc_ticks": 639289403653482110
+      "last_write_utc_ticks": 639289403650000000
     },
     "database/migrations/0001_01_01_000001_create_cache_table.php": {
       "length": 867,
-      "last_write_utc_ticks": 639274383091351459
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_14_000001_add_created_by_to_billing_table.php": {
       "length": 822,
-      "last_write_utc_ticks": 639275727875121807
+      "last_write_utc_ticks": 639275727870000000
     },
     "database/migrations/2026_10_26_000003_seed_madina_rent_allocation.php": {
       "length": 1221,
-      "last_write_utc_ticks": 639286443430197310
+      "last_write_utc_ticks": 639286443430000000
+    },
+    "database/migrations/2026_11_10_130000_create_bank_sms_approval_policies.php": {
+      "length": 961,
+      "last_write_utc_ticks": 639299134900000000
     },
     "database/migrations/2026_10_24_000002_reset_automatic_insurance_claimed_statuses.php": {
       "length": 511,
-      "last_write_utc_ticks": 639284464481430286
+      "last_write_utc_ticks": 639284464480000000
     },
     "database/migrations/2026_10_25_000001_create_bank_sms_alert_tables.php": {
       "length": 2836,
-      "last_write_utc_ticks": 639285362405502527
+      "last_write_utc_ticks": 639285362400000000
     },
     "database/migrations/2026_10_28_000001_add_bank_sms_sync_request_versions.php": {
       "length": 976,
-      "last_write_utc_ticks": 639287994028313205
+      "last_write_utc_ticks": 639287994020000000
     },
     "database/migrations/2026_08_31_000001_create_lens_order_requests_table.php": {
       "length": 941,
-      "last_write_utc_ticks": 639274383091354227
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_11_02_000002_create_patient_folder_id_allocations_table.php": {
       "length": 1818,
-      "last_write_utc_ticks": 639292194259058831
+      "last_write_utc_ticks": 639292194250000000
     },
     "database/migrations/0001_01_01_000002_create_jobs_table.php": {
       "length": 1812,
-      "last_write_utc_ticks": 639274383091351858
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_11_01_000001_create_staff_appraisal_tables.php": {
       "length": 3547,
-      "last_write_utc_ticks": 639291691305122479
+      "last_write_utc_ticks": 639291652050000000
     },
     "database/migrations/2026_08_02_120000_create_monitor_budgets_table.php": {
       "length": 713,
-      "last_write_utc_ticks": 639274383091352858
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_29_000006_add_prescription_count_to_lens_selling_price_rules.php": {
       "length": 1308,
-      "last_write_utc_ticks": 639289094589365559
+      "last_write_utc_ticks": 639289094580000000
     },
     "database/migrations/2026_10_26_000004_add_sales_allocation_target_dates.php": {
       "length": 1086,
-      "last_write_utc_ticks": 639286459517015611
+      "last_write_utc_ticks": 639286459510000000
     },
     "database/migrations/2026_09_10_000004_create_working_capital_entry_approvals_table.php": {
       "length": 996,
-      "last_write_utc_ticks": 639274383091355696
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_09_10_000005_make_working_capital_description_optional.php": {
       "length": 904,
-      "last_write_utc_ticks": 639274383091356145
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_11_05_000001_create_push_subscriptions_table.php": {
       "length": 773,
-      "last_write_utc_ticks": 639294961196973507
+      "last_write_utc_ticks": 639294961190000000
     },
     "database/migrations/2026_10_22_000002_align_billing_status_rounding.php": {
       "length": 778,
-      "last_write_utc_ticks": 639282784664003223
+      "last_write_utc_ticks": 639282784660000000
     },
     "database/migrations/2026_10_24_000003_create_expense_approval_requests_table.php": {
       "length": 1511,
-      "last_write_utc_ticks": 639284775834955571
+      "last_write_utc_ticks": 639284775830000000
     },
     "database/migrations/2026_10_20_000001_add_created_by_to_patient_records_table.php": {
       "length": 870,
-      "last_write_utc_ticks": 639281304623316749
+      "last_write_utc_ticks": 639281304620000000
     },
     "database/migrations/2026_10_26_000001_create_billing_refunds_table.php": {
       "length": 1426,
-      "last_write_utc_ticks": 639286174753948400
+      "last_write_utc_ticks": 639286174750000000
     },
     "database/migrations/2026_10_29_000002_create_lens_selling_price_rules_table.php": {
       "length": 1575,
-      "last_write_utc_ticks": 639289094589427474
+      "last_write_utc_ticks": 639289094580000000
     },
     "database/migrations/2026_10_24_000001_create_insurance_remittance_allocations_table.php": {
       "length": 1022,
-      "last_write_utc_ticks": 639284434452553441
+      "last_write_utc_ticks": 639284434450000000
     },
     "database/migrations/2026_09_10_000002_create_working_capital_liabilities_table.php": {
       "length": 1015,
-      "last_write_utc_ticks": 639274383091354766
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_11_01_000002_add_assigned_role_to_staff_appraisal_tasks.php": {
       "length": 1063,
-      "last_write_utc_ticks": 639291691305188929
+      "last_write_utc_ticks": 639291652080000000
     },
     "database/migrations/2026_05_03_120000_create_debt_management_tables.php": {
       "length": 4234,
-      "last_write_utc_ticks": 639274383091352418
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_29_000004_create_lens_selling_price_settings_table.php": {
       "length": 767,
-      "last_write_utc_ticks": 639289078779759453
+      "last_write_utc_ticks": 639289078770000000
     },
     "database/migrations/2026_10_22_000001_normalize_billing_status_values.php": {
       "length": 1870,
-      "last_write_utc_ticks": 639282784599331315
+      "last_write_utc_ticks": 639282784590000000
     },
     "database/migrations/2026_10_25_000002_track_user_login_presence.php": {
       "length": 1317,
-      "last_write_utc_ticks": 639285450008168327
+      "last_write_utc_ticks": 639285450000000000
     },
     "database/migrations/2026_09_10_000003_extend_working_capital_entries_table.php": {
       "length": 1700,
-      "last_write_utc_ticks": 639274383091355242
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/migrations/2026_10_29_000003_add_receptionist_override_to_lens_selling_price_rules.php": {
       "length": 949,
-      "last_write_utc_ticks": 639289072472008367
+      "last_write_utc_ticks": 639289072470000000
     },
     "database/migrations/2026_10_29_000005_expand_lens_catalogue.php": {
       "length": 3194,
-      "last_write_utc_ticks": 639289087070148150
+      "last_write_utc_ticks": 639289087070000000
     },
     "database/migrations/2026_10_26_000005_add_sales_allocation_start_dates.php": {
       "length": 1153,
-      "last_write_utc_ticks": 639286459585457175
+      "last_write_utc_ticks": 639286459580000000
     },
     "database/migrations/2026_10_26_000006_create_sales_allocation_savings_entries_table.php": {
       "length": 1185,
-      "last_write_utc_ticks": 639286480854016031
+      "last_write_utc_ticks": 639286480850000000
     },
     "database/migrations/2026_10_24_000006_create_expense_workflow_settings_table.php": {
       "length": 1129,
-      "last_write_utc_ticks": 639284775892290450
+      "last_write_utc_ticks": 639284775890000000
     },
     "database/migrations/2026_10_29_000001_create_lens_selling_price_requests_table.php": {
       "length": 1511,
-      "last_write_utc_ticks": 639288946477155404
+      "last_write_utc_ticks": 639288946470000000
     },
     "database/migrations/2026_08_04_000000_create_user_branches_table.php": {
       "length": 808,
-      "last_write_utc_ticks": 639274383091353332
-    },
-    "database/schema/lens_selling_pricelist_hostinger.sql": {
-      "length": 3166,
-      "last_write_utc_ticks": 639289937736881621
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/schema/build_opticplus_full_import.php": {
       "length": 9374,
-      "last_write_utc_ticks": 639274383091359264
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/schema/alter_working_capital_description_optional.mysql.sql": {
       "length": 127,
-      "last_write_utc_ticks": 639274383091357761
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/schema/user_login_presence.mysql.sql": {
       "length": 1413,
-      "last_write_utc_ticks": 639285450116747093
+      "last_write_utc_ticks": 639285450110000000
     },
     "database/schema/memo_user_signatures.mysql.sql": {
       "length": 421,
-      "last_write_utc_ticks": 639284705410915272
+      "last_write_utc_ticks": 639284705410000000
     },
     "database/schema/build_opticplus_manifest.php": {
-      "length": 11255,
-      "last_write_utc_ticks": 639274383091359768
+      "length": 11764,
+      "last_write_utc_ticks": 639299135800000000
     },
     "database/schema/insurance_remittance_allocations.mysql.sql": {
       "length": 626,
-      "last_write_utc_ticks": 639284434791354566
+      "last_write_utc_ticks": 639284434790000000
     },
     "database/schema/add_staff_appraisal_assigned_role.mysql.sql": {
       "length": 977,
-      "last_write_utc_ticks": 639291691305226620
+      "last_write_utc_ticks": 639291653180000000
     },
     "database/schema/opticplus_full_schema.mysql.sql": {
-      "length": 39700,
-      "last_write_utc_ticks": 639282784508601814
+      "length": 40073,
+      "last_write_utc_ticks": 639299136090000000
     },
     "database/schema/expense_workflow_settings_and_memo_link.mysql.sql": {
       "length": 742,
-      "last_write_utc_ticks": 639284775938439798
+      "last_write_utc_ticks": 639284775930000000
     },
     "database/schema/working_capital_entry_approvals.mysql.sql": {
       "length": 724,
-      "last_write_utc_ticks": 639274383091362213
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/schema/alter_billing_status_enum.mysql.sql": {
       "length": 636,
-      "last_write_utc_ticks": 639282784919304180
+      "last_write_utc_ticks": 639282784910000000
     },
     "database/schema/create_patient_folder_id_allocations.mysql.sql": {
       "length": 1666,
-      "last_write_utc_ticks": 639292194305163401
+      "last_write_utc_ticks": 639292194300000000
     },
     "database/schema/add_bank_sms_sync_request_versions.mysql.sql": {
       "length": 261,
-      "last_write_utc_ticks": 639287990197234544
+      "last_write_utc_ticks": 639287990190000000
     },
     "database/schema/expense_receipt_unavailable.mysql.sql": {
       "length": 106,
-      "last_write_utc_ticks": 639284712272077362
+      "last_write_utc_ticks": 639284712270000000
     },
     "database/schema/staff_appraisal_tables.mysql.sql": {
       "length": 3918,
-      "last_write_utc_ticks": 639291691305193611
+      "last_write_utc_ticks": 639291652100000000
     },
     "database/schema/hostinger_frame_tracker_schema.mysql.sql": {
       "length": 1222,
-      "last_write_utc_ticks": 639275016774955317
+      "last_write_utc_ticks": 639275016770000000
     },
     "database/schema/add_public_patient_registration_metadata.mysql.sql": {
       "length": 1184,
-      "last_write_utc_ticks": 639292143503707310
+      "last_write_utc_ticks": 639292143500000000
     },
     "database/schema/working_capital_liabilities.mysql.sql": {
       "length": 1235,
-      "last_write_utc_ticks": 639274383091362644
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/schema/add_bank_sms_device_alert_source.mysql.sql": {
       "length": 198,
-      "last_write_utc_ticks": 639289403653626388
-    },
-    "database/schema/lens_selling_pricelist_override_only.sql": {
-      "length": 681,
-      "last_write_utc_ticks": 639289937737010238
+      "last_write_utc_ticks": 639289403650000000
     },
     "database/schema/reset_automatic_insurance_claimed_statuses.mysql.sql": {
       "length": 290,
-      "last_write_utc_ticks": 639284464506744498
+      "last_write_utc_ticks": 639284464500000000
     },
     "database/schema/hostinger_expense_approvals_signatures_and_receipt_flag.mysql.sql": {
       "length": 2245,
-      "last_write_utc_ticks": 639284775962729165
+      "last_write_utc_ticks": 639284775960000000
     },
     "database/schema/bank_sms_alert_tables.mysql.sql": {
       "length": 3947,
-      "last_write_utc_ticks": 639289403653314580
+      "last_write_utc_ticks": 639289403650000000
     },
     "database/schema/generated_schema_manifest.php": {
-      "length": 46575,
-      "last_write_utc_ticks": 639282784508421071
+      "length": 47065,
+      "last_write_utc_ticks": 639299145003815597
     },
     "database/schema/expense_approval_requests.mysql.sql": {
       "length": 1124,
-      "last_write_utc_ticks": 639284582714231040
-    },
-    "database/schema/staff_appraisal_manual_install.mysql.sql": {
-      "length": 4357,
-      "last_write_utc_ticks": 639291719872189681
-    },
-    "database/schema/lens_selling_pricelist_catalogue_update.sql": {
-      "length": 3934,
-      "last_write_utc_ticks": 639289937736754021
-    },
-    "database/schema/lens_selling_pricelist_seed.sql": {
-      "length": 30593,
-      "last_write_utc_ticks": 639289937737137517
+      "last_write_utc_ticks": 639284582710000000
     },
     "database/schema/alter_working_capital_entries_for_cash.mysql.sql": {
       "length": 666,
-      "last_write_utc_ticks": 639274383091358247
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/schema/auto_provision_debt_tables.mysql.sql": {
       "length": 3611,
-      "last_write_utc_ticks": 639274383091358757
-    },
-    "database/schema/lens_selling_pricelist_settings.sql": {
-      "length": 359,
-      "last_write_utc_ticks": 639289937737265422
+      "last_write_utc_ticks": 639274383090000000
     },
     "database/seeders/DatabaseSeeder.php": {
       "length": 482,
-      "last_write_utc_ticks": 639287366010433655
+      "last_write_utc_ticks": 639287366010000000
     },
     "database/factories/UserFactory.php": {
       "length": 1044,
-      "last_write_utc_ticks": 639274383091350122
+      "last_write_utc_ticks": 639274383090000000
     },
-    "database/manual_sql/create_push_subscriptions.sql": {
-      "length": 599,
-      "last_write_utc_ticks": 639294961196813419
+    "database/manual_sql/bank_sms_approval_policy.sql": {
+      "length": 826,
+      "last_write_utc_ticks": 639299149700161652
     },
     "bootstrap/app.php": {
       "length": 939,
-      "last_write_utc_ticks": 639285360968109591
+      "last_write_utc_ticks": 639285360960000000
     },
     "bootstrap/providers.php": {
       "length": 89,
-      "last_write_utc_ticks": 639274383091340388
+      "last_write_utc_ticks": 639274383090000000
     },
     "bootstrap/cache/services.php": {
       "length": 21893,
-      "last_write_utc_ticks": 639294953109176640
+      "last_write_utc_ticks": 639294947700000000
     },
     "bootstrap/cache/packages.php": {
       "length": 827,
-      "last_write_utc_ticks": 639294953108950394
+      "last_write_utc_ticks": 639294947700000000
     },
     "bootstrap/cache/.gitignore": {
       "length": 14,
-      "last_write_utc_ticks": 639289937736616503
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Database/Provisioning/SchemaBootstrapService.php": {
       "length": 3297,
-      "last_write_utc_ticks": 639274383091315995
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Providers/AppServiceProvider.php": {
       "length": 471,
-      "last_write_utc_ticks": 639274383091336505
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Models/User.php": {
       "length": 1826,
-      "last_write_utc_ticks": 639274383091335770
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Support/AuditLog.php": {
       "length": 9207,
-      "last_write_utc_ticks": 639274383091338377
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Middleware/PreventDuplicateSubmission.php": {
       "length": 3890,
-      "last_write_utc_ticks": 639274383091335012
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Middleware/AuthenticateApiToken.php": {
       "length": 2246,
-      "last_write_utc_ticks": 639285450063775666
+      "last_write_utc_ticks": 639285450060000000
     },
     "app/Http/Middleware/AuditMutationTrail.php": {
       "length": 386,
-      "last_write_utc_ticks": 639274383091334072
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Middleware/AuthenticateBankAlertDevice.php": {
       "length": 943,
-      "last_write_utc_ticks": 639285361203902523
+      "last_write_utc_ticks": 639285361200000000
     },
     "app/Http/Controllers/BillingController.php": {
       "length": 96451,
-      "last_write_utc_ticks": 639289105841056451
+      "last_write_utc_ticks": 639289105840000000
     },
     "app/Http/Controllers/PayrollController.php": {
-      "length": 63747,
-      "last_write_utc_ticks": 639285361088082477
+      "length": 64339,
+      "last_write_utc_ticks": 639299095360000000
     },
     "app/Http/Controllers/DatabaseAdminController.php": {
       "length": 59129,
-      "last_write_utc_ticks": 639282871921521706
+      "last_write_utc_ticks": 639282871920000000
     },
     "app/Http/Controllers/InternalMessageController.php": {
       "length": 16739,
-      "last_write_utc_ticks": 639274383091327754
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Controllers/DebtController.php": {
       "length": 71464,
-      "last_write_utc_ticks": 639291481139781811
+      "last_write_utc_ticks": 639291479450000000
     },
     "app/Http/Controllers/CompanyProfileController.php": {
       "length": 11398,
-      "last_write_utc_ticks": 639274383091321453
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Controllers/Controller.php": {
       "length": 77,
-      "last_write_utc_ticks": 639274383091321838
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Controllers/AuditLogController.php": {
       "length": 3020,
-      "last_write_utc_ticks": 639274383091319038
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Controllers/PatientRecordController.php": {
       "length": 113473,
-      "last_write_utc_ticks": 639294321276620783
+      "last_write_utc_ticks": 639294316360000000
     },
     "app/Http/Controllers/ManagerNotificationController.php": {
       "length": 6764,
-      "last_write_utc_ticks": 639294954032392645
+      "last_write_utc_ticks": 639294952420000000
     },
     "app/Http/Controllers/CustomerServiceController.php": {
       "length": 40153,
-      "last_write_utc_ticks": 639292274284091864
+      "last_write_utc_ticks": 639292274070000000
     },
     "app/Http/Controllers/DashboardController.php": {
       "length": 12791,
-      "last_write_utc_ticks": 639287026645990793
+      "last_write_utc_ticks": 639287026640000000
     },
     "app/Http/Controllers/AuthController.php": {
       "length": 9909,
-      "last_write_utc_ticks": 639285448845355945
+      "last_write_utc_ticks": 639285448840000000
     },
     "app/Http/Controllers/FinanceController.php": {
       "length": 219207,
-      "last_write_utc_ticks": 639294952628461531
+      "last_write_utc_ticks": 639294948580000000
     },
     "app/Http/Controllers/ExecutiveReportController.php": {
       "length": 20289,
-      "last_write_utc_ticks": 639274383091325644
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Controllers/WorkingCapitalLiabilityController.php": {
       "length": 11903,
-      "last_write_utc_ticks": 639274383091333183
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Http/Controllers/BankAlertController.php": {
-      "length": 32015,
-      "last_write_utc_ticks": 639296495985925480
+      "length": 42423,
+      "last_write_utc_ticks": 639299168728395630
     },
     "app/Http/Controllers/InventoryController.php": {
       "length": 106913,
-      "last_write_utc_ticks": 639286178425916911
+      "last_write_utc_ticks": 639286178420000000
     },
     "app/Http/Controllers/InsuranceController.php": {
       "length": 55808,
-      "last_write_utc_ticks": 639284468945966955
+      "last_write_utc_ticks": 639284468940000000
     },
     "app/Http/Controllers/StaffAppraisalController.php": {
       "length": 32990,
-      "last_write_utc_ticks": 639292123956765210
+      "last_write_utc_ticks": 639292123480000000
     },
     "app/Http/Controllers/ExecutiveBankBalanceController.php": {
       "length": 5027,
-      "last_write_utc_ticks": 639296495985988655
+      "last_write_utc_ticks": 639296474220000000
     },
     "app/Http/Controllers/ManagerController.php": {
       "length": 49748,
-      "last_write_utc_ticks": 639296495985957959
+      "last_write_utc_ticks": 639296489320000000
     },
     "app/Http/Controllers/MemoController.php": {
       "length": 48035,
-      "last_write_utc_ticks": 639294952628493249
+      "last_write_utc_ticks": 639294951360000000
     },
     "app/Services/BsmiTransactionService.php": {
       "length": 5121,
-      "last_write_utc_ticks": 639274383091337523
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Services/ManagerPushNotificationService.php": {
       "length": 6056,
-      "last_write_utc_ticks": 639296495986019441
+      "last_write_utc_ticks": 639296475880000000
     },
     "app/Console/Commands/SyncBsmiTransactionsCommand.php": {
       "length": 1274,
-      "last_write_utc_ticks": 639274383091315109
+      "last_write_utc_ticks": 639274383090000000
     },
     "app/Console/Commands/GenerateWebPushKeysCommand.php": {
       "length": 639,
-      "last_write_utc_ticks": 639294952628583249
+      "last_write_utc_ticks": 639294950450000000
     },
     "config/auth.php": {
       "length": 4040,
-      "last_write_utc_ticks": 639274383091344524
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/app.php": {
       "length": 4272,
-      "last_write_utc_ticks": 639274383091344085
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/mail.php": {
       "length": 3631,
-      "last_write_utc_ticks": 639274383091347272
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/services.php": {
       "length": 1735,
-      "last_write_utc_ticks": 639294952628641716
+      "last_write_utc_ticks": 639294948490000000
     },
     "config/database.php": {
       "length": 6982,
-      "last_write_utc_ticks": 639274383091345915
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/cache.php": {
       "length": 3683,
-      "last_write_utc_ticks": 639274383091344974
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/session.php": {
       "length": 7848,
-      "last_write_utc_ticks": 639274383091348812
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/queue.php": {
       "length": 4199,
-      "last_write_utc_ticks": 639274383091347796
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/cors.php": {
       "length": 399,
-      "last_write_utc_ticks": 639274383091345356
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/logging.php": {
       "length": 4340,
-      "last_write_utc_ticks": 639274383091346848
+      "last_write_utc_ticks": 639274383090000000
     },
     "config/filesystems.php": {
       "length": 2532,
-      "last_write_utc_ticks": 639274383091346325
+      "last_write_utc_ticks": 639274383090000000
     },
     "resources/css/app.css": {
       "length": 390,
-      "last_write_utc_ticks": 639274383091401267
+      "last_write_utc_ticks": 639274383090000000
     },
     "resources/js/bootstrap.js": {
       "length": 127,
-      "last_write_utc_ticks": 639274383091402251
+      "last_write_utc_ticks": 639274383090000000
     },
     "resources/js/app.js": {
       "length": 22,
-      "last_write_utc_ticks": 639274383091401862
+      "last_write_utc_ticks": 639274383090000000
     },
     "resources/views/welcome.blade.php": {
       "length": 82568,
-      "last_write_utc_ticks": 639289937737393725
+      "last_write_utc_ticks": 639274383090000000
     },
     "tests/TestCase.php": {
       "length": 142,
-      "last_write_utc_ticks": 639274383091412790
+      "last_write_utc_ticks": 639274383090000000
     },
     "tests/Unit/ExampleTest.php": {
       "length": 243,
-      "last_write_utc_ticks": 639274383091413373
+      "last_write_utc_ticks": 639274383090000000
     },
     "tests/Feature/ExampleTest.php": {
       "length": 359,
-      "last_write_utc_ticks": 639274383091412439
+      "last_write_utc_ticks": 639274383090000000
     },
     "storage/app/.gitignore": {
       "length": 33,
-      "last_write_utc_ticks": 639274383091406218
+      "last_write_utc_ticks": 639274383090000000
     },
     "storage/app/company_profile.json": {
       "length": 1073,
-      "last_write_utc_ticks": 639284378983326335
+      "last_write_utc_ticks": 639284378980000000
     },
     "storage/app/public/.gitignore": {
       "length": 14,
-      "last_write_utc_ticks": 639274383091407428
+      "last_write_utc_ticks": 639274383090000000
     },
     "storage/app/private/.gitignore": {
       "length": 14,
-      "last_write_utc_ticks": 639274383091406851
+      "last_write_utc_ticks": 639274383090000000
     },
     "storage/framework/.gitignore": {
       "length": 119,
-      "last_write_utc_ticks": 639274383091408019
+      "last_write_utc_ticks": 639274383090000000
     },
     "storage/framework/testing/.gitignore": {
       "length": 14,
-      "last_write_utc_ticks": 639274383091410394
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/favicon.ico": {
       "length": 0,
-      "last_write_utc_ticks": 639274383091365263
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/index.html": {
-      "length": 1039,
-      "last_write_utc_ticks": 639296507020907778
+      "length": 1122,
+      "last_write_utc_ticks": 639299958943311424
     },
     "public/index.php": {
       "length": 543,
-      "last_write_utc_ticks": 639274383091365750
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/opticplus-login-logo.png": {
       "length": 941871,
-      "last_write_utc_ticks": 639289936804733847
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/bealet-logo.png": {
       "length": 110545,
-      "last_write_utc_ticks": 639292201051481888
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/robots.txt": {
       "length": 24,
-      "last_write_utc_ticks": 639274383091366131
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/manifest.webmanifest": {
       "length": 534,
-      "last_write_utc_ticks": 639294955333166940
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/icons.svg": {
       "length": 5031,
-      "last_write_utc_ticks": 639289936804694911
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/opticplus-logo.png": {
       "length": 834721,
-      "last_write_utc_ticks": 639292201051570475
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/favicon.svg": {
       "length": 9522,
-      "last_write_utc_ticks": 639292201051485456
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/sw.js": {
       "length": 2878,
-      "last_write_utc_ticks": 639296495986139487
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/.htaccess": {
-      "length": 1986,
-      "last_write_utc_ticks": 639292163638380654
+      "length": 969,
+      "last_write_utc_ticks": 639299932133296207
     },
     "public/registration/index.html": {
-      "length": 1039,
-      "last_write_utc_ticks": 639294955333033643
+      "length": 1122,
+      "last_write_utc_ticks": 639299958943341109
     },
     "public/images/banks/prudential-bank.png": {
       "length": 15802,
-      "last_write_utc_ticks": 639289936804716073
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/images/banks/gt-bank.png": {
       "length": 10937,
-      "last_write_utc_ticks": 639289936804708194
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/images/banks/mtn-momo.jpeg": {
       "length": 17767,
-      "last_write_utc_ticks": 639289936804712862
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/images/banks/ecobank.jpg": {
       "length": 75424,
-      "last_write_utc_ticks": 639289936804705163
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/uploads/company-profile/dashboard_hero_1786031955_KAVmeopg.png": {
       "length": 1511440,
-      "last_write_utc_ticks": 639274383091374117
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/company-profile/login_wallpaper_1792841098_OY6zj2S3.jpg": {
       "length": 180910,
-      "last_write_utc_ticks": 639284378982883823
+      "last_write_utc_ticks": 639284378980000000
     },
     "public/uploads/company-profile/login_wallpaper_1777333326_DXKBtjQu.jpg": {
       "length": 245763,
-      "last_write_utc_ticks": 639274383091378785
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/company-profile/labadi_dashboard_hero_1792840023_3a7jNM6R.jpg": {
       "length": 82132,
-      "last_write_utc_ticks": 639284368237429278
+      "last_write_utc_ticks": 639284368230000000
     },
     "public/uploads/company-profile/dashboard_hero_dashboard_hero_1792840023_AUaX8wMT.jpg": {
       "length": 140025,
-      "last_write_utc_ticks": 639284368237423504
+      "last_write_utc_ticks": 639284368230000000
     },
     "public/uploads/company-profile/madina_dashboard_hero_1792839804_jqAb0ylo.jpg": {
       "length": 140273,
-      "last_write_utc_ticks": 639284366045780372
+      "last_write_utc_ticks": 639284366040000000
     },
     "public/uploads/memo-attachments/memo_6_0_1777743146_5zhfwe.pdf": {
       "length": 108688,
-      "last_write_utc_ticks": 639274383091383597
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/memo-attachments/memo_4_0_1777742709_RPozq1.pdf": {
       "length": 108688,
-      "last_write_utc_ticks": 639274383091381469
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/memo-signatures/gm_13_1777743767_oAECnC.png": {
       "length": 10987,
-      "last_write_utc_ticks": 639274383091385598
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/memo-signatures/accountant_4_1777743146_uplKRq.png": {
       "length": 26993,
-      "last_write_utc_ticks": 639274383091384869
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/memo-signatures/user_13_1792876184_ktskBy.png": {
       "length": 10987,
-      "last_write_utc_ticks": 639284729843010692
+      "last_write_utc_ticks": 639284729840000000
     },
     "public/uploads/memo-signatures/gm_13_1778428491_UOdU9j.png": {
       "length": 10987,
-      "last_write_utc_ticks": 639274383091386217
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/staff-profiles/staff_4_1777541942.jpg": {
       "length": 70431,
-      "last_write_utc_ticks": 639274383091398626
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/staff-profiles/staff_4_1777629790.jpg": {
       "length": 70431,
-      "last_write_utc_ticks": 639274383091400301
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/profile-images/profile_2_1777744619.png": {
       "length": 26993,
-      "last_write_utc_ticks": 639274383091387390
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/profile-images/profile_4_1777745200.png": {
       "length": 549471,
-      "last_write_utc_ticks": 639274383091391870
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/report-signatures/accountant_4_1778066657_XweMyC.png": {
       "length": 35798,
-      "last_write_utc_ticks": 639274383091395730
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/uploads/report-signatures/accountant_4_1778067745_iD5Ou3.png": {
       "length": 26993,
-      "last_write_utc_ticks": 639274383091396648
+      "last_write_utc_ticks": 639274383090000000
     },
     "public/icons/opticplus-180.png": {
       "length": 23672,
-      "last_write_utc_ticks": 639294955333193874
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/icons/opticplus-192.png": {
       "length": 27379,
-      "last_write_utc_ticks": 639294955333196813
+      "last_write_utc_ticks": 639299953180000000
     },
     "public/icons/opticplus-512.png": {
       "length": 224571,
-      "last_write_utc_ticks": 639294955333199983
+      "last_write_utc_ticks": 639299953180000000
     },
-    "public/assets/index-Ba3uYAmt.js": {
-      "length": 182364,
-      "last_write_utc_ticks": 639296507020969121
+    "public/assets/App-C-FdAD01.css": {
+      "length": 300893,
+      "last_write_utc_ticks": 639299953190000000
     },
-    "public/assets/PublicRegistrationPage-Dz0BMLh-.js": {
-      "length": 26465,
-      "last_write_utc_ticks": 639296507020963822
+    "public/assets/react-dom-CPFlkE0y.js": {
+      "length": 3546,
+      "last_write_utc_ticks": 639299953190000000
     },
     "public/assets/index-C-2ResrQ.css": {
       "length": 1141,
-      "last_write_utc_ticks": 639296507020972589
+      "last_write_utc_ticks": 639299953190000000
     },
-    "public/assets/PublicPatientIdCard-D-lPSdAY.css": {
-      "length": 17358,
-      "last_write_utc_ticks": 639296507020959157
+    "public/assets/jsx-runtime-B4rycR1h.css": {
+      "length": 5218,
+      "last_write_utc_ticks": 639299953190000000
     },
-    "public/assets/react-dom-CNfC-q5X.js": {
-      "length": 3546,
-      "last_write_utc_ticks": 639296507020978932
+    "public/assets/index-lxkmtKPV.js": {
+      "length": 182449,
+      "last_write_utc_ticks": 639299953190000000
     },
-    "public/assets/App-CzYFiH5i.css": {
-      "length": 296312,
-      "last_write_utc_ticks": 639296507020942204
-    },
-    "public/assets/jsx-runtime-CQVmOSz-.js": {
+    "public/assets/jsx-runtime-CGBb8Mj1.js": {
       "length": 8789,
-      "last_write_utc_ticks": 639296507020976114
+      "last_write_utc_ticks": 639299953190000000
     },
-    "public/assets/App-DO0nV3j2.js": {
-      "length": 2117770,
-      "last_write_utc_ticks": 639296507020952040
+    "public/assets/PublicRegistrationPage-BvZFkKXU.js": {
+      "length": 17027,
+      "last_write_utc_ticks": 639299953190000000
+    },
+    "public/assets/PublicPatientIdCard-qbEZQtxE.js": {
+      "length": 9617,
+      "last_write_utc_ticks": 639299953190000000
+    },
+    "public/assets/App-2TcU_avp.js": {
+      "length": 2154519,
+      "last_write_utc_ticks": 639299953190000000
+    },
+    "public/assets/PublicRegistrationPage-CdPH3cx_.css": {
+      "length": 12141,
+      "last_write_utc_ticks": 639299953190000000
     },
     ".github/workflows/update-changelog.yml": {
       "length": 204,
-      "last_write_utc_ticks": 639274383091312115
+      "last_write_utc_ticks": 639274383090000000
     },
     ".github/workflows/issues.yml": {
       "length": 161,
-      "last_write_utc_ticks": 639274383091310899
+      "last_write_utc_ticks": 639274383090000000
     },
     ".github/workflows/tests.yml": {
       "length": 933,
-      "last_write_utc_ticks": 639274383091311707
+      "last_write_utc_ticks": 639274383090000000
     },
     ".github/workflows/pull-requests.yml": {
       "length": 193,
-      "last_write_utc_ticks": 639274383091311281
+      "last_write_utc_ticks": 639274383090000000
     },
     "routes/console.php": {
       "length": 578,
-      "last_write_utc_ticks": 639274383091404975
+      "last_write_utc_ticks": 639274383090000000
     },
     "routes/web.php": {
       "length": 556,
-      "last_write_utc_ticks": 639274383091405384
+      "last_write_utc_ticks": 639274383090000000
     },
     "routes/api.php": {
-      "length": 23613,
-      "last_write_utc_ticks": 639296495986044540
+      "length": 23719,
+      "last_write_utc_ticks": 639299135800000000
     },
     "vendor/autoload.php": {
       "length": 748,
-      "last_write_utc_ticks": 639274385982656506
+      "last_write_utc_ticks": 639274385980000000
+    },
+    "vendor/.DS_Store": {
+      "length": 6148,
+      "last_write_utc_ticks": 639276816740000000
     },
     "vendor/myclabs/deep-copy/LICENSE": {
       "length": 1077,
@@ -3725,6 +3721,54 @@
       "length": 26386,
       "last_write_utc_ticks": 638902512000000000
     },
+    "vendor/filp/whoops/src/Whoops/Resources/views/panel_details_outer.html.php": {
+      "length": 87,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/frames_container.html.php": {
+      "length": 162,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/frame_list.html.php": {
+      "length": 1040,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/panel_details.html.php": {
+      "length": 70,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/header.html.php": {
+      "length": 9417,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/frame_code.html.php": {
+      "length": 2927,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/frames_description.html.php": {
+      "length": 660,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/panel_left.html.php": {
+      "length": 104,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/header_outer.html.php": {
+      "length": 52,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/env_details.html.php": {
+      "length": 1561,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/panel_left_outer.html.php": {
+      "length": 121,
+      "last_write_utc_ticks": 638902512000000000
+    },
+    "vendor/filp/whoops/src/Whoops/Resources/views/layout.html.php": {
+      "length": 877,
+      "last_write_utc_ticks": 638902512000000000
+    },
     "vendor/filp/whoops/src/Whoops/Exception/ErrorException.php": {
       "length": 355,
       "last_write_utc_ticks": 638902512000000000
@@ -3747,39 +3791,39 @@
     },
     "vendor/bin/pint": {
       "length": 3330,
-      "last_write_utc_ticks": 639274385966710656
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/yaml-lint": {
       "length": 3366,
-      "last_write_utc_ticks": 639274385965624908
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/php-parse": {
       "length": 3348,
-      "last_write_utc_ticks": 639274385966744304
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/patch-type-declarations": {
       "length": 3435,
-      "last_write_utc_ticks": 639274385964334367
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/carbon": {
       "length": 3330,
-      "last_write_utc_ticks": 639274385966781655
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/psysh": {
       "length": 3315,
-      "last_write_utc_ticks": 639274385966885709
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/var-dump-server": {
       "length": 3402,
-      "last_write_utc_ticks": 639274385963598142
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/sail": {
       "length": 950,
-      "last_write_utc_ticks": 639274385965847068
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/bin/phpunit": {
       "length": 3689,
-      "last_write_utc_ticks": 639274385969643728
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/theseer/tokenizer/composer.lock": {
       "length": 655,
@@ -4435,7 +4479,7 @@
     },
     "vendor/composer/autoload_namespaces.php": {
       "length": 139,
-      "last_write_utc_ticks": 639274385982538866
+      "last_write_utc_ticks": 639274385980000000
     },
     "vendor/composer/LICENSE": {
       "length": 1070,
@@ -4447,39 +4491,39 @@
     },
     "vendor/composer/autoload_psr4.php": {
       "length": 7474,
-      "last_write_utc_ticks": 639294952705955693
+      "last_write_utc_ticks": 639294947690000000
     },
     "vendor/composer/autoload_classmap.php": {
-      "length": 921975,
-      "last_write_utc_ticks": 639294952705963691
+      "length": 921597,
+      "last_write_utc_ticks": 639294947690000000
     },
     "vendor/composer/platform_check.php": {
       "length": 917,
-      "last_write_utc_ticks": 639274385982656017
+      "last_write_utc_ticks": 639274385980000000
     },
     "vendor/composer/autoload_static.php": {
-      "length": 1006104,
-      "last_write_utc_ticks": 639294952706210949
+      "length": 1005684,
+      "last_write_utc_ticks": 639294947690000000
     },
     "vendor/composer/autoload_real.php": {
       "length": 1672,
-      "last_write_utc_ticks": 639274385982656984
+      "last_write_utc_ticks": 639274385980000000
     },
     "vendor/composer/installed.json": {
       "length": 342921,
-      "last_write_utc_ticks": 639294952681831975
+      "last_write_utc_ticks": 639294947670000000
     },
     "vendor/composer/autoload_files.php": {
       "length": 3834,
-      "last_write_utc_ticks": 639294952705973256
+      "last_write_utc_ticks": 639294947690000000
     },
     "vendor/composer/InstalledVersions.php": {
       "length": 17395,
-      "last_write_utc_ticks": 639274385962265583
+      "last_write_utc_ticks": 639274385960000000
     },
     "vendor/composer/installed.php": {
       "length": 53150,
-      "last_write_utc_ticks": 639294952681841217
+      "last_write_utc_ticks": 639294947670000000
     },
     "vendor/psy/psysh/LICENSE": {
       "length": 1086,
@@ -25965,6 +26009,34 @@
       "length": 2115,
       "last_write_utc_ticks": 639099547250000000
     },
+    "vendor/symfony/error-handler/Resources/views/exception.html.php": {
+      "length": 4529,
+      "last_write_utc_ticks": 639099547250000000
+    },
+    "vendor/symfony/error-handler/Resources/views/traces.html.php": {
+      "length": 2815,
+      "last_write_utc_ticks": 639099547250000000
+    },
+    "vendor/symfony/error-handler/Resources/views/traces_text.html.php": {
+      "length": 2064,
+      "last_write_utc_ticks": 639099547250000000
+    },
+    "vendor/symfony/error-handler/Resources/views/logs.html.php": {
+      "length": 2139,
+      "last_write_utc_ticks": 639099547250000000
+    },
+    "vendor/symfony/error-handler/Resources/views/trace.html.php": {
+      "length": 2575,
+      "last_write_utc_ticks": 639099547250000000
+    },
+    "vendor/symfony/error-handler/Resources/views/error.html.php": {
+      "length": 819,
+      "last_write_utc_ticks": 639099547250000000
+    },
+    "vendor/symfony/error-handler/Resources/views/exception_full.html.php": {
+      "length": 1844,
+      "last_write_utc_ticks": 639099547250000000
+    },
     "vendor/symfony/error-handler/Resources/assets/css/exception.css": {
       "length": 16930,
       "last_write_utc_ticks": 639099547250000000
@@ -30501,6 +30573,42 @@
       "length": 900,
       "last_write_utc_ticks": 639101335140000000
     },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/simple-bootstrap-4.blade.php": {
+      "length": 1053,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/bootstrap-5.blade.php": {
+      "length": 4288,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/simple-default.blade.php": {
+      "length": 773,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/simple-bootstrap-5.blade.php": {
+      "length": 1186,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/bootstrap-4.blade.php": {
+      "length": 2084,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/simple-tailwind.blade.php": {
+      "length": 2148,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/tailwind.blade.php": {
+      "length": 8972,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/semantic-ui.blade.php": {
+      "length": 1682,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Pagination/resources/views/default.blade.php": {
+      "length": 1864,
+      "last_write_utc_ticks": 639101335140000000
+    },
     "vendor/laravel/framework/src/Illuminate/Broadcasting/LICENSE.md": {
       "length": 1075,
       "last_write_utc_ticks": 639101335140000000
@@ -31193,6 +31301,10 @@
       "length": 858,
       "last_write_utc_ticks": 639101335140000000
     },
+    "vendor/laravel/framework/src/Illuminate/Auth/Console/stubs/make/views/layouts/app.stub": {
+      "length": 3363,
+      "last_write_utc_ticks": 639101335140000000
+    },
     "vendor/laravel/framework/src/Illuminate/Mail/MailManager.php": {
       "length": 18293,
       "last_write_utc_ticks": 639101335140000000
@@ -31263,6 +31375,74 @@
     },
     "vendor/laravel/framework/src/Illuminate/Mail/Transport/SesTransport.php": {
       "length": 4377,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/panel.blade.php": {
+      "length": 309,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/subcopy.blade.php": {
+      "length": 165,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/header.blade.php": {
+      "length": 265,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/table.blade.php": {
+      "length": 72,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/layout.blade.php": {
+      "length": 1448,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/message.blade.php": {
+      "length": 499,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/button.blade.php": {
+      "length": 578,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/footer.blade.php": {
+      "length": 236,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/html/themes/default.css": {
+      "length": 4734,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/panel.blade.php": {
+      "length": 12,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/subcopy.blade.php": {
+      "length": 12,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/header.blade.php": {
+      "length": 24,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/table.blade.php": {
+      "length": 12,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/layout.blade.php": {
+      "length": 153,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/message.blade.php": {
+      "length": 648,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/button.blade.php": {
+      "length": 24,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Mail/resources/views/text/footer.blade.php": {
+      "length": 12,
       "last_write_utc_ticks": 639101335140000000
     },
     "vendor/laravel/framework/src/Illuminate/Mail/Mailables/Headers.php": {
@@ -32307,6 +32487,46 @@
     },
     "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/Whoops/WhoopsHandler.php": {
       "length": 2099,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/402.blade.php": {
+      "length": 139,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/minimal.blade.php": {
+      "length": 6686,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/404.blade.php": {
+      "length": 125,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/500.blade.php": {
+      "length": 131,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/403.blade.php": {
+      "length": 153,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/layout.blade.php": {
+      "length": 1435,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/429.blade.php": {
+      "length": 141,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/419.blade.php": {
+      "length": 131,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/401.blade.php": {
+      "length": 131,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Foundation/Exceptions/views/503.blade.php": {
+      "length": 145,
       "last_write_utc_ticks": 639101335140000000
     },
     "vendor/laravel/framework/src/Illuminate/Foundation/Testing/DatabaseTruncation.php": {
@@ -35433,6 +35653,10 @@
       "length": 602,
       "last_write_utc_ticks": 639101335140000000
     },
+    "vendor/laravel/framework/src/Illuminate/Notifications/resources/views/email.blade.php": {
+      "length": 1081,
+      "last_write_utc_ticks": 639101335140000000
+    },
     "vendor/laravel/framework/src/Illuminate/Notifications/Events/BroadcastNotificationCreated.php": {
       "length": 3165,
       "last_write_utc_ticks": 639101335140000000
@@ -35879,6 +36103,22 @@
     },
     "vendor/laravel/framework/src/Illuminate/Console/Contracts/NewLineAware.php": {
       "length": 383,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Console/resources/views/components/bullet-list.php": {
+      "length": 184,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Console/resources/views/components/two-column-detail.php": {
+      "length": 324,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Console/resources/views/components/alert.php": {
+      "length": 131,
+      "last_write_utc_ticks": 639101335140000000
+    },
+    "vendor/laravel/framework/src/Illuminate/Console/resources/views/components/line.php": {
+      "length": 304,
       "last_write_utc_ticks": 639101335140000000
     },
     "vendor/laravel/framework/src/Illuminate/Console/View/TaskResult.php": {

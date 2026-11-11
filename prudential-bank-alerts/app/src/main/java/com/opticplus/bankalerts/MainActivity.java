@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -17,11 +18,19 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.lifecycle.Observer;
+import androidx.work.WorkInfo;
+import androidx.work.WorkManager;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class MainActivity extends Activity {
     static final String ACTION_ALERT_STORED = "com.opticplus.bankalerts.ALERT_STORED";
@@ -34,8 +43,11 @@ public final class MainActivity extends Activity {
     private TextView syncStatus;
     private Button smsPermissionButton;
     private Button inboxRefreshPermissionButton;
+    private Button syncNowButton;
     private EditText serverUrlInput;
     private EditText deviceTokenInput;
+    private final Map<String, Boolean> expandedAlertGroups = new HashMap<>();
+    private Observer<List<WorkInfo>> syncWorkObserver;
     private boolean alertStoredReceiverRegistered;
     private final BroadcastReceiver alertStoredReceiver = new BroadcastReceiver() {
         @Override
@@ -82,6 +94,11 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (syncWorkObserver != null) {
+            WorkManager.getInstance(this)
+                    .getWorkInfosForUniqueWorkLiveData("prudential-bank-alert-sync")
+                    .removeObserver(syncWorkObserver);
+        }
         if (database != null) {
             database.close();
         }
@@ -92,22 +109,40 @@ public final class MainActivity extends Activity {
         int horizontalPadding = dp(20);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(horizontalPadding, dp(28), horizontalPadding, dp(12));
-        root.setBackgroundColor(0xFFF4F7FC);
+        root.setPadding(horizontalPadding, dp(20), horizontalPadding, dp(24));
+        root.setBackgroundColor(0xFFF3F6FB);
 
-        TextView title = text("OpticPlus Bank Alerts", 26, 0xFF102A56, true);
-        root.addView(title);
-        TextView subtitle = text("Prudential Bank and MTN MoMo • SMS pilot", 15, 0xFF52647D, false);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
+        LinearLayout brandHeader = new LinearLayout(this);
+        brandHeader.setGravity(Gravity.CENTER_VERTICAL);
+        brandHeader.setPadding(dp(18), dp(18), dp(18), dp(18));
+        brandHeader.setBackground(rounded(0xFFFFFFFF, 24, 0xFFE3EAF5));
+        brandHeader.setElevation(dp(3));
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.opticplus_logo);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(76), dp(76));
+        logoParams.rightMargin = dp(16);
+        brandHeader.addView(logo, logoParams);
+        LinearLayout brandText = new LinearLayout(this);
+        brandText.setOrientation(LinearLayout.VERTICAL);
+        brandText.addView(text("OPTICPLUS", 13, 0xFF1689E8, true));
+        TextView title = text("Bank alerts", 25, 0xFF102A56, true);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
-        subtitleParams.topMargin = dp(6);
-        root.addView(subtitle, subtitleParams);
+        titleParams.topMargin = dp(2);
+        brandText.addView(title, titleParams);
+        brandText.addView(text("Secure SMS sync", 13, 0xFF63728A, false));
+        brandHeader.addView(brandText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        root.addView(brandHeader);
+        TextView subtitle = text("Prudential  •  GTBank  •  MTN MoMo", 14, 0xFF63728A, false);
+        subtitle.setPadding(dp(4), dp(14), dp(4), 0);
+        root.addView(subtitle);
 
         permissionStatus = text("", 14, 0xFF1769E0, true);
         permissionStatus.setPadding(dp(14), dp(12), dp(14), dp(12));
-        permissionStatus.setBackgroundColor(0xFFE8F1FF);
+        permissionStatus.setBackground(rounded(0xFFE7F1FF, 16, 0xFFD5E6FC));
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -115,7 +150,7 @@ public final class MainActivity extends Activity {
         statusParams.topMargin = dp(20);
         root.addView(permissionStatus, statusParams);
 
-        smsPermissionButton = new Button(this);
+        smsPermissionButton = button("Enable SMS monitoring", false);
         smsPermissionButton.setText("Enable SMS monitoring");
         smsPermissionButton.setOnClickListener(view -> openSmsPermissionSettings());
         LinearLayout.LayoutParams permissionButtonParams = new LinearLayout.LayoutParams(
@@ -125,7 +160,7 @@ public final class MainActivity extends Activity {
         permissionButtonParams.topMargin = dp(8);
         root.addView(smsPermissionButton, permissionButtonParams);
 
-        inboxRefreshPermissionButton = new Button(this);
+        inboxRefreshPermissionButton = button("Enable background inbox refresh", false);
         inboxRefreshPermissionButton.setText("Enable background inbox refresh");
         inboxRefreshPermissionButton.setOnClickListener(view -> requestInboxRefreshPermission());
         LinearLayout.LayoutParams inboxPermissionButtonParams = new LinearLayout.LayoutParams(
@@ -136,9 +171,10 @@ public final class MainActivity extends Activity {
         root.addView(inboxRefreshPermissionButton, inboxPermissionButtonParams);
 
         TextView privacyNote = text(
-                "Only supported Prudential and MTN MoMo sender IDs and message formats are checked. " +
+                "Only supported Prudential, GTBank, and MTN MoMo sender IDs and message formats are checked. " +
                         "Grant background inbox refresh permission to automatically scan recent supported sender messages about every five minutes. " +
                         "Without inbox permission, only newly received SMS messages are monitored. " +
+                        "Alerts sync after you close the screen, but Android may delay background work; Force stop prevents syncing until you open the app again. " +
                         "The app stores parsed transaction details only; " +
                         "it does not save the original SMS or change bank balances. Verify alerts against " +
                         "the bank because sender IDs can be spoofed.",
@@ -153,7 +189,7 @@ public final class MainActivity extends Activity {
         noteParams.topMargin = dp(16);
         root.addView(privacyNote, noteParams);
 
-        Button testLatestMessage = new Button(this);
+        Button testLatestMessage = button("Check recent SMS inbox", false);
         testLatestMessage.setText("Test latest supported bank / MTN SMS");
         testLatestMessage.setOnClickListener(view -> requestLatestMessageTest());
         LinearLayout.LayoutParams testButtonParams = new LinearLayout.LayoutParams(
@@ -202,15 +238,19 @@ public final class MainActivity extends Activity {
         deviceTokenInput.setHint("One-time pairing token");
         addInput(root, deviceTokenInput, "Device token");
 
-        Button saveConnection = new Button(this);
+        Button saveConnection = button("Save secure connection", false);
         saveConnection.setText("Save secure connection");
         saveConnection.setOnClickListener(view -> saveConnection());
         root.addView(saveConnection);
 
-        Button syncNow = new Button(this);
-        syncNow.setText("Sync pending alerts now");
-        syncNow.setOnClickListener(view -> syncPendingAlerts());
-        root.addView(syncNow);
+        syncNowButton = button("End-of-day sync", true);
+        syncNowButton.setOnClickListener(view -> syncPendingAlerts());
+        LinearLayout.LayoutParams syncButtonParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        syncButtonParams.topMargin = dp(8);
+        root.addView(syncNowButton, syncButtonParams);
 
         syncStatus = text(SecureSettings.lastSyncStatus(this), 13, 0xFF52647D, false);
         LinearLayout.LayoutParams syncStatusParams = new LinearLayout.LayoutParams(
@@ -218,9 +258,10 @@ public final class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         syncStatusParams.topMargin = dp(6);
+        syncStatus.setPadding(dp(4), dp(8), dp(4), dp(8));
         root.addView(syncStatus, syncStatusParams);
 
-        TextView sectionTitle = text("Alerts waiting for review", 19, 0xFF102A56, true);
+        TextView sectionTitle = text("Your recent alerts", 20, 0xFF102A56, true);
         LinearLayout.LayoutParams sectionParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -230,24 +271,50 @@ public final class MainActivity extends Activity {
 
         alertList = new LinearLayout(this);
         alertList.setOrientation(LinearLayout.VERTICAL);
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.addView(alertList);
-        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams alertListParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
-        scrollParams.topMargin = dp(12);
-        root.addView(scrollView, scrollParams);
+        alertListParams.topMargin = dp(12);
+        root.addView(alertList, alertListParams);
+        TextView reviewNote = text(
+                "The General Manager controls approval. This app securely sends alerts to OpticPlus; automatic approval, if enabled, is a branch policy.",
+                12,
+                0xFF63728A,
+                false
+        );
+        reviewNote.setPadding(dp(4), dp(4), dp(4), dp(12));
+        root.addView(reviewNote);
         ScrollView pageScrollView = new ScrollView(this);
         pageScrollView.addView(root);
         setContentView(pageScrollView);
+        syncWorkObserver = workInfos -> {
+                    if (workInfos == null || workInfos.isEmpty()) {
+                        return;
+                    }
+                    boolean running = false;
+                    for (WorkInfo workInfo : workInfos) {
+                        if (workInfo.getState() == WorkInfo.State.RUNNING || workInfo.getState() == WorkInfo.State.ENQUEUED) {
+                            running = true;
+                            break;
+                        }
+                    }
+                    if (running) {
+                        syncStatus.setText("End-of-day sync is running. Pending alerts will remain on this phone until accepted by OpticPlus.");
+                    } else {
+                        updateScreen();
+                    }
+                };
+        WorkManager.getInstance(this)
+                .getWorkInfosForUniqueWorkLiveData("prudential-bank-alert-sync")
+                .observeForever(syncWorkObserver);
         loadServerUrl();
     }
 
     private void updateScreen() {
         boolean granted = checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
         permissionStatus.setText(granted
-                ? "SMS monitoring is enabled for Prudential and MTN MoMo alerts."
+                ? "SMS monitoring is enabled for Prudential, GTBank, and MTN MoMo alerts."
                 : "Allow SMS access to receive bank and MTN MoMo alerts.");
         if (smsPermissionButton != null) {
             smsPermissionButton.setText(granted ? "SMS permission settings" : "Enable SMS monitoring");
@@ -260,27 +327,75 @@ public final class MainActivity extends Activity {
         if (syncStatus != null) {
             syncStatus.setText(SecureSettings.lastSyncStatus(this));
         }
-        alertList.removeAllViews();
-
         List<BankAlert> alerts = database.latestAlerts();
-        if (alerts.isEmpty()) {
-            TextView empty = text("No matching alerts received on this phone yet.", 14, 0xFF52647D, false);
-            empty.setGravity(Gravity.CENTER);
-            empty.setPadding(dp(12), dp(28), dp(12), dp(28));
-            alertList.addView(empty);
+        if (syncNowButton != null) {
+            syncNowButton.setText("End-of-day sync  ·  " + database.unsyncedAlerts().size() + " pending");
+        }
+        renderAlertGroups(alerts);
+    }
+
+    private void renderAlertGroups(List<BankAlert> alerts) {
+        alertList.removeAllViews();
+        addAlertGroup("momo", "MTN MoMo", alerts, "MTN_MOMO", false);
+        addAlertGroup("gtbank", "GTBank", alerts, "GTBANK", false);
+        addAlertGroup("prudential", "Prudential Bank", alerts, "PRUDENTIAL", false);
+        addAlertGroup("ecobank", "Ecobank", alerts, "ECOBANK", true);
+    }
+
+    private void addAlertGroup(String key, String title, List<BankAlert> alerts, String sender, boolean comingLater) {
+        List<BankAlert> groupAlerts = new ArrayList<>();
+        for (BankAlert alert : alerts) {
+            if (sender.equals(alert.sender)) {
+                groupAlerts.add(alert);
+            }
+        }
+
+        LinearLayout group = new LinearLayout(this);
+        group.setOrientation(LinearLayout.VERTICAL);
+        group.setPadding(dp(12), dp(6), dp(12), dp(10));
+        group.setBackground(rounded(0xFFFFFFFF, 18, 0xFFE4EAF2));
+        group.setElevation(dp(1));
+        LinearLayout.LayoutParams groupParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        groupParams.bottomMargin = dp(10);
+        alertList.addView(group, groupParams);
+
+        boolean expanded = expandedAlertGroups.getOrDefault(key, comingLater || !groupAlerts.isEmpty());
+        Button header = button(
+                (expanded ? "⌄  " : "›  ") + title + "  ·  " + groupAlerts.size(),
+                false
+        );
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setOnClickListener(view -> {
+            expandedAlertGroups.put(key, !expanded);
+            renderAlertGroups(alerts);
+        });
+        group.addView(header);
+
+        if (!expanded) {
+            return;
+        }
+        if (groupAlerts.isEmpty()) {
+            String emptyMessage = comingLater
+                    ? "Ecobank SMS setup will be added when this bank is available."
+                    : "No " + title + " alerts on this phone yet.";
+            TextView empty = text(emptyMessage, 13, 0xFF78869B, false);
+            empty.setPadding(dp(12), dp(4), dp(12), dp(10));
+            group.addView(empty);
             return;
         }
 
-        for (BankAlert alert : alerts) {
-            addAlertCard(alert);
+        for (BankAlert alert : groupAlerts) {
+            addAlertCard(group, alert);
         }
     }
 
-    private void addAlertCard(BankAlert alert) {
+    private void addAlertCard(LinearLayout parent, BankAlert alert) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(14), dp(16), dp(14));
-        card.setBackgroundColor(0xFFFFFFFF);
         LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -309,7 +424,7 @@ public final class MainActivity extends Activity {
                 0xFF52647D,
                 false
         ));
-        alertList.addView(card, cardParams);
+        parent.addView(card, cardParams);
     }
 
     private void requestSmsPermissionIfNeeded() {
@@ -362,11 +477,11 @@ public final class MainActivity extends Activity {
         try {
             SupportedSmsInboxScanner.ScanResult scan = SupportedSmsInboxScanner.scan(this, database);
             if (scan.examinedCount == 0) {
-                testStatus.setText("No recent inbox messages from supported bank or MTN sender IDs were found.");
+                testStatus.setText("No recent inbox messages from supported sender IDs were found. GTBank is matched case-insensitively as GTBank/GTBANK; SMS text was not saved.");
                 return;
             }
             if (scan.parsedCount == 0) {
-                testStatus.setText("No recent supported bank or MTN message matched. SMS text was not saved.");
+                testStatus.setText("Checked " + scan.examinedCount + " recent supported-sender message(s), but none matched a supported alert format. GTBank sender casing is accepted; SMS text was not saved.");
                 return;
             }
             updateScreen();
@@ -374,8 +489,8 @@ public final class MainActivity extends Activity {
                 BankAlertSync.enqueue(this);
             }
             testStatus.setText(scan.importedCount > 0
-                    ? "Checked the latest supported sender messages; added " + scan.importedCount + " new alert(s) to the local review list. SMS text was not saved."
-                    : "Supported messages were found, but they were already on the local review list.");
+                    ? "Parsed " + scan.parsedCount + " supported message(s); added " + scan.importedCount + " new alert(s) to the local review list and queued sync. SMS text was not saved."
+                    : "Parsed " + scan.parsedCount + " supported message(s), but they were already on the local alert list. Pending alerts will retry sync.");
         } catch (SecurityException exception) {
             testStatus.setText(
                     "Android did not allow inbox access. Grant SMS reading permission in app settings, then try again."
@@ -385,6 +500,11 @@ public final class MainActivity extends Activity {
 
     private void addInput(LinearLayout root, EditText input, String contentDescription) {
         input.setContentDescription(contentDescription);
+        input.setTextColor(0xFF102A56);
+        input.setHintTextColor(0xFF8A97A9);
+        input.setTextSize(15);
+        input.setPadding(dp(14), dp(12), dp(14), dp(12));
+        input.setBackground(rounded(0xFFFFFFFF, 14, 0xFFDCE4EF));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -452,7 +572,11 @@ public final class MainActivity extends Activity {
                 syncStatus.setText("Save the HTTPS API URL and pairing token before syncing.");
                 return;
             }
-            syncStatus.setText("Sync queued. The phone will send pending alerts over HTTPS.");
+            int pendingCount = database.unsyncedAlerts().size();
+            String inboxMessage = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                    ? "Recent supported SMS messages will also be scanned."
+                    : "Enable background inbox refresh to include recent SMS messages.";
+            syncStatus.setText("End-of-day sync queued: " + pendingCount + " saved alert(s) pending. " + inboxMessage);
             BankAlertSync.enqueue(this);
         } catch (Exception exception) {
             syncStatus.setText("Could not read encrypted connection settings. Save the connection again.");
@@ -484,6 +608,31 @@ public final class MainActivity extends Activity {
             view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         }
         return view;
+    }
+
+    private Button button(String label, boolean primary) {
+        Button view = new Button(this);
+        view.setText(label);
+        view.setAllCaps(false);
+        view.setTextSize(14);
+        view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        view.setTextColor(primary ? 0xFFFFFFFF : 0xFF175AAB);
+        view.setPadding(dp(14), dp(7), dp(14), dp(7));
+        view.setMinHeight(dp(48));
+        view.setBackground(rounded(
+                primary ? 0xFF1769D2 : 0xFFF0F5FC,
+                14,
+                primary ? 0xFF1769D2 : 0xFFDCE7F5
+        ));
+        return view;
+    }
+
+    private GradientDrawable rounded(int fillColor, int radiusDp, int strokeColor) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fillColor);
+        drawable.setCornerRadius(dp(radiusDp));
+        drawable.setStroke(dp(1), strokeColor);
+        return drawable;
     }
 
     private int dp(int value) {

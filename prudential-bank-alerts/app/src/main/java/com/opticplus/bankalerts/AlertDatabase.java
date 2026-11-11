@@ -11,7 +11,7 @@ import java.util.List;
 
 final class AlertDatabase extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "bank_alerts.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
     AlertDatabase(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -39,6 +39,9 @@ final class AlertDatabase extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
             database.execSQL("ALTER TABLE alerts ADD COLUMN synced INTEGER NOT NULL DEFAULT 0");
+        }
+        if (oldVersion < 3) {
+            database.execSQL("UPDATE alerts SET synced = 0 WHERE sender = 'GTBANK'");
         }
     }
 

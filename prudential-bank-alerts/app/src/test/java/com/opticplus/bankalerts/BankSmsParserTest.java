@@ -12,6 +12,12 @@ public final class BankSmsParserTest {
                     "Bealet optical sales~ 3003170000000000  30059100  092244488318 " +
                     "on 26-10-2026 (939825934). Available Balance is GHS41,177.14. " +
                     "Protect your login credentials by never sharing your password or PIN.";
+    private static final String GTBANK_CREDIT_ALERT =
+            "Acct: 3********5951\n" +
+                    "Amt: GHS 0.01  CR\n" +
+                    "Desc: GTB/BEALETOPTICALCENTER//BEALMD9486267087906/11/06/2026 14:15:36\n" +
+                    "Avail Bal: GHS 0.01\n" +
+                    "Date: 2026-11-06 2:15:36 PM";
 
     @Test
     public void parsesPrudentialCreditWithoutRetainingFullAccountNumber() {
@@ -48,5 +54,42 @@ public final class BankSmsParserTest {
         assertEquals("938903154", alert.transactionReference);
         assertEquals("20-10-2026", alert.transactionDate);
         assertEquals("36277.14", alert.availableBalance);
+    }
+
+    @Test
+    public void parsesGtBankCreditAlertWithoutRetainingFullAccountNumber() {
+        BankAlert alert = BankSmsParser.parse("GTBank", GTBANK_CREDIT_ALERT, 9876L);
+
+        assertEquals("GTBANK", alert.sender);
+        assertEquals("credited", alert.direction);
+        assertEquals("0.01", alert.amount);
+        assertEquals("5951", alert.accountSuffix);
+        assertEquals("BEALMD9486267087906", alert.transactionReference);
+        assertEquals("06-11-2026", alert.transactionDate);
+        assertEquals("0.01", alert.availableBalance);
+        assertEquals(9876L, alert.receivedAt);
+    }
+
+    @Test
+    public void acceptsGtBankSenderIdWithoutCaseSensitivity() {
+        BankAlert alert = BankSmsParser.parse("GTBANK", GTBANK_CREDIT_ALERT, 9876L);
+
+        assertEquals("GTBANK", alert.sender);
+        assertEquals("BEALMD9486267087906", alert.transactionReference);
+    }
+
+    @Test
+    public void parsesGtBankDebitAndRejectsUnsupportedSenderOrIncompleteAlert() {
+        String debitAlert = GTBANK_CREDIT_ALERT
+                .replace("GHS 0.01  CR", "GHS 10.00 DR")
+                .replace("Avail Bal: GHS 0.01", "Avail Bal: GHS 25.40");
+
+        BankAlert alert = BankSmsParser.parse("GTBank", debitAlert, 9876L);
+
+        assertEquals("debited", alert.direction);
+        assertEquals("10.00", alert.amount);
+        assertEquals("25.40", alert.availableBalance);
+        assertNull(BankSmsParser.parse("OTHERBANK", GTBANK_CREDIT_ALERT, 9876L));
+        assertNull(BankSmsParser.parse("GTBank", "Acct: 1234\nAmt: GHS 1.00 CR", 9876L));
     }
 }

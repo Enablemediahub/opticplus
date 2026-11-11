@@ -653,6 +653,7 @@ function App() {
   })
   const [session, setSession] = useState(null)
   const [dashboard, setDashboard] = useState(null)
+  const [appraisalHeroScore, setAppraisalHeroScore] = useState(null)
   const [activeView, setActiveView] = useState(getInitialView)
   const [requestedProductTrackerTab, setRequestedProductTrackerTab] = useState(null)
   const [isBooting, setIsBooting] = useState(true)
@@ -5364,6 +5365,15 @@ function App() {
                           : `Monitoring ${canSwitchBranch ? `${activeBranchName} branch` : `${session.branch || activeBranchName} branch`} operations.`}
                       </p>
                     </div>
+                    {appraisalHeroScore?.score !== null
+                      && appraisalHeroScore?.score !== undefined
+                      && (appraisalHeroScore.scope !== 'team' || activeView === 'Appraisals') ? (
+                      <div className="portal-hero-appraisal-score" role="status" aria-label={`${appraisalHeroScore.label} ${Number(appraisalHeroScore.score).toFixed(1)} percent`}>
+                        <span className="portal-hero-appraisal-score-icon" aria-hidden="true">✦</span>
+                        <span><small>{appraisalHeroScore.label}</small><strong>{Number(appraisalHeroScore.score).toFixed(1)}%</strong></span>
+                        <span className="portal-hero-appraisal-score-period">{appraisalHeroScore.period}</span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="header-actions portal-hero-actions">
@@ -5604,7 +5614,7 @@ function App() {
                 <div className="patients-header">
                   <div><p className="eyebrow">Human Resources</p><h2>Staff Appraisals</h2><p className="header-copy">Set role-based goals, review progress, and finalize daily, weekly, or monthly scores.</p></div>
                 </div>
-                <StaffAppraisalManagerPanel apiFetch={apiFetch} token={token} branchId={selectedBranchId} />
+                <StaffAppraisalManagerPanel apiFetch={apiFetch} token={token} branchId={selectedBranchId} onOverallScoreChange={setAppraisalHeroScore} />
               </section>
             ) : null}
 
@@ -6519,7 +6529,7 @@ function App() {
       ) : null}
 
       {session && ['receptionist', 'accountant', 'technician'].includes(session?.normalized_role ?? session?.role) ? (
-        <StaffAppraisalPanel apiFetch={apiFetch} token={token} session={session} showCard={activeView === 'Appraisals'} />
+        <StaffAppraisalPanel apiFetch={apiFetch} token={token} session={session} showCard={activeView === 'Appraisals'} onOverallScoreChange={setAppraisalHeroScore} />
       ) : null}
 
       {receiptPreview ? (

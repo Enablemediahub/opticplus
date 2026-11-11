@@ -21,7 +21,7 @@ const daysRemaining = (endDate) => {
   return Number.isNaN(end.getTime()) ? null : Math.max(0, Math.ceil((end - today) / 86400000))
 }
 
-export default function StaffAppraisalPanel({ apiFetch, token, session, showCard = true }) {
+export default function StaffAppraisalPanel({ apiFetch, token, session, showCard = true, onOverallScoreChange }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -71,10 +71,21 @@ export default function StaffAppraisalPanel({ apiFetch, token, session, showCard
 
   const activePeriods = useMemo(() => (data?.periods ?? []).filter((period) => period.status === 'active'), [data])
   const currentPeriod = useMemo(() => activePeriods.find((period) => Number(period.id) === Number(openPeriodId)) ?? activePeriods[0] ?? null, [activePeriods, openPeriodId])
-  const displayPeriods = activePeriods.length ? activePeriods : (data?.periods ?? []).slice(0, 1)
+  const displayPeriods = useMemo(() => activePeriods.length ? activePeriods : (data?.periods ?? []).slice(0, 1), [activePeriods, data])
+  const heroPeriod = displayPeriods[0] ?? null
   const reminderPeriod = activePeriods.find((period) => period.tasks.some((task) => !task.acknowledged_at || taskStatus(task).tone !== 'complete')) ?? currentPeriod
   const reminderCount = activePeriods.reduce((total, period) => total + period.tasks.filter((task) => !task.acknowledged_at || taskStatus(task).tone !== 'complete').length, 0)
   const shouldShowReminder = Boolean(data?.enabled && reminderCount > 0)
+
+  useEffect(() => {
+    onOverallScoreChange?.(heroPeriod ? {
+      score: Number(heroPeriod.score) || 0,
+      label: 'Your appraisal',
+      period: heroPeriod.period_type ? `${heroPeriod.period_type.charAt(0).toUpperCase()}${heroPeriod.period_type.slice(1)} review` : 'Current period',
+      scope: 'personal',
+    } : null)
+  }, [heroPeriod, onOverallScoreChange])
+
   if (!staffRole) return null
 
   function valuesFor(task) {
@@ -131,7 +142,7 @@ export default function StaffAppraisalPanel({ apiFetch, token, session, showCard
             <span className="staff-appraisal-top-symbol" aria-hidden="true">✦</span>
             <div><p className="eyebrow">People &amp; Performance <span>·</span> {currentPeriod.period_type} review</p><h2 id="staff-appraisal-modal-title">Welcome back, {session?.name || 'team member'}</h2><p>Your goals for {currentPeriod.title} <span>·</span> {currentPeriod.start_date} — {currentPeriod.end_date}</p></div>
           </div>
-          <div className="staff-appraisal-top-score"><strong>{(Number(currentPeriod.score) || 0).toFixed(1)}%</strong><span>{currentPeriod.is_final ? 'Final score' : 'Current score'}</span></div>
+          <div className="staff-appraisal-top-score"><strong>{(Number(currentPeriod.score) || 0).toFixed(1)}%</strong><span>{currentPeriod.is_final ? 'Final overall score' : 'Overall appraisal score'}</span></div>
           <button type="button" className="staff-appraisal-top-minimize" aria-label="Minimize appraisal reminder" onClick={() => { promptInteracted.current = true; setOpen(false) }}>⌃</button>
         </header>
         {error ? <div className="message-banner error staff-appraisal-top-error">{error}</div> : null}
@@ -163,6 +174,7 @@ export default function StaffAppraisalPanel({ apiFetch, token, session, showCard
     <button type="button" className="staff-appraisal-reminder-toast" onClick={() => { promptInteracted.current = true; setOpenPeriodId(reminderPeriod.id); setOpen(true) }}>
       <span className="staff-appraisal-reminder-pulse" aria-hidden="true" />
       <span className="staff-appraisal-reminder-copy"><strong>Your appraisal is ready</strong><small>{reminderCount} {reminderCount === 1 ? 'goal' : 'goals'} to review or update</small></span>
+      <span className="staff-appraisal-reminder-score"><strong>{(Number(reminderPeriod.score) || 0).toFixed(1)}%</strong><small>overall</small></span>
       <span className="staff-appraisal-reminder-action">View goals <b aria-hidden="true">↗</b></span>
       <span key={reminderCount} className="staff-appraisal-reminder-count" aria-label={`${reminderCount} goals to review or update`}>{reminderCount}</span>
     </button>,

@@ -23,6 +23,21 @@ final class BankSmsParser {
     private static final Pattern REFERENCE = Pattern.compile(
             "\\(([^()\\s]{4,80})\\)\\s*\\.?\\s*(?=Available\\s+Balance)"
     );
+    private static final Pattern GTBANK_AMOUNT = Pattern.compile(
+            "(?im)^\\s*Amt:\\s*GHS\\s*([0-9,]+(?:\\.\\d{1,2})?)\\s*(CR|DR)\\s*$"
+    );
+    private static final Pattern GTBANK_ACCOUNT = Pattern.compile(
+            "(?im)^\\s*Acct:\\s*([0-9x*]+)\\s*$"
+    );
+    private static final Pattern GTBANK_DESCRIPTION_REFERENCE = Pattern.compile(
+            "(?im)^\\s*Desc:[^\\r\\n]*//([A-Za-z0-9_-]{4,80})/"
+    );
+    private static final Pattern GTBANK_AVAILABLE_BALANCE = Pattern.compile(
+            "(?im)^\\s*Avail\\s+Bal:\\s*GHS\\s*([0-9,]+(?:\\.\\d{1,2})?)\\s*$"
+    );
+    private static final Pattern GTBANK_DATE = Pattern.compile(
+            "(?im)^\\s*Date:\\s*(\\d{4})-(\\d{2})-(\\d{2})\\b"
+    );
     private static final Pattern MTN_PAYMENT = Pattern.compile(
             "(?is)\\bPayment\\s+(received for|made for)\\s+GHS\\s*([0-9,]+(?:\\.\\d{1,2})?)"
     );
@@ -51,6 +66,9 @@ final class BankSmsParser {
         }
 
         String normalizedSender = sender.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+        if ("GTBANK".equals(normalizedSender)) {
+            return parseGtBank(body, receivedAt);
+        }
         if (!(normalizedSender.startsWith("MTN") || normalizedSender.equals("170") || normalizedSender.equals("MOBILEMONEY"))) {
             return null;
         }
@@ -83,6 +101,36 @@ final class BankSmsParser {
                 // The SMS has no wallet suffix; the server maps this to the paired branch's configured wallet.
                 "0000",
                 transactionIdMatcher.group(1),
+                transactionDate,
+                availableBalance,
+                receivedAt
+        );
+    }
+
+    private static BankAlert parseGtBank(String body, long receivedAt) {
+        Matcher movement = GTBANK_AMOUNT.matcher(body);
+        Matcher account = GTBANK_ACCOUNT.matcher(body);
+        Matcher reference = GTBANK_DESCRIPTION_REFERENCE.matcher(body);
+        Matcher balance = GTBANK_AVAILABLE_BALANCE.matcher(body);
+        Matcher date = GTBANK_DATE.matcher(body);
+        if (!movement.find() || !account.find() || !reference.find() || !balance.find() || !date.find()) {
+            return null;
+        }
+
+        String amount = normalizeAmount(movement.group(1));
+        String availableBalance = normalizeAmount(balance.group(1));
+        String accountSuffix = lastFourDigits(account.group(1));
+        if (amount == null || availableBalance == null || accountSuffix.length() != 4) {
+            return null;
+        }
+
+        String transactionDate = date.group(3) + "-" + date.group(2) + "-" + date.group(1);
+        return new BankAlert(
+                "GTBANK",
+                "CR".equalsIgnoreCase(movement.group(2)) ? "credited" : "debited",
+                amount,
+                accountSuffix,
+                reference.group(1),
                 transactionDate,
                 availableBalance,
                 receivedAt

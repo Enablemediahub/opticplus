@@ -17,11 +17,12 @@ final class SupportedSmsInboxScanner {
                 Telephony.Sms.BODY,
                 Telephony.Sms.DATE
         };
-        String selection = "(" + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
-                + Telephony.Sms.ADDRESS + " COLLATE NOCASE = ? OR "
+        String selection = "(UPPER(TRIM(" + Telephony.Sms.ADDRESS + ")) = ? OR "
+                + "UPPER(TRIM(" + Telephony.Sms.ADDRESS + ")) = ? OR "
+                + "UPPER(TRIM(" + Telephony.Sms.ADDRESS + ")) = ? OR "
+                + "UPPER(TRIM(" + Telephony.Sms.ADDRESS + ")) = ? OR "
                 + Telephony.Sms.ADDRESS + " LIKE ? COLLATE NOCASE)";
-        String[] selectionArgs = { "PRUDENTIAL", "170", "MobileMoney", "MTN%" };
+        String[] selectionArgs = { "PRUDENTIAL", "GTBANK", "170", "MOBILEMONEY", "MTN%" };
         int examined = 0;
         int parsed = 0;
         int imported = 0;

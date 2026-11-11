@@ -20,7 +20,7 @@ const defaultBalanceForm = () => ({
 })
 
 const defaultAccountForm = (branchId) => ({
-  branch_id: branchId > 0 ? branchId : 1,
+  branch_id: Number.isInteger(Number(branchId)) ? Number(branchId) : 1,
   bank_name: 'Prudential Bank',
   account_suffix: '',
   account_label: '',
@@ -55,6 +55,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
+  const [activityPage, setActivityPage] = useState(1)
   const refreshInProgress = useRef(false)
   const refreshWaiters = useRef([])
   const [isSavingDeposit, setIsSavingDeposit] = useState(false)
@@ -63,6 +64,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [deletingAccountId, setDeletingAccountId] = useState(null)
   const [isPairingDevice, setIsPairingDevice] = useState(false)
   const [isRequestingPhoneRefresh, setIsRequestingPhoneRefresh] = useState(false)
+  const [savingApprovalPolicyBranchId, setSavingApprovalPolicyBranchId] = useState(null)
   const [revokingDeviceId, setRevokingDeviceId] = useState(null)
   const [phoneRefreshFeedback, setPhoneRefreshFeedback] = useState(null)
   const [historyDialog, setHistoryDialog] = useState(null)
@@ -72,7 +74,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [historyError, setHistoryError] = useState('')
   const historyRequestId = useRef(0)
 
-  const loadRegister = useCallback(async ({ silent = false, force = false } = {}) => {
+  const loadRegister = useCallback(async ({ silent = false, force = false, page = activityPage } = {}) => {
     if (!token || !session) return
 
     while (refreshInProgress.current) {
@@ -86,7 +88,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
 
     try {
       const [response, alertResponse] = await Promise.all([
-        apiFetch(`/payroll/bank-register?branch_id=${branchId}`, { token }),
+        apiFetch(`/payroll/bank-register?branch_id=${branchId}&page=${page}&per_page=20`, { token }),
         apiFetch(`/bank-alerts?branch_id=${branchId}`, { token }),
       ])
       setData(response)
@@ -115,7 +117,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       refreshWaiters.current.splice(0).forEach((resolve) => resolve())
       if (!silent) setIsLoading(false)
     }
-  }, [apiFetch, branchId, session, token])
+  }, [activityPage, apiFetch, branchId, session, token])
 
   useEffect(() => {
     loadRegister()
@@ -139,6 +141,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   useEffect(() => {
     if (branchId > 0) {
       setAccountForm((current) => ({ ...current, branch_id: branchId }))
+    } else if (Number(branchId) === 0) {
+      setAccountForm((current) => ({ ...current, branch_id: 0 }))
     }
   }, [branchId])
 
@@ -186,7 +190,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
 
       setSuccess(response.message || 'Bank deposit recorded successfully.')
       setDepositForm(defaultDepositForm())
-      await loadRegister({ force: true })
+      setActivityPage(1)
+      await loadRegister({ force: true, page: 1 })
     } catch (saveError) {
       setError(saveError.message)
     } finally {
@@ -244,8 +249,9 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
 
   async function removeAccount(account) {
     const accountTitle = `${branchName(account.branch_id)} ${account.bank_name} •••• ${account.account_suffix}`
+    const sharedGtBank = account.bank_name === 'GTBank'
     const confirmed = window.confirm(
-      `Remove ${accountTitle}? Its configured balance will be cleared. SMS history and posted bank-register activity will be kept; pending alerts for this account will be archived.`
+      `Remove ${sharedGtBank ? 'the shared' : ''} ${accountTitle}${sharedGtBank ? ' from both branches' : ''}? Its configured balance will be cleared. SMS history and posted bank-register activity will be kept; pending alerts for this account will be archived.`
     )
     if (!confirmed) return
 
@@ -374,9 +380,46 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         body: { decision },
       })
       setSuccess(response.message || 'Bank alert review saved.')
-      await loadRegister()
+      setBankAlerts((current) => ({
+        ...current,
+        alerts: current.alerts.filter((alert) => String(alert.id) !== String(alertId)),
+      }))
+      setActivityPage(1)
+      await loadRegister({ force: true, page: 1 })
     } catch (reviewError) {
       setError(reviewError.message)
+    }
+  }
+
+  async function updateApprovalPolicy(policy, autoApprove) {
+    if (autoApprove && !window.confirm(
+      `Enable automatic approval for ${branchName(policy.branch_id)}? New matched bank credits and withdrawals will post to that branch's bank register without individual review. MTN MoMo alerts will be marked approved but will not change the bank register. Existing pending alerts are unchanged.`
+    )) {
+      return
+    }
+
+    setSavingApprovalPolicyBranchId(policy.branch_id)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch('/bank-alerts/approval-policy', {
+        method: 'PUT',
+        token,
+        body: { branch_id: policy.branch_id, auto_approve: autoApprove },
+      })
+      setBankAlerts((current) => ({
+        ...current,
+        approval_policies: (current.approval_policies ?? []).map((item) => (
+          Number(item.branch_id) === Number(policy.branch_id)
+            ? { ...item, auto_approve: autoApprove }
+            : item
+        )),
+      }))
+      setSuccess(response.message || 'SMS approval policy updated.')
+    } catch (policyError) {
+      setError(policyError.message)
+    } finally {
+      setSavingApprovalPolicyBranchId(null)
     }
   }
 
@@ -467,6 +510,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
             <p className="eyebrow">Connected Bank Accounts</p>
             <h3>Branches, bank balances, and SMS alerts</h3>
             <p className="header-copy">Click a bank or MoMo card to browse its synced SMS alerts. Original SMS text is not stored.</p>
+            <p className="muted-copy">GTBank accounts are shared automatically across Labadi and Madina. Other accounts used by both branches can be added with Both branches.</p>
           </div>
           <span className="panel-tag">{Number(branchId) === 0 ? 'All banks and wallets' : `${bankCards.length} accounts`}</span>
         </div>
@@ -526,6 +570,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                 value={accountForm.branch_id}
                 onChange={(event) => setAccountForm((current) => ({ ...current, branch_id: Number(event.target.value) }))}
               >
+                <option value={0}>Merged (Labadi + Madina)</option>
                 <option value={1}>Labadi</option>
                 <option value={2}>Madina</option>
               </select>
@@ -573,9 +618,42 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       {isGeneralManager ? <section className="panel">
         <div className="panel-heading">
           <div>
+            <p className="eyebrow">Manager-controlled automation</p>
+            <h3>SMS approval policy</h3>
+            <p className="header-copy">Automatic approval is off by default. When enabled, only new matched alerts for that branch are affected; existing pending alerts still require review. Approved bank alerts post to the bank register. MoMo remains wallet-only.</p>
+          </div>
+        </div>
+        <div className="sms-device-list">
+          {(bankAlerts.approval_policies ?? []).map((policy) => (
+            <article className="sms-device-row" key={policy.branch_id}>
+              <div>
+                <strong>{branchName(policy.branch_id)}</strong>
+                <p className="muted-copy">
+                  {policy.auto_approve
+                    ? 'New matched alerts automatically approve under your manager policy.'
+                    : 'New alerts wait for General Manager review.'}
+                </p>
+              </div>
+              <label className="sms-device-source-control">
+                Automatically approve new alerts
+                <input
+                  type="checkbox"
+                  checked={Boolean(policy.auto_approve)}
+                  disabled={savingApprovalPolicyBranchId !== null}
+                  onChange={(event) => updateApprovalPolicy(policy, event.target.checked)}
+                />
+              </label>
+            </article>
+          ))}
+        </div>
+      </section> : null}
+
+      {isGeneralManager ? <section className="panel">
+        <div className="panel-heading">
+          <div>
             <p className="eyebrow">Android SMS Connection</p>
             <h3>{pairedDevices.length ? `${pairedDevices.length} SMS phone${pairedDevices.length === 1 ? '' : 's'} paired` : 'Connect bank / MTN MoMo SMS phones'}</h3>
-            <p className="header-copy">Each phone has its own branch and SMS source setting. Set the Prudential phone to Prudential only and the MoMo SIM phone to MTN MoMo only.</p>
+            <p className="header-copy">Each phone has its own branch and SMS source setting. Set bank-alert phones to Bank only and the MoMo SIM phone to MTN MoMo only.</p>
           </div>
         </div>
         {pairedDevices.length ? (
@@ -592,7 +670,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                   <label className="sms-device-source-control">
                     Accept alerts from
                     <select value={device.alert_source ?? 'both'} onChange={(event) => updateDeviceSource(device, event.target.value)}>
-                      <option value="prudential">Prudential only</option>
+                      <option value="prudential">Bank only (Prudential + GTBank)</option>
                       <option value="momo">MTN MoMo only</option>
                       <option value="both">Both sources</option>
                     </select>
@@ -629,7 +707,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
             SMS alerts from this phone
             <select value={smsDeviceSource} onChange={(event) => setSmsDeviceSource(event.target.value)}>
               <option value="" disabled>Select a source</option>
-              <option value="prudential">Prudential only</option>
+              <option value="prudential">Bank only (Prudential + GTBank)</option>
               <option value="momo">MTN MoMo only</option>
               <option value="both">Both sources</option>
             </select>
@@ -658,7 +736,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
           <div>
             <p className="eyebrow">SMS Review Queue</p>
             <h3>Bank and MTN MoMo alerts awaiting approval</h3>
-            <p className="header-copy">Approving Prudential alerts posts them to the bank register. MTN MoMo approvals only confirm the separate wallet balance; they do not change the bank register.</p>
+            <p className="header-copy">This queue shows alerts awaiting review and clears each alert after approval or rejection. Recent completed alerts remain available in Synced SMS History. Bank approvals post to the bank register; MTN MoMo approvals only confirm the separate wallet balance.</p>
           </div>
           <span className="panel-tag">{bankAlerts.alerts.filter((alert) => alert.status === 'pending').length} pending</span>
         </div>
@@ -768,7 +846,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Bank Activity</p>
-            <h3>Recent deposit, withdrawal, and adjustment records</h3>
+            <h3>Deposit, withdrawal, and adjustment records</h3>
           </div>
           <span className="panel-tag">{Number(data?.stats?.activity_count ?? 0)} rows</span>
         </div>
@@ -805,6 +883,32 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
             </tbody>
           </table>
         </div>
+        {Number(data?.activity_pagination?.last_page ?? 1) > 1 ? (
+          <div className="bank-history-pagination">
+            <span>
+              Page {data.activity_pagination.current_page} of {data.activity_pagination.last_page}
+              {' · '}{data.activity_pagination.total} activities
+            </span>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={isLoading || data.activity_pagination.current_page <= 1}
+                onClick={() => setActivityPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={isLoading || data.activity_pagination.current_page >= data.activity_pagination.last_page}
+                onClick={() => setActivityPage((current) => Math.min(data.activity_pagination.last_page, current + 1))}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </article>
 
       {historyDialog ? (
@@ -847,9 +951,9 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
             {historyError ? <div className="message-banner error">{historyError}</div> : null}
             <div className="table-shell">
               <table className="portal-table">
-                <thead><tr><th>Received</th><th>Branch / wallet</th><th>Type</th><th>Amount</th><th>Available balance</th><th>Transaction ID</th><th>Status</th></tr></thead>
+                <thead><tr><th>Received</th><th>Branch / wallet</th><th>Type</th><th>Amount</th><th>Available balance</th><th>Transaction ID</th><th>Status</th><th>Review mode</th></tr></thead>
                 <tbody>
-                  {isLoadingHistory ? <tr><td colSpan="7">Loading SMS history...</td></tr> : historyData.items.length ? historyData.items.map((alert) => (
+                  {isLoadingHistory ? <tr><td colSpan="8">Loading SMS history...</td></tr> : historyData.items.length ? historyData.items.map((alert) => (
                     <tr key={alert.id}>
                       <td>{formatDateTime(alert.received_at)}</td>
                       <td>{branchName(alert.branch_id)} · {alert.bank_name || historyDialog.bankName} •••• {alert.account_suffix}</td>
@@ -858,8 +962,9 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                       <td>{currency.format(Number(alert.available_balance))}</td>
                       <td>{alert.transaction_reference}</td>
                       <td><span className={`bank-ledger-badge ${alert.status}`}>{titleize(alert.status)}</span></td>
+                      <td>{alert.review_method === 'automatic' ? 'Manager policy (automatic)' : 'Manager review'}</td>
                     </tr>
-                  )) : <tr><td colSpan="7">No synced SMS alerts found for this provider and date range.</td></tr>}
+                  )) : <tr><td colSpan="8">No synced SMS alerts found for this provider and date range.</td></tr>}
                 </tbody>
               </table>
             </div>

@@ -670,12 +670,20 @@ class PayrollController extends Controller
             return $response;
         }
 
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
+        ]);
         $rows = DB::table('bank_deposits')
             ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
             ->orderByDesc('date')
             ->orderByDesc('id')
-            ->limit(120)
-            ->get();
+            ->paginate(
+                (int) ($validated['per_page'] ?? 20),
+                ['*'],
+                'page',
+                (int) ($validated['page'] ?? 1)
+            );
 
         $monthStart = now()->startOfMonth()->toDateString();
         $today = now()->toDateString();
@@ -695,9 +703,9 @@ class PayrollController extends Controller
                 'month_deposits' => round((float) $monthlyRows->where('type', 'deposit')->sum('amount'), 2),
                 'month_withdrawals' => round(abs((float) $monthlyRows->where('type', 'withdrawal')->sum('amount')), 2),
                 'month_adjustments' => round((float) $monthlyRows->where('type', 'adjustment')->sum('amount'), 2),
-                'activity_count' => $rows->count(),
+                'activity_count' => $rows->total(),
             ],
-            'activities' => $rows->map(fn ($row) => [
+            'activities' => $rows->getCollection()->map(fn ($row) => [
                 'id' => (int) $row->id,
                 'amount' => (float) $row->amount,
                 'date' => $row->date,
@@ -706,6 +714,12 @@ class PayrollController extends Controller
                 'payment_method' => $row->payment_method ?: 'bank_transfer',
                 'created_at' => $row->created_at,
             ])->values(),
+            'activity_pagination' => [
+                'current_page' => $rows->currentPage(),
+                'last_page' => $rows->lastPage(),
+                'per_page' => $rows->perPage(),
+                'total' => $rows->total(),
+            ],
         ]);
     }
 

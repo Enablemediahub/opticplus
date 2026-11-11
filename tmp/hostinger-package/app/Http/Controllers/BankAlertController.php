@@ -16,7 +16,7 @@ class BankAlertController extends Controller
 {
     private const BANKS = ['Ecobank', 'Prudential Bank', 'GTBank', 'MTN MoMo'];
 
-    private const SENDER_BANKS = ['PRUDENTIAL' => 'Prudential Bank', 'MTN_MOMO' => 'MTN MoMo'];
+    private const SENDER_BANKS = ['PRUDENTIAL' => 'Prudential Bank', 'GTBANK' => 'GTBank', 'MTN_MOMO' => 'MTN MoMo'];
 
     public function index(Request $request): JsonResponse
     {
@@ -27,6 +27,7 @@ class BankAlertController extends Controller
         $branchId = $this->resolveBranchId($request);
         $isManager = $request->user()?->normalized_role === 'manager';
         if ($isManager) {
+            $this->ensureSharedGtBankAccounts();
             $this->resolveUnmatchedAccounts($branchId);
         }
 
@@ -45,6 +46,7 @@ class BankAlertController extends Controller
                 'device' => null,
                 'devices' => [],
                 'banks' => [],
+                'approval_policies' => [],
             ]);
         }
 
@@ -92,6 +94,42 @@ class BankAlertController extends Controller
             'device' => $devices->first(),
             'devices' => $devices,
             'banks' => self::BANKS,
+            'approval_policies' => $this->approvalPolicies($branchId),
+        ]);
+    }
+
+    public function updateApprovalPolicy(Request $request): JsonResponse
+    {
+        if ($response = $this->ensureManager($request)) {
+            return $response;
+        }
+
+        if (! Schema::hasTable('bank_sms_approval_policies') || ! Schema::hasColumn('bank_sms_alerts', 'review_method')) {
+            return response()->json([
+                'message' => 'Automatic SMS approval is not installed yet. Run the new bank SMS approval migration first.',
+            ], 503);
+        }
+
+        $validated = $request->validate([
+            'branch_id' => ['required', 'integer', Rule::in([1, 2])],
+            'auto_approve' => ['required', 'boolean'],
+        ]);
+        $now = now();
+        DB::table('bank_sms_approval_policies')->updateOrInsert(
+            ['branch_id' => $validated['branch_id']],
+            [
+                'auto_approve' => $validated['auto_approve'],
+                'updated_by' => $request->user()->id,
+                'updated_at' => $now,
+            ]
+        );
+
+        return response()->json([
+            'message' => $validated['auto_approve']
+                ? 'New matched alerts for this branch will be automatically approved. Existing pending alerts are unchanged.'
+                : 'Automatic approval is off for this branch. New alerts will wait for General Manager review.',
+            'branch_id' => (int) $validated['branch_id'],
+            'auto_approve' => (bool) $validated['auto_approve'],
         ]);
     }
 
@@ -102,51 +140,79 @@ class BankAlertController extends Controller
         }
 
         $validated = $request->validate([
-            'branch_id' => ['required', 'integer', Rule::in([1, 2])],
+            'branch_id' => ['required', 'integer', Rule::in([0, 1, 2])],
             'bank_name' => ['required', 'string', Rule::in(self::BANKS)],
             'account_suffix' => ['required', 'regex:/^\d{4}$/'],
             'account_label' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $existingAccount = DB::table('bank_accounts')
-            ->where('branch_id', $validated['branch_id'])
-            ->where('bank_name', $validated['bank_name'])
-            ->where('account_suffix', $validated['account_suffix'])
-            ->first(['id', 'is_active']);
-        if ($existingAccount?->is_active) {
-            throw ValidationException::withMessages([
-                'account_suffix' => 'That bank account is already configured for this branch.',
-            ]);
-        }
-
         $now = now();
-        if ($existingAccount) {
-            DB::table('bank_accounts')->where('id', $existingAccount->id)->update([
-                'account_label' => trim((string) ($validated['account_label'] ?? '')) ?: null,
-                'reported_balance' => null,
-                'reported_balance_at' => null,
-                'is_active' => true,
-                'updated_at' => $now,
-            ]);
+        $branchIds = $validated['bank_name'] === 'GTBank' || (int) $validated['branch_id'] === 0
+            ? [1, 2]
+            : [(int) $validated['branch_id']];
+        $accountLabel = trim((string) ($validated['account_label'] ?? '')) ?: null;
+        $accountIds = DB::transaction(function () use ($validated, $branchIds, $accountLabel, $now): array {
+            $ids = [];
+            $createdCount = 0;
+            $reconnectedCount = 0;
 
-            return response()->json([
-                'message' => 'Bank account reconnected.',
-                'account_id' => (int) $existingAccount->id,
-            ]);
-        }
+            foreach ($branchIds as $branchId) {
+                $existingAccount = DB::table('bank_accounts')
+                    ->where('branch_id', $branchId)
+                    ->where('bank_name', $validated['bank_name'])
+                    ->where('account_suffix', $validated['account_suffix'])
+                    ->first(['id', 'is_active']);
 
-        $accountId = DB::table('bank_accounts')->insertGetId([
-            ...$validated,
-            'account_label' => trim((string) ($validated['account_label'] ?? '')) ?: null,
-            'is_active' => true,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
+                if ($existingAccount?->is_active) {
+                    if (count($branchIds) === 1) {
+                        throw ValidationException::withMessages([
+                            'account_suffix' => 'That bank account is already configured for this branch.',
+                        ]);
+                    }
+                    $ids[] = (int) $existingAccount->id;
+
+                    continue;
+                }
+
+                if ($existingAccount) {
+                    DB::table('bank_accounts')->where('id', $existingAccount->id)->update([
+                        'account_label' => $accountLabel,
+                        'reported_balance' => null,
+                        'reported_balance_at' => null,
+                        'is_active' => true,
+                        'updated_at' => $now,
+                    ]);
+                    $ids[] = (int) $existingAccount->id;
+                    $reconnectedCount++;
+
+                    continue;
+                }
+
+                $ids[] = (int) DB::table('bank_accounts')->insertGetId([
+                    'branch_id' => $branchId,
+                    'bank_name' => $validated['bank_name'],
+                    'account_suffix' => $validated['account_suffix'],
+                    'account_label' => $accountLabel,
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                $createdCount++;
+            }
+
+            return [$ids, $createdCount, $reconnectedCount];
+        });
+        [$ids, $createdCount, $reconnectedCount] = $accountIds;
+        $scopeLabel = count($branchIds) > 1 ? ' for both branches' : '';
+        $message = $createdCount > 0
+            ? 'Bank account added'.$scopeLabel.'.'
+            : ($reconnectedCount > 0 ? 'Bank account reconnected'.$scopeLabel.'.' : 'Bank account is already configured for both branches.');
 
         return response()->json([
-            'message' => 'Bank account added.',
-            'account_id' => $accountId,
-        ], 201);
+            'message' => $message,
+            'account_id' => $ids[0] ?? null,
+            'account_ids' => $ids,
+        ], $createdCount > 0 ? 201 : 200);
     }
 
     public function destroyAccount(Request $request, int $accountId): JsonResponse
@@ -167,22 +233,30 @@ class BankAlertController extends Controller
 
         $now = now();
         $sender = array_search($account->bank_name, self::SENDER_BANKS, true);
+        $accountIds = [$accountId];
+        if ($account->bank_name === 'GTBank') {
+            $accountIds = DB::table('bank_accounts')
+                ->where('bank_name', 'GTBank')
+                ->where('account_suffix', $account->account_suffix)
+                ->pluck('id')
+                ->all();
+        }
 
-        DB::transaction(function () use ($account, $accountId, $sender, $now): void {
-            $linkedAlerts = DB::table('bank_sms_alerts')->where('bank_account_id', $accountId);
+        DB::transaction(function () use ($account, $accountIds, $sender, $now): void {
+            $linkedAlerts = DB::table('bank_sms_alerts')->whereIn('bank_account_id', $accountIds);
             $linkedAlerts->whereIn('status', ['pending', 'unmatched'])->update([
                 'bank_account_id' => null,
                 'status' => 'archived',
                 'updated_at' => $now,
             ]);
-            DB::table('bank_sms_alerts')->where('bank_account_id', $accountId)->update([
+            DB::table('bank_sms_alerts')->whereIn('bank_account_id', $accountIds)->update([
                 'bank_account_id' => null,
                 'updated_at' => $now,
             ]);
 
             if ($sender !== false) {
                 DB::table('bank_sms_alerts')
-                    ->where('branch_id', $account->branch_id)
+                    ->when($account->bank_name === 'GTBank', fn ($query) => $query->whereIn('branch_id', [1, 2]), fn ($query) => $query->where('branch_id', $account->branch_id))
                     ->where('account_suffix', $account->account_suffix)
                     ->where('sender', $sender)
                     ->whereNull('bank_account_id')
@@ -193,7 +267,7 @@ class BankAlertController extends Controller
                     ]);
             }
 
-            DB::table('bank_accounts')->where('id', $accountId)->update([
+            DB::table('bank_accounts')->whereIn('id', $accountIds)->update([
                 'is_active' => false,
                 'reported_balance' => null,
                 'reported_balance_at' => null,
@@ -202,7 +276,9 @@ class BankAlertController extends Controller
         });
 
         return response()->json([
-            'message' => 'Account removed. SMS history and posted bank-register activity were preserved; pending alerts for this account were archived.',
+            'message' => $account->bank_name === 'GTBank'
+                ? 'Shared GTBank account removed from both branches. SMS history and posted bank-register activity were preserved; pending alerts were archived.'
+                : 'Account removed. SMS history and posted bank-register activity were preserved; pending alerts for this account were archived.',
         ]);
     }
 
@@ -223,6 +299,24 @@ class BankAlertController extends Controller
 
         $branchId = $this->resolveBranchId($request);
         $sender = array_search($validated['bank_name'], self::SENDER_BANKS, true);
+        $historyColumns = [
+            'alerts.id',
+            'alerts.branch_id',
+            'alerts.sender',
+            'alerts.account_suffix',
+            'alerts.direction',
+            'alerts.amount',
+            'alerts.transaction_reference',
+            'alerts.transaction_date',
+            'alerts.available_balance',
+            'alerts.received_at',
+            'alerts.status',
+            'accounts.bank_name',
+            'accounts.account_label',
+        ];
+        if (Schema::hasColumn('bank_sms_alerts', 'review_method')) {
+            $historyColumns[] = 'alerts.review_method';
+        }
         $history = DB::table('bank_sms_alerts as alerts')
             ->leftJoin('bank_accounts as accounts', 'accounts.id', '=', 'alerts.bank_account_id')
             ->where(function ($query) use ($validated, $sender): void {
@@ -237,21 +331,7 @@ class BankAlertController extends Controller
             ->when(! empty($validated['start_date']), fn ($query) => $query->whereDate('alerts.transaction_date', '>=', $validated['start_date']))
             ->when(! empty($validated['end_date']), fn ($query) => $query->whereDate('alerts.transaction_date', '<=', $validated['end_date']))
             ->orderByDesc('alerts.received_at')
-            ->paginate((int) ($validated['per_page'] ?? 25), [
-                'alerts.id',
-                'alerts.branch_id',
-                'alerts.sender',
-                'alerts.account_suffix',
-                'alerts.direction',
-                'alerts.amount',
-                'alerts.transaction_reference',
-                'alerts.transaction_date',
-                'alerts.available_balance',
-                'alerts.received_at',
-                'alerts.status',
-                'accounts.bank_name',
-                'accounts.account_label',
-            ], 'page', (int) ($validated['page'] ?? 1));
+            ->paginate((int) ($validated['per_page'] ?? 25), $historyColumns, 'page', (int) ($validated['page'] ?? 1));
 
         return response()->json([
             'items' => $history->items(),
@@ -345,17 +425,21 @@ class BankAlertController extends Controller
         }
 
         $newSource = $validated['alert_source'];
-        $blockedSender = $newSource === 'prudential' ? 'MTN_MOMO' : ($newSource === 'momo' ? 'PRUDENTIAL' : null);
-        DB::transaction(function () use ($device, $newSource, $blockedSender): void {
-            if ($blockedSender) {
+        $blockedSenders = match ($newSource) {
+            'prudential' => ['MTN_MOMO'],
+            'momo' => ['PRUDENTIAL', 'GTBANK'],
+            default => [],
+        };
+        DB::transaction(function () use ($device, $newSource, $blockedSenders): void {
+            if ($blockedSenders) {
                 $blockedAlerts = DB::table('bank_sms_alerts')
                     ->where('device_id', $device->id)
-                    ->where('sender', $blockedSender)
+                    ->whereIn('sender', $blockedSenders)
                     ->whereIn('status', ['pending', 'unmatched']);
                 $affectedAccountIds = (clone $blockedAlerts)->whereNotNull('bank_account_id')->pluck('bank_account_id')->unique();
                 foreach ($affectedAccountIds as $accountId) {
                     $latest = DB::table('bank_sms_alerts')->where('bank_account_id', $accountId)->orderByDesc('received_at')->first(['device_id', 'sender']);
-                    if ($latest && (int) $latest->device_id === (int) $device->id && $latest->sender === $blockedSender) {
+                    if ($latest && (int) $latest->device_id === (int) $device->id && in_array($latest->sender, $blockedSenders, true)) {
                         DB::table('bank_accounts')->where('id', $accountId)->update([
                             'reported_balance' => null,
                             'reported_balance_at' => null,
@@ -371,7 +455,7 @@ class BankAlertController extends Controller
             ]);
         });
 
-        return response()->json(['message' => $device->label.' is now set to '.($newSource === 'prudential' ? 'Prudential only' : ($newSource === 'momo' ? 'MTN MoMo only' : 'both Prudential and MTN MoMo alerts')).'.']);
+        return response()->json(['message' => $device->label.' is now set to '.($newSource === 'prudential' ? 'bank alerts only' : ($newSource === 'momo' ? 'MTN MoMo only' : 'bank and MTN MoMo alerts')).'.']);
     }
 
     public function deviceSyncRequest(Request $request): JsonResponse
@@ -494,20 +578,25 @@ class BankAlertController extends Controller
             ]);
         }
 
-        $source = $validated['sender'] === 'PRUDENTIAL' ? 'prudential' : 'momo';
+        $source = $validated['sender'] === 'MTN_MOMO' ? 'momo' : 'prudential';
         if (isset($device->alert_source) && $device->alert_source !== 'both' && $device->alert_source !== $source) {
             DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
 
-            return response()->json(['message' => 'Alert ignored because this phone is not paired for this SMS source.', 'ignored' => true]);
+            throw ValidationException::withMessages([
+                'sender' => 'This phone is not paired for this SMS source. Set it to Both sources in Bank Deposits; the alert remains saved on the phone for retry.',
+            ]);
         }
 
-        if ($validated['sender'] === 'PRUDENTIAL' && empty($validated['account_suffix'])) {
-            throw ValidationException::withMessages(['account_suffix' => 'Account suffix is required for Prudential alerts.']);
+        if ($validated['sender'] !== 'MTN_MOMO' && empty($validated['account_suffix'])) {
+            throw ValidationException::withMessages(['account_suffix' => 'Account suffix is required for bank alerts.']);
+        }
+        if ($validated['sender'] === 'GTBANK') {
+            $this->ensureSharedGtBankAccounts($validated['account_suffix']);
         }
         $bankName = self::SENDER_BANKS[$validated['sender']];
         $matchingAccounts = DB::table('bank_accounts')
             ->where('bank_name', $bankName)
-            ->when($validated['sender'] === 'PRUDENTIAL', fn ($query) => $query->where('account_suffix', $validated['account_suffix']))
+            ->when($validated['sender'] !== 'MTN_MOMO', fn ($query) => $query->where('account_suffix', $validated['account_suffix']))
             ->where('branch_id', $device->branch_id)
             ->where('is_active', true)
             ->get();
@@ -553,11 +642,26 @@ class BankAlertController extends Controller
         if ($account && (! $account->reported_balance_at || $receivedAt->greaterThan($account->reported_balance_at))) {
             $balanceChanged = $account->reported_balance === null
                 || round((float) $account->reported_balance, 2) !== $updatedBalance;
-            DB::table('bank_accounts')->where('id', $account->id)->update([
-                'reported_balance' => $updatedBalance,
-                'reported_balance_at' => $receivedAt,
-                'updated_at' => now(),
-            ]);
+            $sharedAccounts = DB::table('bank_accounts')
+                ->where('bank_name', $bankName)
+                ->where('account_suffix', $accountSuffix)
+                ->where('is_active', true)
+                ->when($validated['sender'] === 'GTBANK', fn ($query) => $query->whereIn('branch_id', [1, 2]))
+                ->when($validated['sender'] !== 'GTBANK', fn ($query) => $query->where('id', $account->id))
+                ->get(['id']);
+            foreach ($sharedAccounts as $sharedAccount) {
+                DB::table('bank_accounts')
+                    ->where('id', $sharedAccount->id)
+                    ->where(function ($query) use ($receivedAt): void {
+                        $query->whereNull('reported_balance_at')
+                            ->orWhere('reported_balance_at', '<', $receivedAt);
+                    })
+                    ->update([
+                        'reported_balance' => $updatedBalance,
+                        'reported_balance_at' => $receivedAt,
+                        'updated_at' => now(),
+                    ]);
+            }
             if ($balanceChanged) {
                 $pushNotifications->notifyCeoOfBankBalanceChange(
                     (int) $account->id,
@@ -571,14 +675,48 @@ class BankAlertController extends Controller
             }
         }
 
-        DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
+        $policy = $account && Schema::hasTable('bank_sms_approval_policies')
+            ? DB::table('bank_sms_approval_policies')->where('branch_id', $device->branch_id)->first(['auto_approve', 'updated_by'])
+            : null;
+        $autoApproved = false;
+        $autoApprovalIssue = null;
+        if ($account && $policy?->auto_approve && Schema::hasColumn('bank_sms_alerts', 'review_method')) {
+            try {
+                DB::transaction(function () use ($alertId, $policy): void {
+                    $alert = DB::table('bank_sms_alerts')->where('id', $alertId)->lockForUpdate()->first();
+                    if (! $alert || $alert->status !== 'pending' || ! $alert->bank_account_id || ! $alert->branch_id) {
+                        return;
+                    }
 
-        $pushNotifications->notifyBranchManagers((int) $device->branch_id, 'sms_review');
+                    $depositId = $this->postBankAlertToRegister($alert);
+                    DB::table('bank_sms_alerts')->where('id', $alert->id)->update([
+                        'status' => 'approved',
+                        'review_method' => 'automatic',
+                        'reviewed_by' => $policy->updated_by,
+                        'reviewed_at' => now(),
+                        'bank_deposit_id' => $depositId,
+                        'updated_at' => now(),
+                    ]);
+                });
+                $autoApproved = DB::table('bank_sms_alerts')->where('id', $alertId)->value('status') === 'approved';
+            } catch (ValidationException $exception) {
+                $autoApprovalIssue = $exception->errors()['alert'][0] ?? 'Automatic posting could not be completed; the alert remains for manager review.';
+            }
+        }
+
+        DB::table('bank_sms_devices')->where('id', $deviceId)->update(['last_used_at' => now()]);
+        if (! $autoApproved) {
+            $pushNotifications->notifyBranchManagers((int) $device->branch_id, 'sms_review');
+        }
 
         return response()->json([
-            'message' => 'Alert received for review.',
+            'message' => $autoApproved
+                ? 'Alert automatically approved by the General Manager branch policy.'
+                : ($autoApprovalIssue
+                    ? $autoApprovalIssue.' The alert is waiting for manager review.'
+                    : 'Alert received for review.'),
             'alert_id' => $alertId,
-            'status' => 'pending',
+            'status' => $autoApproved ? 'approved' : 'pending',
         ], 201);
     }
 
@@ -600,52 +738,13 @@ class BankAlertController extends Controller
                 ]);
             }
 
-            $depositId = null;
-            if ($validated['decision'] === 'approve' && $alert->sender === 'PRUDENTIAL') {
-                $amount = round((float) $alert->amount * ($alert->direction === 'debited' ? -1 : 1), 2);
-                $balanceQuery = DB::table('bank_balance');
-                if (Schema::hasColumn('bank_balance', 'branch_id')) {
-                    $balanceQuery->where('branch_id', $alert->branch_id);
-                }
-                $balanceRow = $balanceQuery->orderByDesc('id')->lockForUpdate()->first();
-                $currentBalance = (float) ($balanceRow->balance ?? 0);
-                $nextBalance = round($currentBalance + $amount, 2);
-                if ($nextBalance < 0) {
-                    throw ValidationException::withMessages([
-                        'alert' => 'Approving this withdrawal would make the recorded branch balance negative.',
-                    ]);
-                }
-
-                $depositId = DB::table('bank_deposits')->insertGetId([
-                    'branch_id' => $alert->branch_id,
-                    'amount' => $amount,
-                    'date' => $alert->transaction_date,
-                    'description' => 'Prudential Bank SMS '.$alert->direction.' | account ending '.$alert->account_suffix.' | reference '.$alert->transaction_reference,
-                    'type' => $alert->direction === 'debited' ? 'withdrawal' : 'deposit',
-                    'payment_method' => 'bank_transfer',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-
-                if ($balanceRow) {
-                    DB::table('bank_balance')->where('id', $balanceRow->id)->update([
-                        'balance' => $nextBalance,
-                        'last_updated' => now(),
-                        'updated_at' => now(),
-                    ]);
-                } else {
-                    DB::table('bank_balance')->insert([
-                        'branch_id' => $alert->branch_id,
-                        'balance' => $nextBalance,
-                        'last_updated' => now(),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-            }
+            $depositId = $validated['decision'] === 'approve'
+                ? $this->postBankAlertToRegister($alert)
+                : null;
 
             DB::table('bank_sms_alerts')->where('id', $alert->id)->update([
                 'status' => $validated['decision'] === 'approve' ? 'approved' : 'rejected',
+                'review_method' => 'manual',
                 'reviewed_by' => $request->user()->id,
                 'reviewed_at' => now(),
                 'bank_deposit_id' => $depositId,
@@ -686,7 +785,7 @@ class BankAlertController extends Controller
                 ->where('bank_name', $bankName)
                 ->where('branch_id', $alert->branch_id)
                 ->where('is_active', true);
-            if ($alert->sender === 'PRUDENTIAL') {
+            if ($alert->sender !== 'MTN_MOMO') {
                 $accountQuery->where('account_suffix', $alert->account_suffix);
             }
             $account = $accountQuery->get();
@@ -700,6 +799,135 @@ class BankAlertController extends Controller
                 ]);
             }
         }
+    }
+
+    private function ensureSharedGtBankAccounts(?string $accountSuffix = null): void
+    {
+        $accounts = DB::table('bank_accounts')
+            ->where('bank_name', 'GTBank')
+            ->where('is_active', true)
+            ->when($accountSuffix !== null, fn ($query) => $query->where('account_suffix', $accountSuffix))
+            ->orderByDesc('reported_balance_at')
+            ->get([
+                'branch_id',
+                'account_suffix',
+                'account_label',
+                'reported_balance',
+                'reported_balance_at',
+            ])
+            ->groupBy('account_suffix');
+
+        if ($accounts->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($accounts): void {
+            foreach ($accounts as $suffix => $branchAccounts) {
+                $latest = $branchAccounts->first();
+                foreach ([1, 2] as $branchId) {
+                    $existing = DB::table('bank_accounts')
+                        ->where('branch_id', $branchId)
+                        ->where('bank_name', 'GTBank')
+                        ->where('account_suffix', $suffix)
+                        ->lockForUpdate()
+                        ->first(['id', 'account_label', 'reported_balance', 'reported_balance_at']);
+
+                    if (! $existing) {
+                        DB::table('bank_accounts')->insert([
+                            'branch_id' => $branchId,
+                            'bank_name' => 'GTBank',
+                            'account_suffix' => $suffix,
+                            'account_label' => $latest->account_label,
+                            'reported_balance' => $latest->reported_balance,
+                            'reported_balance_at' => $latest->reported_balance_at,
+                            'is_active' => true,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+
+                        continue;
+                    }
+
+                    $balanceIsNewer = $latest->reported_balance_at
+                        && (! $existing->reported_balance_at
+                            || $latest->reported_balance_at > $existing->reported_balance_at);
+                    $updates = [
+                        'account_label' => $existing->account_label ?: $latest->account_label,
+                        'is_active' => true,
+                        'updated_at' => now(),
+                    ];
+                    if ($balanceIsNewer) {
+                        $updates['reported_balance'] = $latest->reported_balance;
+                        $updates['reported_balance_at'] = $latest->reported_balance_at;
+                    }
+                    DB::table('bank_accounts')->where('id', $existing->id)->update($updates);
+                }
+            }
+        });
+    }
+
+    private function approvalPolicies(int $branchId): array
+    {
+        $branchIds = $branchId > 0 ? [$branchId] : [1, 2];
+        $policies = Schema::hasTable('bank_sms_approval_policies')
+            ? DB::table('bank_sms_approval_policies')->whereIn('branch_id', $branchIds)->get()->keyBy('branch_id')
+            : collect();
+
+        return collect($branchIds)->map(fn (int $id): array => [
+            'branch_id' => $id,
+            'auto_approve' => (bool) ($policies->get($id)->auto_approve ?? false),
+            'updated_at' => $policies->get($id)->updated_at ?? null,
+        ])->all();
+    }
+
+    private function postBankAlertToRegister(object $alert): ?int
+    {
+        if ($alert->sender === 'MTN_MOMO') {
+            return null;
+        }
+
+        $amount = round((float) $alert->amount * ($alert->direction === 'debited' ? -1 : 1), 2);
+        $balanceQuery = DB::table('bank_balance');
+        if (Schema::hasColumn('bank_balance', 'branch_id')) {
+            $balanceQuery->where('branch_id', $alert->branch_id);
+        }
+        $balanceRow = $balanceQuery->orderByDesc('id')->lockForUpdate()->first();
+        $currentBalance = (float) ($balanceRow->balance ?? 0);
+        $nextBalance = round($currentBalance + $amount, 2);
+        if ($nextBalance < 0) {
+            throw ValidationException::withMessages([
+                'alert' => 'Approving this withdrawal would make the recorded branch balance negative.',
+            ]);
+        }
+
+        $depositId = DB::table('bank_deposits')->insertGetId([
+            'branch_id' => $alert->branch_id,
+            'amount' => $amount,
+            'date' => $alert->transaction_date,
+            'description' => (self::SENDER_BANKS[$alert->sender] ?? 'Bank').' SMS '.$alert->direction.' | account ending '.$alert->account_suffix.' | reference '.$alert->transaction_reference,
+            'type' => $alert->direction === 'debited' ? 'withdrawal' : 'deposit',
+            'payment_method' => 'bank_transfer',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        if ($balanceRow) {
+            DB::table('bank_balance')->where('id', $balanceRow->id)->update([
+                'balance' => $nextBalance,
+                'last_updated' => now(),
+                'updated_at' => now(),
+            ]);
+        } else {
+            DB::table('bank_balance')->insert([
+                'branch_id' => $alert->branch_id,
+                'balance' => $nextBalance,
+                'last_updated' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $depositId;
     }
 
     private function resolveBranchId(Request $request): int

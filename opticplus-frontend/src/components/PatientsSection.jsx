@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import QRCode from 'qrcode'
 import StatWidget from './StatWidget.jsx'
 import WorkspaceTabs from './WorkspaceTabs.jsx'
+import PublicPatientIdCard, { downloadPatientIdCardPdf } from './PublicPatientIdCard.jsx'
 
 export const patientFormDefaults = {
   surname: '',
@@ -128,6 +130,7 @@ export default function PatientsSection({
   const [isIntakeModalOpen, setIsIntakeModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [patientProfile, setPatientProfile] = useState(null)
   const records = patientData?.records ?? []
   const pendingRecords = records.filter((record) => record.status === 'pending')
 
@@ -231,7 +234,6 @@ export default function PatientsSection({
           setPatientForm={setPatientForm}
           savePatientRecord={savePatientRecord}
           isSavingPatient={isSavingPatient}
-          patientLookupSearch={patientLookupSearch}
           setPatientLookupSearch={setPatientLookupSearch}
           patientLookupResults={patientLookupResults}
           isSearchingPatientLookup={isSearchingPatientLookup}
@@ -243,6 +245,7 @@ export default function PatientsSection({
           markAsSeen={markAsSeen}
           assignOptometrist={assignOptometrist}
           updatePatientDetails={updatePatientDetails}
+          fetchPatientPrescriptions={fetchPatientPrescriptions}
           defaultFilters={defaultFilters}
           isIntakeModalOpen={isIntakeModalOpen}
           setIsIntakeModalOpen={setIsIntakeModalOpen}
@@ -250,6 +253,8 @@ export default function PatientsSection({
           setEditingRecord={setEditingRecord}
           isSavingEdit={isSavingEdit}
           setIsSavingEdit={setIsSavingEdit}
+          patientProfile={patientProfile}
+          setPatientProfile={setPatientProfile}
         />
       </section>
     )
@@ -300,8 +305,8 @@ export default function PatientsSection({
           markAsSeen={markAsSeen}
           assignOptometrist={assignOptometrist}
           updatePatientDetails={updatePatientDetails}
-          deletePatientRecord={deletePatientRecord}
-          fetchPatientPrescriptions={fetchPatientPrescriptions}
+        deletePatientRecord={deletePatientRecord}
+        fetchPatientPrescriptions={fetchPatientPrescriptions}
           fetchPatientPayments={fetchPatientPayments}
           addPatientPrescription={addPatientPrescription}
           fetchMedicalReport={fetchMedicalReport}
@@ -857,7 +862,6 @@ function ReceptionistPatientsWorkspace({
   setPatientForm,
   savePatientRecord,
   isSavingPatient,
-  patientLookupSearch,
   setPatientLookupSearch,
   patientLookupResults,
   isSearchingPatientLookup,
@@ -869,6 +873,7 @@ function ReceptionistPatientsWorkspace({
   markAsSeen,
   assignOptometrist,
   updatePatientDetails,
+  fetchPatientPrescriptions,
   defaultFilters,
   isIntakeModalOpen,
   setIsIntakeModalOpen,
@@ -876,7 +881,10 @@ function ReceptionistPatientsWorkspace({
   setEditingRecord,
   isSavingEdit,
   setIsSavingEdit,
+  patientProfile,
+  setPatientProfile,
 }) {
+  const [activeWorkspace, setActiveWorkspace] = useState('intake')
   const purposeOptions = useMemo(() => {
     const source = Array.isArray(patientMeta?.purposes) ? patientMeta.purposes : []
     return Array.from(new Set([...CANONICAL_PATIENT_PURPOSES, ...source])).filter(Boolean)
@@ -922,28 +930,58 @@ function ReceptionistPatientsWorkspace({
             </div>
             <div className="patient-reception-actions">
               <span className="panel-tag">{patientData?.branch_name ?? patientMeta?.branch_name ?? 'Patients'}</span>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => setIsIntakeModalOpen(true)}
-              >
-                Register Patient
+              {activeWorkspace === 'intake' ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => setIsIntakeModalOpen(true)}
+                >
+                  Register Patient
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <WorkspaceTabs
+            tabs={[
+              { id: 'intake', label: 'Intake', description: 'Register a new visit', icon: 'IN' },
+              { id: 'database', label: 'Patient Database', description: 'Search records and history', count: patientData?.pagination?.total ?? 0, countLabel: 'patients', icon: 'DB' },
+              { id: 'registration', label: 'Online Registration', description: 'Share the link or scan the QR code', icon: 'QR' },
+            ]}
+            activeTab={activeWorkspace}
+            onChange={setActiveWorkspace}
+            ariaLabel="Patient workspace"
+            heading="Patient workspace"
+            description="Switch between front-desk intake, the patient database, and public registration."
+            compact
+          />
+
+          {activeWorkspace === 'intake' ? (
+          <div className="patient-intake-hero patient-reception-hero">
+            <div>
+              <span className="patient-intake-kicker">Reception desk</span>
+              <strong>Capture demographics and visit details, then keep the patient record available in the branch database.</strong>
+            </div>
+            <div className="patient-intake-highlights">
+              <span>Patient demographics</span>
+              <span>Visit purpose and notes</span>
+              <span>Appointment scheduling</span>
+            </div>
+            <div className="patient-intake-hero-actions">
+              <button type="button" className="primary-button" onClick={() => setIsIntakeModalOpen(true)}>
+                Start patient intake
+              </button>
+              <button type="button" className="ghost-button" onClick={() => setActiveWorkspace('database')}>
+                Open patient database
               </button>
             </div>
           </div>
+          ) : null}
 
-          <div className="patient-intake-hero patient-reception-hero">
-            <div>
-              <span className="patient-intake-kicker">Single Workspace</span>
-              <strong>Live search, live filters, and editable history without a two-column display.</strong>
-            </div>
-            <div className="patient-intake-highlights">
-              <span>Popup registration</span>
-              <span>One search bar</span>
-              <span>Past entry edits</span>
-            </div>
-          </div>
+          {activeWorkspace === 'registration' ? <PatientRegistrationLinkPanel /> : null}
 
+          {activeWorkspace === 'database' ? (
+          <>
           <div className="patient-lookup-panel patient-reception-lookup">
             <div className="patient-lookup-header">
               <div>
@@ -1201,6 +1239,13 @@ function ReceptionistPatientsWorkspace({
                             </button>
                             <button
                               type="button"
+                              className="mini-action"
+                              onClick={() => setPatientProfile(record)}
+                            >
+                              Patient profile
+                            </button>
+                            <button
+                              type="button"
                               className="mini-action success"
                               disabled={rowBusyId === record.id || record.status === 'seen'}
                               onClick={() => markAsSeen(record.id, 'seen')}
@@ -1248,6 +1293,8 @@ function ReceptionistPatientsWorkspace({
               </div>
             </>
           ) : null}
+          </>
+          ) : null}
         </article>
       </section>
 
@@ -1279,7 +1326,234 @@ function ReceptionistPatientsWorkspace({
           submitLabel={isSavingEdit ? 'Saving changes...' : 'Save changes'}
         />
       ) : null}
+      {patientProfile ? (
+        <PatientDatabaseProfileModal
+          patient={patientProfile}
+          onClose={() => setPatientProfile(null)}
+          fetchPatientPrescriptions={fetchPatientPrescriptions}
+        />
+      ) : null}
     </>
+  )
+}
+
+function PatientRegistrationLinkPanel() {
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [message, setMessage] = useState('')
+  const registrationUrl = `${window.location.origin}/registration`
+
+  useEffect(() => {
+    let cancelled = false
+    QRCode.toDataURL(registrationUrl, {
+      width: 280,
+      margin: 2,
+      errorCorrectionLevel: 'H',
+      color: { dark: '#173b5d', light: '#ffffff' },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setQrDataUrl(dataUrl)
+      })
+      .catch((error) => {
+        if (!cancelled) setMessage(error.message || 'Could not generate the registration QR code.')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [registrationUrl])
+
+  async function copyRegistrationLink() {
+    setMessage('')
+    try {
+      await navigator.clipboard.writeText(registrationUrl)
+      setMessage('Registration link copied.')
+    } catch (error) {
+      setMessage(error.message || 'Could not copy the registration link. Copy it from the field below.')
+    }
+  }
+
+  return (
+    <div className="patient-registration-panel">
+      <article className="optometrist-workspace-card patient-registration-card">
+        <div>
+          <p className="eyebrow">Public patient registration</p>
+          <h3>Let patients register before they arrive</h3>
+          <p className="muted-copy">
+            Share this public link or print the QR code for patients to scan. The registration page creates their patient record and ID card.
+          </p>
+          <div className="patient-registration-link-row">
+            <input aria-label="Public registration link" readOnly value={registrationUrl} onFocus={(event) => event.target.select()} />
+            <button type="button" className="primary-button" onClick={copyRegistrationLink}>Copy link</button>
+          </div>
+          {message ? <p className="muted-copy" role="status">{message}</p> : null}
+          <a className="patient-registration-open-link" href={registrationUrl} target="_blank" rel="noreferrer">
+            Open registration page
+          </a>
+        </div>
+        <div className="patient-registration-qr">
+          {qrDataUrl ? (
+            <>
+              <img src={qrDataUrl} alt="QR code for the public patient registration page" />
+              <a className="ghost-button" href={qrDataUrl} download="opticplus-patient-registration-qr.png">Download QR code</a>
+            </>
+          ) : message ? (
+            <p className="message-banner error">{message}</p>
+          ) : (
+            <p className="muted-copy">Generating QR code...</p>
+          )}
+        </div>
+      </article>
+    </div>
+  )
+}
+
+function patientCardForRecord(patient) {
+  const fullName = patient.patient_name || patient.name || ''
+  const nameParts = fullName.trim().split(/\s+/).filter(Boolean)
+  const branchName = String(patient.branch_name || patient.branch || '').toLowerCase()
+  const branchId = patient.branch_id ?? (branchName.includes('labadi') ? 1 : branchName.includes('madina') ? 2 : undefined)
+
+  return {
+    form: {
+      surname: patient.surname || nameParts[0] || '',
+      firstname: patient.firstname || nameParts[1] || '',
+      othernames: patient.othernames || nameParts.slice(2).join(' '),
+      sex: patient.sex || '',
+      dob: patient.dob || '',
+      age: patient.age || '',
+      phone: patient.phone || '',
+      patient_type: patient.patient_type || '',
+      branch_id: branchId,
+    },
+    folderId: patient.folder_id || String(patient.id),
+    issuedAt: patient.created_at || patient.date || '',
+  }
+}
+
+function whatsappPhoneNumber(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('00')) return digits.slice(2)
+  if (digits.startsWith('0')) return `233${digits.slice(1)}`
+  return digits
+}
+
+function isValidWhatsappPhoneNumber(phoneNumber) {
+  return /^\d{7,15}$/.test(phoneNumber)
+}
+
+function PatientDatabaseProfileModal({ patient, onClose, fetchPatientPrescriptions }) {
+  const [prescriptions, setPrescriptions] = useState([])
+  const [isLoadingPrescriptions, setIsLoadingPrescriptions] = useState(true)
+  const [prescriptionError, setPrescriptionError] = useState('')
+  const [cardError, setCardError] = useState('')
+  const card = patientCardForRecord(patient)
+  const patientName = patient.patient_name || patient.name || 'Patient'
+  useEffect(() => {
+    let cancelled = false
+    fetchPatientPrescriptions(patient.id)
+      .then((response) => {
+        if (!cancelled) setPrescriptions(response.prescriptions ?? [])
+      })
+      .catch((error) => {
+        if (!cancelled) setPrescriptionError(error.message || 'Could not load prescription history.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingPrescriptions(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchPatientPrescriptions, patient.id])
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <article className="modal-panel patient-database-profile-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Patient Database</p>
+            <h3>{patientName}</h3>
+            <p className="muted-copy">{patient.folder_id || `Patient #${patient.id}`} • {patient.phone || 'No phone on file'}</p>
+          </div>
+          <button type="button" className="ghost-button" onClick={onClose}>Close</button>
+        </div>
+        <div className="patient-database-profile-grid">
+          <section className="optometrist-workspace-card">
+            <p className="eyebrow">Demographics and contact</p>
+            <div className="optometrist-checklist">
+              <div><span>Full name</span><strong>{patientName}</strong></div>
+              <div><span>Folder ID</span><strong>{patient.folder_id || 'Not assigned'}</strong></div>
+              <div><span>Date of birth / age</span><strong>{patient.dob || 'Not recorded'} / {patient.age || 'N/A'}</strong></div>
+              <div><span>Sex</span><strong>{patient.sex || 'Not recorded'}</strong></div>
+              <div><span>Phone / email</span><strong>{patient.phone || 'No phone'} / {patient.email || 'No email'}</strong></div>
+              <div><span>Address / residence</span><strong>{[patient.address, patient.residence].filter(Boolean).join(' / ') || 'Not recorded'}</strong></div>
+              <div><span>Visit purpose</span><strong>{patient.purpose || 'Not recorded'}</strong></div>
+            </div>
+          </section>
+          <PatientIdCardPanel patient={patient} card={card} />
+        </div>
+        {prescriptionError ? <div className="message-banner error" role="alert">{prescriptionError}</div> : null}
+        <PrescriptionReferencePanel prescriptions={prescriptions} isLoadingPrescriptions={isLoadingPrescriptions} />
+      </article>
+    </div>
+  )
+}
+
+function PatientIdCardPanel({ patient, card = patientCardForRecord(patient) }) {
+  const [cardError, setCardError] = useState('')
+  const [whatsappStatus, setWhatsappStatus] = useState('')
+  const phoneNumber = whatsappPhoneNumber(patient.phone)
+  const hasValidWhatsappPhone = isValidWhatsappPhoneNumber(phoneNumber)
+  const patientName = patient.patient_name || patient.name || 'Patient'
+  const whatsappUrl = hasValidWhatsappPhone
+    ? `https://wa.me/${phoneNumber}?text=${encodeURIComponent(`Hello ${patientName}, here is your Bealet Optical Center patient ID card. Please find the downloaded PDF attached.`)}`
+    : ''
+
+  async function downloadCard() {
+    setCardError('')
+    try {
+      await downloadPatientIdCardPdf(card)
+    } catch (error) {
+      setCardError(error.message || 'Could not create the patient ID card PDF.')
+    }
+  }
+
+  async function prepareWhatsAppCard() {
+    setCardError('')
+    setWhatsappStatus('')
+    if (!hasValidWhatsappPhone) {
+      setCardError(phoneNumber
+        ? 'This phone number does not look valid for WhatsApp. Check the country code and number.'
+        : 'A phone number is required to open WhatsApp for this patient.')
+      return
+    }
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer')
+    setWhatsappStatus(
+      `Opening WhatsApp for +${phoneNumber}. If the number is not registered, WhatsApp will show a notice. OpticPlus cannot check WhatsApp registration in advance.`,
+    )
+    try {
+      await downloadPatientIdCardPdf(card)
+    } catch (error) {
+      setCardError(error.message || 'Could not create the patient ID card PDF. WhatsApp was opened.')
+    }
+  }
+
+  return (
+    <section className="optometrist-workspace-card patient-id-card-preview">
+      <p className="eyebrow">Patient ID card</p>
+      <PublicPatientIdCard {...card} />
+      <div className="patient-id-card-actions">
+        <button type="button" className="primary-button" onClick={downloadCard}>Download ID card PDF</button>
+        <button type="button" className="ghost-button" onClick={prepareWhatsAppCard} disabled={!hasValidWhatsappPhone}>
+          Download and open WhatsApp
+        </button>
+      </div>
+      <p className="muted-copy">
+        The PDF downloads to this device. WhatsApp opens the patient’s chat in the phone or desktop app when available, otherwise in WhatsApp Web. Attach and send the PDF there.
+      </p>
+      {whatsappStatus ? <p className="message-banner success" role="status">{whatsappStatus}</p> : null}
+      {cardError ? <div className="message-banner error" role="alert">{cardError}</div> : null}
+    </section>
   )
 }
 
@@ -3494,6 +3768,8 @@ export function PatientManagementModal({
             </div>
           </form>
         </div>
+
+        <PatientIdCardPanel patient={currentPatient} />
 
         <OptometristManagementView
           record={currentPatient}

@@ -1,17 +1,11 @@
-Dashboard hero layout update only
-Last updated: 2026-11-07
-Paths are relative to tmp/hostinger-package; Hostinger document root is public.
+OPTICPLUS HOSTINGER FILEZILLA MANIFEST — WHATSAPP PATIENT ID CARD UPDATE
+Generated: 2026-11-11
 
-UPLOAD / REPLACE
+Upload only these files from tmp/hostinger-package to the Laravel application root, preserving paths:
+
 public/index.html
-public/assets/App-DO0nV3j2.js
-public/assets/App-CzYFiH5i.css
-public/assets/index-Ba3uYAmt.js
+public/registration/index.html
+public/assets/App-CV3-xwTM.js
+public/assets/index-R_GJW18k.js
 
-DELETE OLD ASSETS FROM HOSTINGER
-public/assets/App-DznSKw6t.js
-public/assets/App-De0MInxP.css
-public/assets/index-GhjDJtOe.js
-
-No backend files, database changes, or server configuration changes are required for
-this update.
+These are the files changed for this update. The other patient workspace assets from the previous package build are unchanged and are not listed. No SQL or deletion instructions are included. Do not upload or replace the live .env file.

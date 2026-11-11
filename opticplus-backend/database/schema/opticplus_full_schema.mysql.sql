@@ -886,4 +886,13 @@ CREATE TABLE IF NOT EXISTS `financial_report_approvals` (
   KEY `financial_report_approvals_approver_id_index` (`approver_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `bank_sms_approval_policies` (
+  `branch_id` int unsigned NOT NULL,
+  `auto_approve` tinyint(1) NOT NULL DEFAULT 0,
+  `updated_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`branch_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

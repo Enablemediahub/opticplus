@@ -111,6 +111,10 @@ public final class BankAlertSyncWorker extends Worker {
                     SecureSettings.saveLastSyncStatus(appContext, "Server rejected the device token. The alert remains saved; replace the token in Bank Deposits and background sync will retry.");
                     return Result.failure();
                 }
+                if (response.statusCode == 422) {
+                    SecureSettings.saveLastSyncStatus(appContext, "OpticPlus did not accept a bank alert because the phone's SMS source setting does not allow it. Set this phone to Both sources in Bank Deposits; the alert remains saved and will sync on the next check.");
+                    return Result.failure();
+                }
                 if (response.statusCode < 200 || response.statusCode >= 300) {
                     SecureSettings.saveLastSyncStatus(appContext, "Server could not accept the alert (HTTP " + response.statusCode + "). It remains saved for background retry.");
                     return response.statusCode == 429 || response.statusCode >= 500

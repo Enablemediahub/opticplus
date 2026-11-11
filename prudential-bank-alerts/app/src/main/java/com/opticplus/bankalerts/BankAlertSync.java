@@ -10,24 +10,30 @@ import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.Operation;
 
 import java.util.concurrent.TimeUnit;
 
 final class BankAlertSync {
     private BankAlertSync() {}
 
-    static void enqueue(Context context) {
+    static Operation enqueue(Context context) {
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(BankAlertSyncWorker.class)
                 .setConstraints(constraints)
                 .build();
-        WorkManager.getInstance(context).enqueueUniqueWork(
+        return WorkManager.getInstance(context).enqueueUniqueWork(
                 "prudential-bank-alert-sync",
                 ExistingWorkPolicy.APPEND_OR_REPLACE,
                 request
         );
+    }
+
+    static void ensureBackgroundWorkScheduled(Context context) {
+        schedulePeriodic(context);
+        ensureRefreshPollScheduled(context);
     }
 
     static void schedulePeriodic(Context context) {
