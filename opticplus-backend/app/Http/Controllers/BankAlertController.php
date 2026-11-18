@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ManagerPushNotificationService;
+use App\Services\GtBankGmailService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class BankAlertController extends Controller
 
     private const SENDER_BANKS = ['PRUDENTIAL' => 'Prudential Bank', 'GTBANK' => 'GTBank', 'MTN_MOMO' => 'MTN MoMo'];
 
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, GtBankGmailService $gmail): JsonResponse
     {
         if ($response = $this->ensureAccess($request)) {
             return $response;
@@ -52,6 +53,7 @@ class BankAlertController extends Controller
 
         $alerts = DB::table('bank_sms_alerts as alerts')
             ->leftJoin('bank_accounts as accounts', 'accounts.id', '=', 'alerts.bank_account_id')
+            ->where('alerts.sender', '!=', 'GTBANK')
             ->when($branchId > 0, fn ($query) => $query->where(function ($branchQuery) use ($branchId): void {
                 $branchQuery->where('alerts.branch_id', $branchId);
             }))
@@ -95,6 +97,7 @@ class BankAlertController extends Controller
             'devices' => $devices,
             'banks' => self::BANKS,
             'approval_policies' => $this->approvalPolicies($branchId),
+            'gmail' => $gmail->status(),
         ]);
     }
 
@@ -319,6 +322,7 @@ class BankAlertController extends Controller
         }
         $history = DB::table('bank_sms_alerts as alerts')
             ->leftJoin('bank_accounts as accounts', 'accounts.id', '=', 'alerts.bank_account_id')
+            ->where('alerts.sender', '!=', 'GTBANK')
             ->where(function ($query) use ($validated, $sender): void {
                 $query->where('accounts.bank_name', $validated['bank_name']);
                 if ($sender !== false) {
@@ -552,6 +556,13 @@ class BankAlertController extends Controller
             'available_balance' => ['required', 'numeric', 'min:0', 'max:9999999999.99'],
             'received_at' => ['required', 'integer', 'min:0'],
         ]);
+
+        if ($validated['sender'] === 'GTBANK') {
+            return response()->json([
+                'message' => 'GTBank SMS alerts are ignored. GTBank balances come from Gmail notifications.',
+                'ignored' => true,
+            ]);
+        }
 
         $deviceId = (int) $request->attributes->get('bank_alert_device_id');
         $receivedAt = now()->setTimestamp((int) floor($validated['received_at'] / 1000));

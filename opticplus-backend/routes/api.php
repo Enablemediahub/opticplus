@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BankAlertController;
+use App\Http\Controllers\BankGmailController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CustomerServiceController;
@@ -45,6 +46,8 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         ->middleware(['auth.bank-alert-device', 'throttle:30,1']);
     Route::post('/bank-alerts/device-sync-request/complete', [BankAlertController::class, 'completeDeviceSyncRequest'])
         ->middleware(['auth.bank-alert-device', 'throttle:30,1']);
+    Route::get('/bank-alerts/gmail/callback', [BankGmailController::class, 'callback'])
+        ->middleware('throttle:30,1');
 
     Route::middleware(['auth.token', 'audit.mutations'])->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
@@ -67,6 +70,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/bank-alerts', [BankAlertController::class, 'index']);
         Route::get('/bank-alerts/history', [BankAlertController::class, 'history']);
         Route::put('/bank-alerts/approval-policy', [BankAlertController::class, 'updateApprovalPolicy']);
+        Route::get('/bank-alerts/gmail/status', [BankGmailController::class, 'status']);
+        Route::post('/bank-alerts/gmail/authorize', [BankGmailController::class, 'authorize']);
+        Route::post('/bank-alerts/gmail/sync', [BankGmailController::class, 'sync']);
+        Route::delete('/bank-alerts/gmail', [BankGmailController::class, 'disconnect']);
         Route::post('/bank-alerts/accounts', [BankAlertController::class, 'storeAccount']);
         Route::delete('/bank-alerts/accounts/{accountId}', [BankAlertController::class, 'destroyAccount']);
         Route::post('/bank-alerts/devices', [BankAlertController::class, 'issueDevice']);

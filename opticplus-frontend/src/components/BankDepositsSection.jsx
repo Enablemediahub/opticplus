@@ -73,6 +73,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const historyRequestId = useRef(0)
+  const [isConnectingGmail, setIsConnectingGmail] = useState(false)
+  const [isSyncingGmail, setIsSyncingGmail] = useState(false)
 
   const loadRegister = useCallback(async ({ silent = false, force = false, page = activityPage } = {}) => {
     if (!token || !session) return
@@ -154,6 +156,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
   }), [data])
 
   const latestReportedAccount = useMemo(() => latestBankBalanceAccount(bankAlerts.accounts), [bankAlerts.accounts])
+  const latestReportedBalanceSource = latestReportedAccount?.bank_name === 'GTBank' ? 'Gmail' : 'SMS'
   const currentDisplayedBalance = latestReportedAccount
     ? Number(latestReportedAccount.reported_balance)
     : runningSummary.current_balance
@@ -369,6 +372,60 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
     }
   }
 
+  async function connectGmail() {
+    setIsConnectingGmail(true)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch('/bank-alerts/gmail/authorize', {
+        method: 'POST',
+        token,
+        freshIdempotencyKey: true,
+        body: {},
+      })
+      window.location.assign(response.authorization_url)
+    } catch (connectError) {
+      setError(connectError.message)
+      setIsConnectingGmail(false)
+    }
+  }
+
+  async function syncGmail() {
+    setIsSyncingGmail(true)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch('/bank-alerts/gmail/sync', {
+        method: 'POST',
+        token,
+        freshIdempotencyKey: true,
+        body: {},
+      })
+      setSuccess(response.message || 'GTBank Gmail notifications synced.')
+      await loadRegister({ force: true })
+    } catch (syncError) {
+      setError(syncError.message)
+    } finally {
+      setIsSyncingGmail(false)
+    }
+  }
+
+  async function disconnectGmail() {
+    if (!window.confirm('Disconnect the Gmail account used for GTBank balances? Existing GTBank balances are kept.')) return
+    setError('')
+    setSuccess('')
+    try {
+      const response = await apiFetch('/bank-alerts/gmail', {
+        method: 'DELETE',
+        token,
+      })
+      setSuccess(response.message || 'Gmail account disconnected.')
+      await loadRegister({ force: true })
+    } catch (disconnectError) {
+      setError(disconnectError.message)
+    }
+  }
+
   async function reviewAlert(alertId, decision) {
     setError('')
     setSuccess('')
@@ -482,8 +539,8 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
           label="Current Bank Balance"
           value={currency.format(currentDisplayedBalance)}
           note={latestReportedAccount
-            ? `Automatically using latest ${bankBrandFor(latestReportedAccount.bank_name)?.name ?? latestReportedAccount.bank_name} SMS •••• ${latestReportedAccount.account_suffix} · ${formatDateTime(latestReportedAccount.reported_balance_at)}`
-            : `${data?.branch_name ?? 'Active branch'} bank-register balance · awaiting an SMS balance`}
+            ? `Automatically using latest ${bankBrandFor(latestReportedAccount.bank_name)?.name ?? latestReportedAccount.bank_name} ${latestReportedBalanceSource} •••• ${latestReportedAccount.account_suffix} · ${formatDateTime(latestReportedAccount.reported_balance_at)}`
+            : `${data?.branch_name ?? 'Active branch'} bank-register balance · awaiting a reported bank balance`}
           icon="finance"
           className="total"
         />
@@ -500,7 +557,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       </section>
       <p className="muted-copy">
         Balances refresh automatically every 30 seconds while this page is open.
-        Current Bank Balance follows the latest SMS-reported account balance; if no SMS balance is available, it falls back to the bank-register balance. SMS is from one account, not a total across accounts. Manual balance entry remains available and updates the bank register.
+        Current Bank Balance follows the latest reported account balance; GTBank uses Gmail, while other banks use SMS. If no reported balance is available, it falls back to the bank-register balance. This is one account's balance, not a total across accounts. Manual balance entry remains available and updates the bank register.
         {lastRefreshedAt ? ` Last refreshed ${lastRefreshedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}.` : ''}
       </p>
 
@@ -508,9 +565,9 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Connected Bank Accounts</p>
-            <h3>Branches, bank balances, and SMS alerts</h3>
-            <p className="header-copy">Click a bank or MoMo card to browse its synced SMS alerts. Original SMS text is not stored.</p>
-            <p className="muted-copy">GTBank accounts are shared automatically across Labadi and Madina. Other accounts used by both branches can be added with Both branches.</p>
+            <h3>Branches, bank balances, and alerts</h3>
+            <p className="header-copy">Click a bank or MoMo card to browse its synced SMS alerts. GTBank balances come from Gmail notifications; original SMS text is not stored.</p>
+            <p className="muted-copy">GTBank is a company-wide account; its Gmail-reported balance is shared across all branch views. Other bank accounts can be assigned to one or both branches.</p>
           </div>
           <span className="panel-tag">{Number(branchId) === 0 ? 'All banks and wallets' : `${bankCards.length} accounts`}</span>
         </div>
@@ -531,12 +588,12 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                   <p className="eyebrow">{branchName(account.branch_id)}</p>
                   <p className="muted-copy">{account.account_label || 'Account'} •••• {account.account_suffix}</p>
                   <strong className="bank-account-balance">
-                    {account.reported_balance == null ? 'Awaiting bank SMS' : currency.format(Number(account.reported_balance))}
+                    {account.reported_balance == null ? (bank.name === 'GTBank' ? 'Awaiting GTBank email' : 'Awaiting bank SMS') : currency.format(Number(account.reported_balance))}
                   </strong>
                   <p className="muted-copy">
                     {account.reported_balance_at
-                      ? `Last SMS balance: ${formatDateTime(account.reported_balance_at)}`
-                      : 'Available balance will appear after a matching bank alert.'}
+                      ? `Last ${bank.name === 'GTBank' ? 'Gmail' : 'SMS'} balance: ${formatDateTime(account.reported_balance_at)}`
+                      : `Balance will appear after a matching ${bank.name === 'GTBank' ? 'Gmail notification' : 'bank SMS'}.`}
                   </p>
                   {isGeneralManager ? (
                     <button
@@ -618,6 +675,47 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
       {isGeneralManager ? <section className="panel">
         <div className="panel-heading">
           <div>
+            <p className="eyebrow">GTBank Gmail Connection</p>
+            <h3>{bankAlerts.gmail?.connected ? `Connected as ${bankAlerts.gmail.email || 'Gmail account'}` : 'Connect GTBank email notifications'}</h3>
+            <p className="header-copy">
+              GTBank balances are read only from Gmail messages sent by <strong>gh.gens@gtbank.com</strong>.
+              GTBank SMS alerts are ignored. The reported balance uses <strong>Current Balance</strong>, with the email date and time preserved.
+            </p>
+          </div>
+        </div>
+        <div className="sms-device-actions">
+          {bankAlerts.gmail?.connected ? (
+            <>
+              <button type="button" className="primary-button" disabled={isSyncingGmail} onClick={syncGmail}>
+                {isSyncingGmail ? 'Syncing...' : 'Sync GTBank Gmail'}
+              </button>
+              <button type="button" className="ghost-button" disabled={isConnectingGmail} onClick={connectGmail}>
+                Replace Gmail Account
+              </button>
+              <button type="button" className="ghost-button danger-button" onClick={disconnectGmail}>
+                Disconnect
+              </button>
+            </>
+          ) : (
+            <button type="button" className="primary-button" disabled={isConnectingGmail} onClick={connectGmail}>
+              {isConnectingGmail ? 'Opening Google...' : 'Connect Gmail'}
+            </button>
+          )}
+        </div>
+        {bankAlerts.gmail?.last_synced_at ? (
+          <p className="muted-copy">
+            Last synced {formatDateTime(bankAlerts.gmail.last_synced_at)}
+            {bankAlerts.gmail.last_sync_message_at ? ` • latest email ${formatDateTime(bankAlerts.gmail.last_sync_message_at)}` : ''}
+          </p>
+        ) : null}
+        {bankAlerts.gmail?.last_error ? (
+          <p className="message-banner error">{bankAlerts.gmail.last_error}</p>
+        ) : null}
+      </section> : null}
+
+      {isGeneralManager ? <section className="panel">
+        <div className="panel-heading">
+          <div>
             <p className="eyebrow">Manager-controlled automation</p>
             <h3>SMS approval policy</h3>
             <p className="header-copy">Automatic approval is off by default. When enabled, only new matched alerts for that branch are affected; existing pending alerts still require review. Approved bank alerts post to the bank register. MoMo remains wallet-only.</p>
@@ -670,7 +768,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
                   <label className="sms-device-source-control">
                     Accept alerts from
                     <select value={device.alert_source ?? 'both'} onChange={(event) => updateDeviceSource(device, event.target.value)}>
-                      <option value="prudential">Bank only (Prudential + GTBank)</option>
+                      <option value="prudential">Bank only (Prudential Bank / Ecobank)</option>
                       <option value="momo">MTN MoMo only</option>
                       <option value="both">Both sources</option>
                     </select>
@@ -707,7 +805,7 @@ export default function BankDepositsSection({ apiFetch, apiBase, token, session,
             SMS alerts from this phone
             <select value={smsDeviceSource} onChange={(event) => setSmsDeviceSource(event.target.value)}>
               <option value="" disabled>Select a source</option>
-              <option value="prudential">Bank only (Prudential + GTBank)</option>
+              <option value="prudential">Bank only (Prudential Bank / Ecobank)</option>
               <option value="momo">MTN MoMo only</option>
               <option value="both">Both sources</option>
             </select>

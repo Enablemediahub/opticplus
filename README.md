@@ -13,3 +13,5 @@ On macOS, install PHP 8.2+, Composer, and Node.js, then run these scripts from t
 The startup script installs missing backend/frontend dependencies and creates the Laravel `.env` and application key if needed. Server output is written to `.portal-runtime/backend.log` and `.portal-runtime/frontend.log`.
 
 On Windows, run `start-portal.ps1` and `stop-portal.ps1` from PowerShell.
+
+With the local Herd setup, open [phpMyAdmin](http://phpmyadmin.test/) to manage the local MySQL database or import a SQL dump.
