@@ -33,6 +33,7 @@ class CompanyProfileController extends Controller
             'madina_address' => ['required', 'string', 'max:255'],
             'tagline' => ['nullable', 'string', 'max:255'],
             'login_wallpaper' => ['nullable', 'image', 'max:6144'],
+            'staff_login_wallpaper' => ['nullable', 'image', 'max:6144'],
             'dashboard_hero_image' => ['nullable', 'image', 'max:6144'],
             'dashboard_hero_position_x' => ['nullable', 'numeric', 'between:0,100'],
             'dashboard_hero_position_y' => ['nullable', 'numeric', 'between:0,100'],
@@ -55,6 +56,7 @@ class CompanyProfileController extends Controller
             'madina_address' => $validated['madina_address'],
             'tagline' => $validated['tagline'] ?? 'Professional Eye Care and Optical Services',
             'login_wallpaper' => $existingProfile['login_wallpaper'] ?? null,
+            'staff_login_wallpaper' => $existingProfile['staff_login_wallpaper'] ?? null,
             'dashboard_hero_image' => $existingProfile['dashboard_hero_image'] ?? null,
             'dashboard_hero_position_x' => (float) ($validated['dashboard_hero_position_x'] ?? $existingProfile['dashboard_hero_position_x'] ?? 50),
             'dashboard_hero_position_y' => (float) ($validated['dashboard_hero_position_y'] ?? $existingProfile['dashboard_hero_position_y'] ?? 50),
@@ -76,6 +78,17 @@ class CompanyProfileController extends Controller
             }
 
             $profile['login_wallpaper'] = $this->storeLoginWallpaper($request);
+        }
+
+        if ($request->hasFile('staff_login_wallpaper')) {
+            if (! empty($existingProfile['staff_login_wallpaper']) && str_starts_with($existingProfile['staff_login_wallpaper'], 'uploads/company-profile/')) {
+                $existing = $this->publicAssetPath($existingProfile['staff_login_wallpaper']);
+                if (is_file($existing)) {
+                    @unlink($existing);
+                }
+            }
+
+            $profile['staff_login_wallpaper'] = $this->storeLoginWallpaper($request, 'staff_login_wallpaper', 'staff_login_wallpaper');
         }
 
         if ($request->hasFile('dashboard_hero_image')) {
@@ -147,6 +160,7 @@ class CompanyProfileController extends Controller
             'madina_address' => 'FireStone Madina Road, Opp Cal Bank',
             'tagline' => 'Professional Eye Care and Optical Services',
             'login_wallpaper' => null,
+            'staff_login_wallpaper' => null,
             'dashboard_hero_image' => null,
             'dashboard_hero_position_x' => 50,
             'dashboard_hero_position_y' => 50,
@@ -163,12 +177,16 @@ class CompanyProfileController extends Controller
     private function serializeProfile(array $profile): array
     {
         $wallpaperPath = $profile['login_wallpaper'] ?? null;
+        $staffLoginWallpaperPath = $profile['staff_login_wallpaper'] ?? null;
         $dashboardHeroPath = $profile['dashboard_hero_image'] ?? null;
         $labadiDashboardHeroPath = $profile['labadi_dashboard_hero_image'] ?? null;
         $madinaDashboardHeroPath = $profile['madina_dashboard_hero_image'] ?? null;
 
         if ($wallpaperPath) {
             $this->ensurePublicAssetAvailable($wallpaperPath);
+        }
+        if ($staffLoginWallpaperPath) {
+            $this->ensurePublicAssetAvailable($staffLoginWallpaperPath);
         }
         if ($dashboardHeroPath) {
             $this->ensurePublicAssetAvailable($dashboardHeroPath);
@@ -183,22 +201,23 @@ class CompanyProfileController extends Controller
         return [
             ...$profile,
             'login_wallpaper_url' => $this->buildPublicAssetUrl($wallpaperPath),
+            'staff_login_wallpaper_url' => $this->buildPublicAssetUrl($staffLoginWallpaperPath),
             'dashboard_hero_image_url' => $this->buildPublicAssetUrl($dashboardHeroPath),
             'labadi_dashboard_hero_image_url' => $this->buildPublicAssetUrl($labadiDashboardHeroPath),
             'madina_dashboard_hero_image_url' => $this->buildPublicAssetUrl($madinaDashboardHeroPath),
         ];
     }
 
-    private function storeLoginWallpaper(Request $request): string
+    private function storeLoginWallpaper(Request $request, string $field = 'login_wallpaper', string $prefix = 'login_wallpaper'): string
     {
-        $file = $request->file('login_wallpaper');
+        $file = $request->file($field);
         $directory = $this->publicAssetPath('uploads/company-profile');
 
         if (! is_dir($directory)) {
             mkdir($directory, 0755, true);
         }
 
-        $filename = 'login_wallpaper_'.time().'_'.Str::random(8).'.'.$file->getClientOriginalExtension();
+        $filename = $prefix.'_'.time().'_'.Str::random(8).'.'.$file->getClientOriginalExtension();
         $file->move($directory, $filename);
 
         return 'uploads/company-profile/'.$filename;

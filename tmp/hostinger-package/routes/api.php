@@ -22,6 +22,8 @@ use App\Http\Controllers\MemoController;
 use App\Http\Controllers\PatientRecordController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\StaffAppraisalController;
+use App\Http\Controllers\StaffPortalController;
+use App\Http\Controllers\StaffHrController;
 use App\Http\Controllers\WorkingCapitalLiabilityController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +37,29 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
     });
 
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/staff/login', [StaffPortalController::class, 'login'])
+        ->middleware('throttle:5,1');
+    Route::middleware('auth.staff')->prefix('staff')->group(function (): void {
+        Route::get('/me', [StaffPortalController::class, 'me']);
+        Route::put('/password', [StaffPortalController::class, 'changePassword'])->name('staff.password.change');
+        Route::post('/logout', [StaffPortalController::class, 'logout'])->name('staff.logout');
+        Route::get('/signature', [StaffHrController::class, 'mySignature']);
+        Route::post('/signature', [StaffHrController::class, 'saveSignature']);
+        Route::delete('/signature', [StaffHrController::class, 'deleteSignature']);
+        Route::get('/communications', [StaffHrController::class, 'myCommunications']);
+        Route::post('/communications/{communicationId}/read', [StaffHrController::class, 'markCommunicationRead']);
+        Route::get('/communications/{communicationId}/view', [StaffHrController::class, 'viewMyCommunicationAttachment']);
+        Route::get('/communications/{communicationId}/attachment', [StaffHrController::class, 'downloadMyCommunicationAttachment']);
+        Route::post('/kpi-assessments/{assessmentId}/comment', [StaffHrController::class, 'commentOnKpiAssessment']);
+        Route::get('/letters', [StaffHrController::class, 'myLetters']);
+        Route::get('/letters/{letterId}/attachment', [StaffHrController::class, 'downloadMyLetterAttachment']);
+        Route::get('/payroll', [StaffHrController::class, 'payroll']);
+        Route::get('/requests', [StaffHrController::class, 'myRequests']);
+        Route::post('/requests', [StaffHrController::class, 'submitRequest']);
+        Route::get('/leave', [StaffHrController::class, 'myLeave']);
+        Route::get('/requests/{requestId}/attachment', [StaffHrController::class, 'downloadMyAttachment']);
+        Route::get('/kpi', [StaffHrController::class, 'myKpi']);
+    });
     Route::post('/public/registrations', [PatientRecordController::class, 'publicStore'])
         ->middleware('throttle:10,1');
     Route::post('/public/folder-ids', [PatientRecordController::class, 'issuePublicFolderId'])
@@ -50,6 +75,40 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         ->middleware('throttle:30,1');
 
     Route::middleware(['auth.token', 'audit.mutations'])->group(function (): void {
+        Route::post('/manager/employees/{employeeId}/staff-portal-account', [StaffPortalController::class, 'provision']);
+        Route::get('/manager/hr-space', [StaffHrController::class, 'adminIndex']);
+        Route::get('/manager/hr-space/letter-signature', [StaffHrController::class, 'managerLetterSignature']);
+        Route::post('/manager/hr-space/letter-signature', [StaffHrController::class, 'saveManagerLetterSignature']);
+        Route::delete('/manager/hr-space/letter-signature', [StaffHrController::class, 'deleteManagerLetterSignature']);
+        Route::post('/manager/hr-space/communications', [StaffHrController::class, 'createCommunication']);
+        Route::delete('/manager/hr-space/communications/{communicationId}', [StaffHrController::class, 'deleteCommunication']);
+        Route::post('/manager/hr-space/letters', [StaffHrController::class, 'saveLetter']);
+        Route::put('/manager/hr-space/letters/{letterId}', [StaffHrController::class, 'saveLetter']);
+        Route::delete('/manager/hr-space/letters/{letterId}', [StaffHrController::class, 'deleteLetter']);
+        Route::get('/manager/hr-space/letters/{letterId}/attachment', [StaffHrController::class, 'downloadAdminLetterAttachment']);
+        Route::post('/manager/hr-space/letter-templates', [StaffHrController::class, 'saveLetterTemplate']);
+        Route::put('/manager/hr-space/letter-templates/{templateId}', [StaffHrController::class, 'saveLetterTemplate']);
+        Route::delete('/manager/hr-space/letter-templates/{templateId}', [StaffHrController::class, 'deleteLetterTemplate']);
+        Route::patch('/manager/hr-space/letters/{letterId}/publish', [StaffHrController::class, 'publishLetter']);
+        Route::patch('/manager/hr-space/requests/{requestId}/decision', [StaffHrController::class, 'decideRequest']);
+        Route::patch('/manager/hr-space/requests/{requestId}/interruption', [StaffHrController::class, 'recordLeaveInterruption']);
+        Route::get('/manager/hr-space/requests/{requestId}/attachment', [StaffHrController::class, 'downloadAdminAttachment']);
+        Route::post('/manager/hr-space/kpi-rules', [StaffHrController::class, 'saveKpiRule']);
+        Route::put('/manager/hr-space/kpi-rules/{ruleId}', [StaffHrController::class, 'saveKpiRule']);
+        Route::post('/manager/hr-space/kpi-results', [StaffHrController::class, 'scoreKpi']);
+        Route::post('/manager/hr-space/kpi-scorecards', [StaffHrController::class, 'saveKpiScorecard']);
+        Route::put('/manager/hr-space/kpi-scorecards/{scorecardId}', [StaffHrController::class, 'saveKpiScorecard']);
+        Route::put('/manager/hr-space/kpi-allowance-bands', [StaffHrController::class, 'saveKpiAllowanceBands']);
+        Route::post('/manager/hr-space/kpi-assessments', [StaffHrController::class, 'saveKpiAssessment']);
+        Route::put('/manager/hr-space/kpi-assessments/{assessmentId}', [StaffHrController::class, 'saveKpiAssessment']);
+        Route::patch('/manager/hr-space/kpi-assessments/{assessmentId}/review', [StaffHrController::class, 'reviewKpiAssessment']);
+        Route::patch('/manager/hr-space/kpi-assessments/{assessmentId}/reopen', [StaffHrController::class, 'reopenKpiAssessment']);
+        Route::patch('/manager/hr-space/kpi-assessments/{assessmentId}/response', [StaffHrController::class, 'respondToKpiAssessment']);
+        Route::post('/manager/hr-space/leave-entitlements', [StaffHrController::class, 'saveLeaveEntitlement']);
+        Route::post('/manager/hr-space/public-holidays', [StaffHrController::class, 'savePublicHoliday']);
+        Route::delete('/manager/hr-space/public-holidays/{holidayId}', [StaffHrController::class, 'deletePublicHoliday']);
+        Route::patch('/manager/hr-space/kpi-results/{resultId}/review', [StaffHrController::class, 'reviewKpi']);
+        Route::patch('/manager/hr-space/kpi-results/{resultId}/reopen', [StaffHrController::class, 'reopenKpi']);
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/me/profile', [AuthController::class, 'updateProfile']);
         Route::post('/me/password', [AuthController::class, 'changePassword']);

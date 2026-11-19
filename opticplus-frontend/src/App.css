@@ -1142,6 +1142,12 @@
   background: var(--bg-base);
 }
 
+.hr-space-fullscreen-shell {
+  grid-template-columns: 1fr;
+  min-height: 100dvh;
+  background: #f3f7fc;
+}
+
 .database-fullscreen-main {
   padding: 28px;
 }
@@ -1157,6 +1163,19 @@
 
 .patient-form-fullscreen-main .optometrist-form-page-full {
   min-height: calc(125vh - 140px);
+}
+
+.hr-space-fullscreen-main {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  padding: 0;
+  background: #f3f7fc;
+}
+
+.hr-space-fullscreen-main > :not(.staff-hr-admin-workspace) {
+  display: none !important;
 }
 
 .portal-header {
@@ -13737,8 +13756,53 @@ td.billing-balance-due,
   cursor: pointer;
 }
 
-.staff-row-trigger {
+.staff-directory-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 190px;
+}
+
+.staff-directory-avatar {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.staff-directory-avatar:focus-visible {
+  outline: 3px solid #2783e3;
+  outline-offset: 3px;
+}
+
+.staff-directory-avatar-circle {
+  position: relative;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e8f2ff;
+  color: #176fc2;
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(30, 85, 139, .16);
+}
+
+.staff-directory-avatar-circle img {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.staff-row-trigger {
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;

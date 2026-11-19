@@ -67,7 +67,7 @@ function withImageVersion(url, versionKey) {
   return `${url}${separator}v=${encodeURIComponent(versionKey)}`
 }
 
-export default function StaffProfilesSection({ token, selectedBranchId, apiFetch, onHeaderProfileChange = () => {} }) {
+export default function StaffProfilesSection({ token, selectedBranchId, branchOptions = [], apiFetch, onHeaderProfileChange = () => {}, onManageHrSpace = () => {} }) {
   const [data, setData] = useState(null)
   const [detail, setDetail] = useState(null)
   const [filters, setFilters] = useState(defaultFilters())
@@ -82,8 +82,11 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
   const [isSaving, setIsSaving] = useState(false)
   const [editForm, setEditForm] = useState(emptyEditForm)
   const [createForm, setCreateForm] = useState(emptyCreateForm)
+  const [createBranchId, setCreateBranchId] = useState(selectedBranchId > 0 ? String(selectedBranchId) : '')
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
+  const [staffPortalNotice, setStaffPortalNotice] = useState('')
+  const [isProvisioningStaffPortal, setIsProvisioningStaffPortal] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -157,6 +160,23 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     }
   }
 
+  async function provisionStaffPortalAccount() {
+    if (!employee?.id) return
+    setIsProvisioningStaffPortal(true)
+    setStaffPortalNotice('')
+    try {
+      const response = await apiFetch(`/manager/employees/${employee.id}/staff-portal-account`, {
+        method: 'POST',
+        token,
+      })
+      setStaffPortalNotice(`${response.staff_id} can sign in at /staff with temporary PIN 1234. Ask the employee to change it immediately.`)
+    } catch (nextError) {
+      setStaffPortalNotice(nextError.message)
+    } finally {
+      setIsProvisioningStaffPortal(false)
+    }
+  }
+
   function resetEditor(nextDetail = detail, options = {}) {
     const { clearPreview = true } = options
     const nextEmployee = nextDetail?.employee
@@ -224,6 +244,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
     setError('')
     setPhotoFile(null)
     setPhotoPreview('')
+    setCreateBranchId(selectedBranchId > 0 ? String(selectedBranchId) : '')
     resetCreateForm()
   }
 
@@ -318,6 +339,10 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
 
   async function submitCreate(event) {
     event.preventDefault()
+    if (!createBranchId) {
+      setError('Choose Labadi or Madina before creating this staff profile.')
+      return
+    }
 
     setIsSaving(true)
     setError('')
@@ -351,7 +376,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
       body.append('year_completed', createForm.year_completed)
       body.append('professional_license', createForm.professional_license)
       body.append('status', createForm.status)
-      body.append('branch_id', String(selectedBranchId))
+      body.append('branch_id', createBranchId)
       if (photoFile) body.append('photo', photoFile)
 
       const response = await apiFetch('/manager/employees', {
@@ -392,6 +417,9 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
             attendance, and update profile images or staff information.
           </p>
         </div>
+        <button type="button" className="primary-button" onClick={onManageHrSpace}>
+          Manage HR Space
+        </button>
       </div>
 
       {error ? <div className="message-banner error">{error}</div> : null}
@@ -418,8 +446,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
               type="button"
               className="primary-button"
               onClick={openCreateModal}
-              disabled={selectedBranchId === 0}
-              title={selectedBranchId === 0 ? 'Switch to a branch before creating staff profiles.' : 'Register a new staff profile'}
+              title="Register a new staff profile"
             >
               New Staff
             </button>
@@ -505,10 +532,34 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                     onClick={() => openEmployeeModal(record.id)}
                   >
                     <td>
-                      <button type="button" className="staff-row-trigger">
+                      <div className="staff-directory-person">
+                        <button
+                          type="button"
+                          className="staff-directory-avatar"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openEmployeeModal(record.id)
+                          }}
+                          aria-label={`Open ${record.name}'s staff profile`}
+                          title={`Open ${record.name}'s staff profile`}
+                        >
+                          <span className="staff-directory-avatar-circle">
+                            {record.photo_url ? (
+                              <img
+                                src={record.photo_url}
+                                alt=""
+                                loading="lazy"
+                                onError={(event) => { event.currentTarget.style.display = 'none' }}
+                              />
+                            ) : null}
+                            <span>{record.name?.trim().slice(0, 1).toUpperCase() || '?'}</span>
+                          </span>
+                        </button>
+                        <button type="button" className="staff-row-trigger">
                         <strong>{record.name}</strong>
                         <div className="muted-copy">{record.staff_id || 'No staff ID'}</div>
-                      </button>
+                        </button>
+                      </div>
                     </td>
                     <td>{record.department || 'No department'}</td>
                     <td>{record.job_title || 'No title'}</td>
@@ -621,7 +672,7 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                     <div className="settings-avatar-copy">
                       <strong>{createForm.name || 'New staff profile'}</strong>
                       <span>Staff ID will be assigned automatically</span>
-                      <span>{data?.branch_name ?? 'Selected branch'}</span>
+                      <span>{branchOptions.find((branch) => String(branch.id) === createBranchId)?.name || data?.branch_name || 'Choose a branch'}</span>
                     </div>
                   </div>
 
@@ -647,6 +698,13 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                   <label>
                     Job title
                     <input value={createForm.job_title} onChange={(event) => setCreateForm((current) => ({ ...current, job_title: event.target.value }))} />
+                  </label>
+                  <label>
+                    Branch
+                    <select value={createBranchId} onChange={(event) => setCreateBranchId(event.target.value)} disabled={selectedBranchId > 0} required>
+                      <option value="">Choose a branch</option>
+                      {branchOptions.filter((branch) => Number(branch.id) > 0 && (selectedBranchId === 0 || Number(branch.id) === Number(selectedBranchId))).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                    </select>
                   </label>
                   <label>
                     Department
@@ -902,6 +960,12 @@ export default function StaffProfilesSection({ token, selectedBranchId, apiFetch
                     ) : (
                       <p className="muted-copy">This employee does not currently map to a portal login.</p>
                     )}
+                    <div className="filter-actions-row" style={{ marginTop: 16 }}>
+                      <button className="primary-button" type="button" onClick={provisionStaffPortalAccount} disabled={isProvisioningStaffPortal || !employee.staff_id || employee.status !== 'active'}>
+                        {isProvisioningStaffPortal ? 'Issuing access…' : 'Issue / reset Staff Space PIN'}
+                      </button>
+                    </div>
+                    {staffPortalNotice && <p className="muted-copy" role="status">{staffPortalNotice}</p>}
                   </section>
 
                   <section className="panel">

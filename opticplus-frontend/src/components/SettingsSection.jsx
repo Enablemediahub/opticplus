@@ -73,6 +73,8 @@ export default function SettingsSection({
   const loginWallpaperPreview =
     companyProfileForm.loginWallpaperPreview || companyProfileForm.login_wallpaper_url || ''
   const loginWallpaperName = companyProfileForm.loginWallpaperFile?.name || ''
+  const staffLoginWallpaperPreview = companyProfileForm.staffLoginWallpaperPreview || companyProfileForm.staff_login_wallpaper_url || ''
+  const staffLoginWallpaperName = companyProfileForm.staffLoginWallpaperFile?.name || ''
   const canManageCompanyProfile = ['manager', 'ceo'].includes(session?.role)
   const canManageOperationsCatalogs = session?.role === 'manager'
 
@@ -310,14 +312,14 @@ export default function SettingsSection({
                   ) : (
                     <div className="settings-wallpaper-fallback">
                       <strong>Login wallpaper</strong>
-                      <span>Upload a branded background for the Opticplus O+ sign-in page.</span>
+                      <span>Upload a branded background for the main Opticplus O+ sign-in page.</span>
                     </div>
                   )}
                 </div>
 
                 <div className="settings-avatar-copy">
                   <strong>Login interface wallpaper</strong>
-                  <span>Visible on the public login page before users sign in.</span>
+                  <span>Visible on the main dashboard login before users sign in.</span>
                   <div className="memo-upload-field settings-upload-field">
                     <span className="memo-upload-label">Wallpaper image</span>
                     <label className="memo-upload-trigger">
@@ -337,7 +339,7 @@ export default function SettingsSection({
                         }}
                       />
                       <strong>Upload login wallpaper</strong>
-                      <span>Use a wide brand image that reads well behind the sign-in hero layout.</span>
+                      <span>Use a wide brand image that reads well behind the main sign-in layout.</span>
                     </label>
                     {loginWallpaperName ? (
                       <div className="memo-file-pill-list">
@@ -345,6 +347,50 @@ export default function SettingsSection({
                       </div>
                     ) : (
                       <p className="muted-copy">No new wallpaper image selected yet.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="settings-avatar-block full-span settings-wallpaper-block">
+                <div className="settings-wallpaper-preview">
+                  {staffLoginWallpaperPreview ? (
+                    <img src={staffLoginWallpaperPreview} alt="Staff Space login wallpaper preview" className="settings-wallpaper-image" />
+                  ) : (
+                    <div className="settings-wallpaper-fallback">
+                      <strong>Staff Space wallpaper</strong>
+                      <span>Choose a separate background for the Bealet HR Space sign-in page.</span>
+                    </div>
+                  )}
+                </div>
+                <div className="settings-avatar-copy">
+                  <strong>Bealet HR Space login wallpaper</strong>
+                  <span>Visible only on the staff sign-in page at /staff.</span>
+                  <div className="memo-upload-field settings-upload-field">
+                    <span className="memo-upload-label">Staff wallpaper image</span>
+                    <label className="memo-upload-trigger">
+                      <input
+                        className="hidden-file-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null
+                          setCompanyProfileForm((current) => ({
+                            ...current,
+                            staffLoginWallpaperFile: file,
+                            staffLoginWallpaperPreview: file
+                              ? URL.createObjectURL(file)
+                              : current.staff_login_wallpaper_url || '',
+                          }))
+                        }}
+                      />
+                      <strong>Upload Staff Space wallpaper</strong>
+                      <span>Choose an image for the employee portal only.</span>
+                    </label>
+                    {staffLoginWallpaperName ? (
+                      <div className="memo-file-pill-list"><span className="memo-file-pill">{staffLoginWallpaperName}</span></div>
+                    ) : (
+                      <p className="muted-copy">No new Staff Space wallpaper selected.</p>
                     )}
                   </div>
                 </div>

@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auth.token' => \App\Http\Middleware\AuthenticateApiToken::class,
+            'auth.staff' => \App\Http\Middleware\AuthenticateStaffPortal::class,
             'auth.bank-alert-device' => \App\Http\Middleware\AuthenticateBankAlertDevice::class,
             'audit.mutations' => \App\Http\Middleware\AuditMutationTrail::class,
             'idempotency' => \App\Http\Middleware\PreventDuplicateSubmission::class,

@@ -1,6 +1,10 @@
 # opticplus
 A software for Optical Centers
 
+## Project references
+
+- [Bealet HR Space project brief](docs/BEALET_HR_SPACE_PROJECT.md)
+
 ## Local development
 
 On macOS, install PHP 8.2+, Composer, and Node.js, then run these scripts from the project root:

@@ -1,56 +1,13 @@
-OPTICPLUS HOSTINGER FILEZILLA MANIFEST — GTBANK GMAIL BALANCE SYNC
-Generated: 2026-11-18 (company-wide GHS balance parsing)
+OPTICPLUS HOSTINGER FILEZILLA UPDATE — STAFF PASSWORD CHANGE
+Prepared: 2026-11-19
 
-Upload the following files from tmp/hostinger-package to the Laravel application root, preserving paths. Upload the backend files before or with the public frontend build.
+Sync only these files for the latest staff-password update. Upload the backend
+file and JavaScript assets first, then `public/index.html` last. Keep older
+hashed assets on the server for users with an already-open browser session.
 
-Latest patch for an installation that already has the Gmail integration:
-app/Services/GtBankGmailService.php
+app/Http/Controllers/StaffPortalController.php
+public/assets/StaffSpace-7Jf9x8Jp.js
+public/assets/index-Cgg7NUBq.js
 public/index.html
-public/assets/index-90CivPa7.js
-public/assets/App-D1-5Tu9i.js
 
-This patch recognizes GHS email balances and applies the latest GTBank Gmail balance company-wide across active account records. No database change is required for this patch.
-
-Backend application files:
-routes/api.php
-app/Http/Controllers/BankAlertController.php
-app/Http/Controllers/BankGmailController.php
-app/Services/GtBankGmailService.php
-bootstrap/app.php
-config/app.php
-config/services.php
-database/migrations/2026_11_18_120000_create_bank_gmail_connections.php
-
-Public frontend build:
-public/index.html
-public/opticplus-login-logo.png
-public/bealet-logo.png
-public/manifest.webmanifest
-public/icons.svg
-public/opticplus-logo.png
-public/favicon.svg
-public/sw.js
-public/images/banks/prudential-bank.png
-public/images/banks/gt-bank.png
-public/images/banks/mtn-momo.jpeg
-public/images/banks/ecobank.jpg
-public/icons/opticplus-180.png
-public/icons/opticplus-192.png
-public/icons/opticplus-512.png
-public/assets/App-C-FdAD01.css
-public/assets/react-dom-CPFlkE0y.js
-public/assets/index-C-2ResrQ.css
-public/assets/jsx-runtime-B4rycR1h.css
-public/assets/jsx-runtime-CGBb8Mj1.js
-public/assets/index-90CivPa7.js
-public/assets/PublicRegistrationPage-BvZFkKXU.js
-public/assets/PublicPatientIdCard-qbEZQtxE.js
-public/assets/PublicRegistrationPage-CdPH3cx_.css
-public/assets/App-D1-5Tu9i.js
-
-Database setup (not a FileZilla upload):
-For Hostinger without Artisan migration access, run tmp/hostinger-package/database/manual_sql/gtbank_gmail_tables.sql in phpMyAdmin against the OpticPlus database. If Artisan migrations are available, upload the migration above and run php artisan migrate --force instead.
-
-After uploading, set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI, and FRONTEND_URL in the live server .env. Use https://opticplus.bealet.com/api/v1/bank-alerts/gmail/callback as the redirect URI and register the same exact URI in the Google Cloud OAuth client. Then run php artisan config:clear. Do not upload or replace the live .env file; do not upload OAuth client secrets.
-
-Automatic Gmail polling requires a Hostinger cron job to run php artisan schedule:run every minute from the Laravel application root. The Bank Deposits page also supports manual sync.
+No database migration or SQL change is required.

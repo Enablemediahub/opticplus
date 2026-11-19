@@ -15,6 +15,9 @@
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
+    # Serve the React staff portal at /staff instead of passing it to Laravel.
+    RewriteRule ^staff/?$ index.html [L]
+
     # Serve the current SPA shell for the public registration route,
     # including when an older physical registration directory exists.
     RewriteRule ^registration/?$ index.html [L]

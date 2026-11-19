@@ -37,6 +37,7 @@ import MonitorSection from './components/MonitorSection.jsx'
 import SettingsSection from './components/SettingsSection.jsx'
 import SellingPricelistSection from './components/SellingPricelistSection.jsx'
 import StaffProfilesSection from './components/StaffProfilesSection.jsx'
+import HRSpaceAdminPanel from './components/HRSpaceAdminPanel.jsx'
 import StaffAppraisalPanel from './components/StaffAppraisalPanel.jsx'
 import StaffAppraisalManagerPanel from './components/StaffAppraisalManagerPanel.jsx'
 import TechnicianDashboardSection from './components/TechnicianDashboardSection.jsx'
@@ -324,6 +325,7 @@ const viewHashMap = {
   Users: '#/users',
   Database: '#/database',
   'Staff Profiles': '#/staff-profiles',
+  'Manage HR Space': '#/hr-space',
   Appointments: '#/appointments',
   Patients: '#/patients',
   Billing: '#/billing',
@@ -388,6 +390,7 @@ const optometristClinicalViews = ['Glasses Prescriptions', 'Medical Report']
 const optometristSettingsViews = ['Settings', 'Profile']
 
 function hashToView(hash) {
+  if (/^#\/hr-space(?:\/(?:staff\/\d+|letters|requests|leave|people|performance))?$/.test(hash)) return 'Manage HR Space'
   const match = Object.entries(viewHashMap).find(([, value]) => value === hash)
   return match?.[0] ?? 'Dashboard'
 }
@@ -620,6 +623,10 @@ const defaultCompanyProfile = () => ({
   login_wallpaper_url: '',
   loginWallpaperFile: null,
   loginWallpaperPreview: '',
+  staff_login_wallpaper: null,
+  staff_login_wallpaper_url: '',
+  staffLoginWallpaperFile: null,
+  staffLoginWallpaperPreview: '',
   dashboard_hero_image: null,
   dashboard_hero_image_url: '',
   dashboardHeroImageFile: null,
@@ -868,8 +875,9 @@ function App() {
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
   const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Selling Pricelist', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
+  const isHrSpaceFullscreen = isGeneralManager && activeView === 'Manage HR Space'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
-  const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen
+  const isChromeHiddenView = isDatabaseFullscreen || isPatientFormFullscreen || isHrSpaceFullscreen
   const branchHero = selectedBranchId === 1
     ? {
         image: companyProfileForm.labadiDashboardHeroImagePreview || companyProfileForm.labadi_dashboard_hero_image_url || '',
@@ -1507,7 +1515,9 @@ function App() {
   }, [activeView, financeSalesFilters.date_from, financeSalesFilters.date_to])
 
   useEffect(() => {
-    const nextHash = viewHashMap[activeView] ?? '#/dashboard'
+    const currentHash = window.location.hash
+    const isHrWorkspaceRoute = activeView === 'Manage HR Space' && /^#\/hr-space(?:\/(?:staff\/\d+|letters|requests|leave|people|performance))?$/.test(currentHash)
+    const nextHash = isHrWorkspaceRoute ? currentHash : (viewHashMap[activeView] ?? '#/dashboard')
     if (window.location.hash !== nextHash) {
       window.location.hash = nextHash
     }
@@ -2940,6 +2950,11 @@ function App() {
   }, [activeView, canAccessSystemSettings, session])
 
   useEffect(() => {
+    if (!session || activeView !== 'Manage HR Space' || isGeneralManager) return
+    setActiveView('Dashboard')
+  }, [activeView, isGeneralManager, session])
+
+  useEffect(() => {
     if (session?.role !== 'receptionist' || activeView !== 'Reports') return
     setActiveView('Notes')
   }, [activeView, session])
@@ -3187,6 +3202,9 @@ function App() {
       formData.append('tagline', companyProfileForm.tagline)
       if (companyProfileForm.loginWallpaperFile) {
         formData.append('login_wallpaper', companyProfileForm.loginWallpaperFile)
+      }
+      if (companyProfileForm.staffLoginWallpaperFile) {
+        formData.append('staff_login_wallpaper', companyProfileForm.staffLoginWallpaperFile)
       }
       if (companyProfileForm.dashboardHeroImageFile) {
         formData.append('dashboard_hero_image', companyProfileForm.dashboardHeroImageFile)
@@ -5187,7 +5205,7 @@ function App() {
           loginError={loginError}
         />
       ) : (
-        <section className={isChromeHiddenView ? `portal-shell ${isDatabaseFullscreen ? 'database-fullscreen-shell' : 'patient-form-fullscreen-shell'}` : 'portal-shell'}>
+        <section className={isChromeHiddenView ? `portal-shell ${isDatabaseFullscreen ? 'database-fullscreen-shell' : isPatientFormFullscreen ? 'patient-form-fullscreen-shell' : 'hr-space-fullscreen-shell'}` : 'portal-shell'}>
           {!isChromeHiddenView && isSidebarOpen ? (
             <button
               type="button"
@@ -5265,7 +5283,8 @@ function App() {
           </aside>
           ) : null}
 
-          <div className={isChromeHiddenView ? `portal-main ${isDatabaseFullscreen ? 'database-fullscreen-main' : 'patient-form-fullscreen-main'}` : `portal-main${activeView === 'Lens Orders' ? ' lens-orders-main' : ''}`}>
+          <div className={isChromeHiddenView ? `portal-main ${isDatabaseFullscreen ? 'database-fullscreen-main' : isPatientFormFullscreen ? 'patient-form-fullscreen-main' : 'hr-space-fullscreen-main'}` : `portal-main${activeView === 'Lens Orders' ? ' lens-orders-main' : ''}`}>
+            {isHrSpaceFullscreen ? <HRSpaceAdminPanel token={token} apiFetch={apiFetch} visible onClose={() => setActiveView('Dashboard')} /> : null}
             {isGeneralManager && managerNotifications.isBannerOpen ? (
               <section className="manager-approval-slide" role="status" aria-live="polite">
                 <div className="manager-approval-slide-heading">
@@ -5648,8 +5667,10 @@ function App() {
               <StaffProfilesSection
                 token={token}
                 selectedBranchId={selectedBranchId}
+                branchOptions={branchOptions}
                 apiFetch={apiFetch}
                 onHeaderProfileChange={setStaffHeroProfile}
+                onManageHrSpace={() => setActiveView('Manage HR Space')}
               />
             ) : null}
 
@@ -6555,7 +6576,7 @@ function App() {
         </div>
       ) : null}
 
-      {successToasts.length ? (
+      {!isHrSpaceFullscreen && successToasts.length ? (
         <div className="success-toast-stack" aria-live="polite" aria-atomic="true">
           {successToasts.map((toast) => (
             <div key={toast.id} className="success-toast">
@@ -6566,7 +6587,7 @@ function App() {
         </div>
       ) : null}
 
-      {session ? (
+      {session && !isHrSpaceFullscreen ? (
         <MessengerWidget
           apiFetch={apiFetch}
           token={token}

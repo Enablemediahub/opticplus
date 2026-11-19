@@ -1,13 +1,18 @@
-import { Component, lazy, StrictMode, Suspense } from 'react'
+import { Component, createElement, lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './components/PublicRegistrationPage.css'
 import './components/PublicPatientIdCard.css'
 
 const isPublicRegistration = window.location.pathname.replace(/\/+$/, '') === '/registration'
-const ApplicationEntry = lazy(() => isPublicRegistration
-  ? import('./components/PublicRegistrationPage.jsx')
-  : import('./App.jsx'))
+const isStaffPortal = window.location.pathname.replace(/\/+$/, '') === '/staff'
+const applicationEntry = lazy(
+  isPublicRegistration
+    ? () => import('./components/PublicRegistrationPage.jsx')
+    : isStaffPortal
+      ? () => import('./components/StaffSpace.jsx')
+      : () => import('./App.jsx'),
+)
 
 class StartupErrorBoundary extends Component {
   constructor(props) {
@@ -83,7 +88,7 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <StartupErrorBoundary>
       <Suspense fallback={<main className="public-registration-loading">Opening Bealet Optical Center registration…</main>}>
-        <ApplicationEntry />
+        {createElement(applicationEntry)}
       </Suspense>
     </StartupErrorBoundary>
   </StrictMode>,
