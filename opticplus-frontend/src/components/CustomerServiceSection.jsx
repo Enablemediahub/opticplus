@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import StatWidget from './StatWidget.jsx'
 import WorkspaceTabs from './WorkspaceTabs.jsx'
+import CustomerFollowupsTab from './CustomerFollowupsTab.jsx'
 
 const customerTabs = [
   {
@@ -15,6 +16,12 @@ const customerTabs = [
     description: 'Review glasses ready for pickup and follow up with customers.',
     icon: 'PG',
   },
+  {
+    id: 'Aftercare',
+    label: 'Aftercare',
+    description: 'Track 1-week, 6-month and 2-year customer check-ins.',
+    icon: '✦',
+  },
 ]
 
 export default function CustomerServiceSection(props) {
@@ -22,6 +29,13 @@ export default function CustomerServiceSection(props) {
   const [smsPreview, setSmsPreview] = useState(null)
   const [editingTemplate, setEditingTemplate] = useState(null)
   const isMergedView = Boolean(props.customerServiceData?.is_merged_view)
+  const role = String(props.session?.normalized_role ?? props.session?.role ?? '').toLowerCase()
+  const isManager = role === 'manager'
+  const isReceptionist = role === 'receptionist'
+  const canAccessAftercare = isManager || isReceptionist
+  const visibleCustomerTabs = canAccessAftercare
+    ? customerTabs
+    : customerTabs.filter((tab) => tab.id !== 'Aftercare')
 
   function closeSmsPreview() {
     setSmsPreview(null)
@@ -126,6 +140,35 @@ export default function CustomerServiceSection(props) {
     }
   }
 
+  function renderActiveTab() {
+    if (!canAccessAftercare && activeTab === 'Aftercare') {
+      return <MessagesTab {...props} isMergedView={isMergedView} openSmsPreview={openSmsPreview} openTemplateEditor={openTemplateEditor} />
+    }
+
+    if (activeTab === 'Messages') {
+      return <MessagesTab {...props} isMergedView={isMergedView} openSmsPreview={openSmsPreview} openTemplateEditor={openTemplateEditor} />
+    }
+
+    if (activeTab === 'Pickup Glasses') {
+      return <PickupTab {...props} isMergedView={isMergedView} openSmsPreview={openSmsPreview} />
+    }
+
+    return <CustomerFollowupsTab
+      data={props.customerFollowupsData}
+      filters={props.customerFollowupFilters}
+      setFilters={props.setCustomerFollowupFilters}
+      setQuery={props.setCustomerFollowupQuery}
+      isManager={isManager}
+      isReceptionist={isReceptionist}
+      isLoading={props.isLoadingCustomerFollowups}
+      isSaving={props.isSavingCustomerFollowup}
+      error={props.customerFollowupError}
+      success={props.customerFollowupSuccess}
+      recordAttempt={props.recordCustomerFollowupAttempt}
+      resolveComplaint={props.resolveCustomerFollowupComplaint}
+    />
+  }
+
   return (
     <section className="finance-section">
       <div className="patients-header">
@@ -161,19 +204,16 @@ export default function CustomerServiceSection(props) {
       ) : null}
 
       <WorkspaceTabs
-        tabs={customerTabs}
-        activeTab={activeTab}
+        tabs={visibleCustomerTabs}
+        activeTab={canAccessAftercare ? activeTab : 'Messages'}
         onChange={setActiveTab}
+        storageKey={`opticplus:workspace-tab:v1:customer-service:${props.session?.id ?? role}:${props.selectedBranchId ?? props.session?.branch_id ?? 'default'}`}
         ariaLabel="Customer service workspaces"
         heading="Choose a customer service workspace"
-        description="Switch between customer messaging and glasses pickup follow-up."
+        description="Switch between customer messaging, glasses pickup, and aftercare."
       />
 
-      {activeTab === 'Messages' ? (
-        <MessagesTab {...props} isMergedView={isMergedView} openSmsPreview={openSmsPreview} openTemplateEditor={openTemplateEditor} />
-      ) : (
-        <PickupTab {...props} isMergedView={isMergedView} openSmsPreview={openSmsPreview} />
-      )}
+      {renderActiveTab()}
 
       {smsPreview ? (
         <div className="modal-overlay" onClick={closeSmsPreview}>
@@ -605,6 +645,9 @@ function PickupTab(props) {
 
   const selectedVisibleCount = displayedPickupRecords.filter((record) => selectedPickupIds.includes(record.billing_id)).length
   const allVisibleSelected = displayedPickupRecords.length > 0 && selectedVisibleCount === displayedPickupRecords.length
+  const selectedPickupRecords = displayedPickupRecords.filter((record) => selectedPickupIds.includes(record.billing_id))
+  const markPickedUpCount = selectedPickupRecords.filter((record) => ['ready', 'notified'].includes(record.pickup_status)).length
+  const reversePickupCount = selectedPickupRecords.filter((record) => record.pickup_status === 'picked_up').length
 
   useEffect(() => {
     const visibleIds = new Set(displayedPickupRecords.map((record) => record.billing_id))
@@ -659,13 +702,13 @@ function PickupTab(props) {
       .filter((record) => selectedIds.includes(record.billing_id) && (
         action === 'picked-up'
           ? ['ready', 'notified'].includes(record.pickup_status)
-          : ['ready', 'notified', 'picked_up'].includes(record.pickup_status)
+          : record.pickup_status === 'picked_up'
       ))
       .map((record) => record.billing_id)
 
     if (!eligibleBillingIds.length) return
-    await props.updatePickupStatus(eligibleBillingIds, action)
-    setSelectedPickupIds([])
+    const updated = await props.updatePickupStatus(eligibleBillingIds, action)
+    if (updated) setSelectedPickupIds([])
   }
 
   function queuePickupMessage(record) {
@@ -771,31 +814,50 @@ function PickupTab(props) {
         {props.isLoadingCustomerService && !props.customerServiceData ? <p className="muted-copy">Loading customer service records...</p> : null}
 
         <div className="extract-table-toolbar">
-          <label className="extract-select-all">
-            <input
-              type="checkbox"
-              checked={allVisibleSelected}
-              onChange={(event) => toggleAllVisiblePickupSelections(event.target.checked)}
-              disabled={!displayedPickupRecords.length}
-            />
-            <span>Select all visible rows</span>
-          </label>
+          <div className="customer-pickup-selection-controls">
+            <label className="extract-select-all">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={(event) => toggleAllVisiblePickupSelections(event.target.checked)}
+                disabled={!displayedPickupRecords.length}
+              />
+              <span>Select all visible rows</span>
+            </label>
+            <label className="customer-pickup-page-size">
+              Show
+              <select
+                value={props.customerServiceFilters.per_page ?? 12}
+                onChange={(event) => {
+                  const perPage = Number(event.target.value)
+                  props.setCustomerServiceFilters((current) => ({ ...current, per_page: perPage, page: 1 }))
+                  props.setCustomerServiceQuery((current) => ({ ...current, per_page: perPage, page: 1 }))
+                }}
+              >
+                <option value="12">12</option>
+                <option value="20">20</option>
+                <option value="30">30</option>
+              </select>
+              rows per page
+            </label>
+          </div>
           <div className="table-actions-inline">
+            <span className="customer-pickup-selected-count">{selectedVisibleCount} selected</span>
             <button
               type="button"
               className="mini-action"
-              disabled={props.isMergedView || !selectedPickupIds.length}
+              disabled={props.isMergedView || !markPickedUpCount}
               onClick={() => runBulkPickupAction('picked-up')}
             >
-              Mark picked up
+              Mark picked up{markPickedUpCount ? ` (${markPickedUpCount})` : ''}
             </button>
             <button
               type="button"
               className="mini-action danger"
-              disabled={props.isMergedView || !selectedPickupIds.length}
+              disabled={props.isMergedView || !reversePickupCount}
               onClick={() => runBulkPickupAction('not-ready')}
             >
-              Reverse selected
+              Reverse selected{reversePickupCount ? ` (${reversePickupCount})` : ''}
             </button>
           </div>
         </div>
@@ -894,7 +956,10 @@ function PickupTab(props) {
         </div>
 
         <div className="pagination-bar">
-          <span>Page {props.customerServiceData?.pagination?.page ?? 1} of {Math.max(props.customerServiceData?.pagination?.total_pages ?? 1, 1)}</span>
+          <span>
+            Page {props.customerServiceData?.pagination?.page ?? 1} of {Math.max(props.customerServiceData?.pagination?.total_pages ?? 1, 1)}
+            {' · '}{props.customerServiceData?.pagination?.total ?? 0} records
+          </span>
           <div className="pagination-actions">
             <button
               type="button"

@@ -7,6 +7,8 @@ use App\Http\Controllers\BankGmailController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CompanyProfileController;
 use App\Http\Controllers\CustomerServiceController;
+use App\Http\Controllers\CustomerFollowupController;
+use App\Http\Controllers\OptometristReferralController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseAdminController;
 use App\Http\Controllers\DebtController;
@@ -158,6 +160,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/patients/{recordId}/documents', [PatientRecordController::class, 'documents']);
         Route::post('/patients/{recordId}/documents', [PatientRecordController::class, 'storeDocuments']);
         Route::get('/patients/{recordId}/medical-report', [PatientRecordController::class, 'medicalReport']);
+        Route::get('/glasses-prescriptions/stock-demand', [PatientRecordController::class, 'glassesPrescriptionDemand']);
         Route::get('/glasses-prescriptions', [PatientRecordController::class, 'glassesPrescriptionIndex']);
         Route::delete('/glasses-prescriptions', [PatientRecordController::class, 'deleteGlassesPrescriptions']);
         Route::get('/selling-pricelist/historical', [BillingController::class, 'historicalLensSellingPrices']);
@@ -324,6 +327,10 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::post('/payroll/bank-register/deposits', [PayrollController::class, 'storeBankDeposit']);
         Route::post('/payroll/bank-register/balance', [PayrollController::class, 'updateBankBalance']);
         Route::get('/customer-service', [CustomerServiceController::class, 'dashboard']);
+        Route::get('/customer-service/followups', [CustomerFollowupController::class, 'index']);
+        Route::post('/customer-service/followups/{followupId}/attempts', [CustomerFollowupController::class, 'recordAttempt']);
+        Route::post('/customer-service/followups/{followupId}/resolve-complaint', [CustomerFollowupController::class, 'resolveComplaint']);
+        Route::get('/optometrist/referrals', [OptometristReferralController::class, 'index']);
         Route::post('/customer-service/templates', [CustomerServiceController::class, 'storeTemplate']);
         Route::put('/customer-service/templates/{templateId}', [CustomerServiceController::class, 'updateTemplate']);
         Route::delete('/customer-service/templates/{templateId}', [CustomerServiceController::class, 'deleteTemplate']);

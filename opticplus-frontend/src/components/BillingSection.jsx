@@ -113,6 +113,29 @@ function findCatalogueMatches(prescription, rows) {
   ))
 }
 
+function findHistoricalSellingPriceMatch(prescription, rows) {
+  if (!prescription) return null
+  const lensType = String(prescription.lens_type ?? '').trim().toLowerCase()
+  const material = String(prescription.lens_material ?? '').trim().toLowerCase()
+
+  const matches = rows.flatMap((row) => {
+    if (String(row.lens_type ?? '').trim().toLowerCase() !== lensType) return []
+    if (row.lens_material && material && String(row.lens_material).trim().toLowerCase() !== material) return []
+
+    return (row.prescription_examples ?? [])
+      .filter((example) => isExactPrescriptionExample(prescription, example))
+      .map((example) => ({
+        price: Number(example.lens_price ?? row.selling_price),
+        billedDate: String(example.billed_date ?? ''),
+      }))
+      .filter((match) => Number.isFinite(match.price) && match.price > 0)
+  })
+
+  matches.sort((left, right) => right.billedDate.localeCompare(left.billedDate))
+
+  return matches[0] ?? null
+}
+
 export default function BillingSection({
   session,
   billingMeta,
@@ -165,6 +188,9 @@ export default function BillingSection({
   const [isLoadingPatientPrescriptions, setIsLoadingPatientPrescriptions] = useState(false)
   const [prescriptionLoadError, setPrescriptionLoadError] = useState('')
   const [sellingPriceRows, setSellingPriceRows] = useState([])
+  const [historicalSellingPriceRows, setHistoricalSellingPriceRows] = useState([])
+  const [isLoadingHistoricalSellingPrices, setIsLoadingHistoricalSellingPrices] = useState(false)
+  const [historicalSellingPriceError, setHistoricalSellingPriceError] = useState('')
   const [receptionistOverrideAllowed, setReceptionistOverrideAllowed] = useState(false)
   const [isLoadingSellingPrices, setIsLoadingSellingPrices] = useState(false)
   const [isSubmittingSellingPriceRequest, setIsSubmittingSellingPriceRequest] = useState(false)
@@ -219,6 +245,13 @@ export default function BillingSection({
     [selectedPrescription, sellingPriceRows],
   )
   const matchedSellingPrice = matchedSellingPrices.length === 1 ? matchedSellingPrices[0] : null
+  const historicalSellingPriceMatch = useMemo(
+    () => matchedSellingPrices.length === 0
+      ? findHistoricalSellingPriceMatch(selectedPrescription, historicalSellingPriceRows)
+      : null,
+    [historicalSellingPriceRows, matchedSellingPrices.length, selectedPrescription],
+  )
+  const suggestedLensPrice = matchedSellingPrice ?? historicalSellingPriceMatch?.price ?? null
   const manualLensPrice = sumLensItems(normalizedLensItems)
   const canOverrideMatchedPrice = Boolean(receptionistOverrideAllowed)
   const hasSellingPriceOverride = Boolean(
@@ -337,6 +370,30 @@ export default function BillingSection({
   }, [fetchSellingPriceRules, isBillingModalOpen])
 
   useEffect(() => {
+    if (!isBillingModalOpen) return undefined
+    let cancelled = false
+    setHistoricalSellingPriceRows([])
+    setHistoricalSellingPriceError('')
+    setIsLoadingHistoricalSellingPrices(true)
+
+    fetchHistoricalSellingPrices()
+      .then((response) => {
+        if (!cancelled) setHistoricalSellingPriceRows(response.records ?? [])
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setHistoricalSellingPriceRows([])
+          setHistoricalSellingPriceError(error.message || 'Unable to check past lens prices.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingHistoricalSellingPrices(false)
+      })
+
+    return () => { cancelled = true }
+  }, [fetchHistoricalSellingPrices, isBillingModalOpen])
+
+  useEffect(() => {
     if (!isBillingModalOpen || !selectedPrescription || catalogueMatches.length > 0) return undefined
     let cancelled = false
     catalogueSellingPricePrescription({
@@ -371,13 +428,13 @@ export default function BillingSection({
   }, [fetchSellingPriceSettings, isBillingModalOpen])
 
   useEffect(() => {
-    if (!matchedSellingPrice) return
+    if (!suggestedLensPrice) return
     setBillingForm((current) => ({
       ...current,
-      lens_price: Number(matchedSellingPrice).toFixed(2),
-      lens_items: [{ amount: Number(matchedSellingPrice).toFixed(2) }],
+      lens_price: Number(suggestedLensPrice).toFixed(2),
+      lens_items: [{ amount: Number(suggestedLensPrice).toFixed(2) }],
     }))
-  }, [matchedSellingPrice, setBillingForm])
+  }, [setBillingForm, suggestedLensPrice])
 
   useEffect(() => {
     if (!billingMeta?.standard_prices) return
@@ -876,10 +933,19 @@ export default function BillingSection({
                   <strong>Lens selling price</strong>
                   {isLoadingPatientPrescriptions ? <span className="billing-loading-line"><span className="billing-loading-spinner" /> Loading prescription...</span> : isLoadingSellingPrices ? <span className="muted-copy">Checking approved price ranges...</span> : matchedSellingPrice ? (
                     <span className="billing-matched-price">Fetched: GHS {Number(matchedSellingPrice).toFixed(2)}{canOverrideMatchedPrice ? ' — override allowed' : ' — locked by GM/Technician'}</span>
-                  ) : !selectedPrescription ? (
-                    <span className="billing-field-warning">Not available — enter the lens selling price below.</span>
                   ) : matchedSellingPrices.length > 1 ? (
                     <span className="billing-field-warning">Multiple selling prices match. Technician or GM review is required.</span>
+                  ) : !selectedPrescription ? (
+                    <span className="billing-field-warning">Not available — enter the lens selling price below.</span>
+                  ) : isLoadingHistoricalSellingPrices ? (
+                    <span className="muted-copy">Checking the latest matching paid/completed bill...</span>
+                  ) : historicalSellingPriceMatch ? (
+                    <span className="billing-matched-price">
+                      Prefilled from past bill: GHS {historicalSellingPriceMatch.price.toFixed(2)}
+                      {historicalSellingPriceMatch.billedDate ? ` (${historicalSellingPriceMatch.billedDate})` : ''} — editable
+                    </span>
+                  ) : historicalSellingPriceError ? (
+                    <span className="billing-field-warning">Could not check past prices. Enter the lens selling price manually.</span>
                   ) : catalogueMatches.length > 0 ? (
                     <span className="billing-field-warning">Lens range found, but no approved selling price has been entered. Enter a price and submit it for approval.</span>
                   ) : (

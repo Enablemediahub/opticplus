@@ -312,3 +312,207 @@
 11:13:01 AM [vite] (client) page reload src/components/HRSpaceAdminPanel.jsx
 11:13:01 AM [vite] (client) page reload src/components/StaffSpace.jsx
 11:37:00 AM [vite] (client) page reload src/components/StaffSpace.jsx
+1:05:40 PM [vite] (client) page reload src/App.jsx
+1:05:40 PM [vite] (client) page reload src/components/TechnicianPrescriptionReferenceSection.jsx
+1:12:09 PM [vite] (client) page reload src/components/TechnicianPrescriptionReferenceSection.jsx
+1:33:14 PM [vite] (client) page reload src/App.jsx
+1:33:26 PM [vite] (client) page reload src/components/TechnicianPrescriptionReferenceSection.jsx
+1:33:30 PM [vite] (client) page reload src/components/TechnicianPrescriptionReferenceSection.jsx
+1:33:41 PM [vite] (client) page reload src/components/TechnicianPrescriptionReferenceSection.jsx
+1:34:02 PM [vite] (client) page reload src/components/BillingSection.jsx
+1:34:10 PM [vite] (client) page reload src/components/BillingSection.jsx
+1:34:16 PM [vite] (client) page reload src/components/SellingPricelistSection.jsx
+1:34:27 PM [vite] (client) page reload src/components/TechnicianPrescriptionReferenceSection.jsx
+1:39:44 PM [vite] (client) page reload src/components/BillingSection.jsx
+10:10:19 AM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+10:10:32 AM [vite] (client) page reload src/App.jsx
+10:10:43 AM [vite] (client) page reload src/App.jsx
+10:10:57 AM [vite] (client) page reload src/App.jsx
+10:10:59 AM [vite] (client) page reload src/App.jsx
+10:11:40 AM [vite] (client) hmr update /src/App.css
+10:12:16 AM [vite] (client) page reload src/App.jsx
+10:12:19 AM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+10:12:24 AM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+11:20:24 AM [vite] (client) page reload src/components/CustomerFollowupsTab.jsx
+11:22:06 AM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+11:32:07 AM [vite] (client) page reload src/components/WorkspaceTabs.jsx
+11:32:17 AM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+11:32:19 AM [vite] (client) page reload src/components/InsuranceSection.jsx
+11:32:20 AM [vite] (client) page reload src/components/ExtractSection.jsx
+11:32:23 AM [vite] (client) page reload src/components/FinanceSection.jsx
+11:32:25 AM [vite] (client) page reload src/components/PatientsSection.jsx
+11:47:42 AM [vite] (client) page reload src/components/CustomerFollowupsTab.jsx
+12:06:55 PM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+12:06:58 PM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+12:07:05 PM [vite] (client) hmr update /src/App.css
+12:11:09 PM [vite] (client) page reload src/components/CustomerServiceSection.jsx
+12:50:16 PM [vite] (client) page reload src/components/CustomerFollowupsTab.jsx
+12:50:19 PM [vite] (client) hmr update /src/App.css
+1:05:06 PM [vite] (client) page reload src/App.jsx
+1:05:06 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:07 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:07 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:36 PM [vite] (client) page reload src/App.jsx
+1:05:36 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:37 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:37 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:43 PM [vite] (client) page reload src/App.jsx
+1:05:43 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:44 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:44 PM [vite] Internal server error: Failed to resolve import "./components/OptometristReferralInbox.jsx" from "src/App.jsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/mindsurgeon/Herd/opticplus/opticplus-frontend/src/App.jsx:28:37
+  26 |  import OptometristDashboardSection from "./components/OptometristDashboardSection.jsx";
+  27 |  import OptometristPrescriptionsSection from "./components/OptometristPrescriptionsSection.jsx";
+  28 |  import OptometristReferralInbox from "./components/OptometristReferralInbox.jsx";
+     |                                        ^
+  29 |  import PlaceLensOrderSection from "./components/PlaceLensOrderSection.jsx";
+  30 |  import TechnicianPrescriptionReferenceSection from "./components/TechnicianPrescriptionReferenceSection.jsx";
+      at TransformPluginContext._formatLog (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30354:39)
+      at TransformPluginContext.error (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30351:14)
+      at normalizeUrl (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27633:18)
+      at async file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27696:30
+      at async Promise.all (index 27)
+      at async TransformPluginContext.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:27664:4)
+      at async EnvironmentPluginContainer.transform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:30143:14)
+      at async loadAndTransform (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24468:26)
+      at async viteTransformMiddleware (file:///Users/mindsurgeon/Herd/opticplus/opticplus-frontend/node_modules/vite/dist/node/chunks/node.js:24262:20)
+1:05:59 PM [vite] (client) page reload src/components/OptometristReferralInbox.jsx
+1:06:14 PM [vite] (client) page reload src/components/OptometristReferralInbox.jsx
+1:06:20 PM [vite] (client) hmr update /src/App.css

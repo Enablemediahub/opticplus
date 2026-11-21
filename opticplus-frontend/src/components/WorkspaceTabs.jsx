@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 function tabAbbreviation(label) {
   return String(label)
     .split(/\s+/)
@@ -16,8 +18,31 @@ export default function WorkspaceTabs({
   heading = 'Choose a workspace',
   description = 'Select a section to continue.',
   compact = false,
+  storageKey,
 }) {
   const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label ?? tabs[0]?.label ?? ''
+  const restoredStorageKey = useRef(null)
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return
+
+    try {
+      if (restoredStorageKey.current !== storageKey) {
+        restoredStorageKey.current = storageKey
+        const savedTab = window.sessionStorage.getItem(storageKey)
+        if (tabs.some((tab) => tab.id === savedTab)) {
+          if (savedTab !== activeTab) onChange(savedTab)
+          return
+        }
+      }
+
+      if (tabs.some((tab) => tab.id === activeTab)) {
+        window.sessionStorage.setItem(storageKey, activeTab)
+      }
+    } catch (error) {
+      console.error('Unable to restore or save the selected workspace tab.', error)
+    }
+  }, [activeTab, onChange, storageKey, tabs])
 
   return (
     <section className={`workspace-tabs-navigation${compact ? ' workspace-tabs-navigation--compact' : ''}`} aria-label={ariaLabel}>

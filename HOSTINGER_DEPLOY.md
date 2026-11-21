@@ -92,6 +92,8 @@ php artisan migrate --force
 
 If terminal access is limited, make sure the database is imported first and that the `.env` file is correct before opening the site.
 
+For the Customer Service aftercare tab, apply the `2026_11_20_000001_create_customer_followup_tables` migration before uploading or opening the feature. If using Artisan, run `php artisan migrate --path=database/migrations/2026_11_20_000001_create_customer_followup_tables.php --force`. If Artisan migrations are unavailable, run `opticplus-backend/database/manual_sql/customer_followups.mysql.sql` in phpMyAdmin. The follow-up schedule is created only when a pickup is confirmed after this update; existing pickups are not backfilled.
+
 ## Notes
 
 - The frontend now uses a relative production API path, so it will call the same domain automatically.

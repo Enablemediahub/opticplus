@@ -917,6 +917,7 @@ export default function ExtractSection(props) {
             ]}
             activeTab={activeTab}
             onChange={setActiveTab}
+            storageKey={`opticplus:workspace-tab:v1:extract:${props.branchName ?? 'active'}`}
             ariaLabel="Tax review categories"
             heading="Choose a classification workspace"
             description="Switch between classifying revenue and expense records."

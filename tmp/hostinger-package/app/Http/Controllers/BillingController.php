@@ -238,6 +238,8 @@ class BillingController extends Controller
                         'cyl_os' => $match->cyl_os,
                         'add_od' => $match->add_od,
                         'add_os' => $match->add_os,
+                        'billed_date' => $match->billed_date,
+                        'lens_price' => (float) $match->lens_price,
                     ])->values(),
                     'status' => 'Pre-list - pending review',
                 ];

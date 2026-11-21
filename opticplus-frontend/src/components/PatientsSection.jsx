@@ -950,6 +950,7 @@ function ReceptionistPatientsWorkspace({
             ]}
             activeTab={activeWorkspace}
             onChange={setActiveWorkspace}
+            storageKey="opticplus:workspace-tab:v1:patient-workspace"
             ariaLabel="Patient workspace"
             heading="Patient workspace"
             description="Switch between front-desk intake, the patient database, and public registration."

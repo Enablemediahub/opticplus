@@ -25,6 +25,7 @@ import NotesSection from './components/NotesSection.jsx'
 import OptometristAppointmentsSection from './components/OptometristAppointmentsSection.jsx'
 import OptometristDashboardSection from './components/OptometristDashboardSection.jsx'
 import OptometristPrescriptionsSection from './components/OptometristPrescriptionsSection.jsx'
+import OptometristReferralInbox from './components/OptometristReferralInbox.jsx'
 import PlaceLensOrderSection from './components/PlaceLensOrderSection.jsx'
 import TechnicianPrescriptionReferenceSection from './components/TechnicianPrescriptionReferenceSection.jsx'
 import MedicalReportSection from './components/MedicalReportSection.jsx'
@@ -93,6 +94,7 @@ const managerNavSections = [
     items: [
       { label: 'Inventory', navLabel: 'Product Tracker', icon: 'inventory' },
       { label: 'Lens Orders', navLabel: 'Lens Order Management', icon: 'glasses' },
+      { label: 'Prescription Reference', navLabel: 'Prescription Reference', icon: 'reports' },
       { label: 'Selling Pricelist', navLabel: 'Lens Selling Pricelist', icon: 'money' },
       { label: 'BSMI Tracking', navLabel: 'BSMI Tracking', icon: 'inventory' },
       { label: 'Assets Register', navLabel: 'Company Assets', icon: 'briefcase' },
@@ -229,6 +231,7 @@ const optometristNavSections = [
   {
     title: 'Clinical Records',
     items: [
+      { label: 'Optometrist Referrals', navLabel: 'Concern Referrals', icon: 'support' },
       { label: 'Glasses Prescriptions', navLabel: 'Prescriptions', icon: 'glasses' },
       { label: 'Medical Report', navLabel: 'Medical Report', icon: 'reports' },
     ],
@@ -356,6 +359,7 @@ const viewHashMap = {
   Attendance: '#/attendance',
   Reports: '#/reports',
   'Customer Service': '#/customer-service',
+  'Optometrist Referrals': '#/optometrist-referrals',
   Settings: '#/settings',
   'Patient Management': '#/patient-management',
   'Prescription Reference': '#/prescription-reference',
@@ -378,7 +382,6 @@ const inventoryViews = ['Inventory', 'Lens Tracker', 'Product Tracker', 'BSMI Tr
 const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Selling Pricelist', 'Notes']
 const optometristPatientViews = [
   'Patient Management',
-  'Prescription Reference',
   'Prescriptions',
   'Prescription',
   'Patient Review',
@@ -577,6 +580,22 @@ const defaultCustomerServiceFilters = () => ({
   date_to: '',
   page: 1,
   per_page: 12,
+})
+
+const defaultCustomerFollowupFilters = () => ({
+  search: '',
+  status: 'queue',
+  date_from: '',
+  date_to: '',
+  kpi_month: todayIso().slice(0, 7),
+  page: 1,
+  per_page: 20,
+})
+
+const defaultOptometristReferralQuery = () => ({
+  search: '',
+  page: 1,
+  per_page: 20,
 })
 
 const defaultMessageForm = () => ({
@@ -809,6 +828,17 @@ function App() {
   const [customerServiceData, setCustomerServiceData] = useState(null)
   const [customerServiceFilters, setCustomerServiceFilters] = useState(defaultCustomerServiceFilters())
   const [customerServiceQuery, setCustomerServiceQuery] = useState(defaultCustomerServiceFilters())
+  const [customerFollowupsData, setCustomerFollowupsData] = useState(null)
+  const [customerFollowupFilters, setCustomerFollowupFilters] = useState(defaultCustomerFollowupFilters())
+  const [customerFollowupQuery, setCustomerFollowupQuery] = useState(defaultCustomerFollowupFilters())
+  const [optometristReferralData, setOptometristReferralData] = useState(null)
+  const [optometristReferralQuery, setOptometristReferralQuery] = useState(defaultOptometristReferralQuery())
+  const [optometristReferralError, setOptometristReferralError] = useState('')
+  const [isLoadingOptometristReferrals, setIsLoadingOptometristReferrals] = useState(false)
+  const [customerFollowupError, setCustomerFollowupError] = useState('')
+  const [customerFollowupSuccess, setCustomerFollowupSuccess] = useState('')
+  const [isLoadingCustomerFollowups, setIsLoadingCustomerFollowups] = useState(false)
+  const [isSavingCustomerFollowup, setIsSavingCustomerFollowup] = useState(false)
   const [messageForm, setMessageForm] = useState(defaultMessageForm())
   const [templateForm, setTemplateForm] = useState(defaultTemplateForm())
   const [customerServiceError, setCustomerServiceError] = useState('')
@@ -854,6 +884,9 @@ function App() {
   const isAccountant = session?.role === 'accountant'
   const isGeneralManager = session?.role === 'manager'
   const isOptometrist = session?.role === 'optometrist'
+  const canAccessCustomerService = ['manager', 'receptionist'].includes(
+    String(session?.normalized_role ?? session?.role ?? '').toLowerCase(),
+  )
   const isTechnician = session?.role === 'technician'
   const isExecutive = ['ceo', 'director'].includes(session?.role)
   const isCeo = session?.role === 'ceo'
@@ -873,7 +906,7 @@ function App() {
     session,
   })
   const executiveDashboardActive = isExecutive && activeView === 'Dashboard'
-  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Selling Pricelist', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
+  const mergedSupportedViews = ['Dashboard', 'Users', 'Database', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Selling Pricelist', 'Memos', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', 'Bank Deposits', 'Audit Log']
   const isDatabaseFullscreen = isGeneralManager && activeView === 'Database'
   const isHrSpaceFullscreen = isGeneralManager && activeView === 'Manage HR Space'
   const isPatientFormFullscreen = isOptometrist && activeView === 'Patient Form'
@@ -1495,6 +1528,15 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!session) return
+    if (activeView === 'Customer Service' && !canAccessCustomerService) {
+      setActiveView(isOptometrist ? 'Optometrist Referrals' : 'Dashboard')
+    } else if (activeView === 'Optometrist Referrals' && !isOptometrist) {
+      setActiveView('Dashboard')
+    }
+  }, [activeView, canAccessCustomerService, isOptometrist, session])
+
+  useEffect(() => {
     if (activeView !== 'Sales') return
     const today = todayIso()
     const hasDateRange = Boolean(financeSalesFilters.date_from || financeSalesFilters.date_to)
@@ -1694,6 +1736,13 @@ function App() {
     setCustomerServiceData(null)
     setCustomerServiceFilters(defaultCustomerServiceFilters())
     setCustomerServiceQuery(defaultCustomerServiceFilters())
+    setCustomerFollowupsData(null)
+    setCustomerFollowupFilters(defaultCustomerFollowupFilters())
+    setCustomerFollowupQuery(defaultCustomerFollowupFilters())
+    setCustomerFollowupError('')
+    setCustomerFollowupSuccess('')
+    setIsLoadingCustomerFollowups(false)
+    setIsSavingCustomerFollowup(false)
     setMessageForm(defaultMessageForm())
     setTemplateForm(defaultTemplateForm())
     setCustomerServiceError('')
@@ -2469,7 +2518,7 @@ function App() {
     let cancelled = false
 
     async function loadCustomerService() {
-      if (!token || !session || activeView !== 'Customer Service') return
+      if (!token || !session || activeView !== 'Customer Service' || !canAccessCustomerService) return
       setIsLoadingCustomerService(true)
       setCustomerServiceError('')
       try {
@@ -2505,7 +2554,89 @@ function App() {
       document.removeEventListener('visibilitychange', refreshIfVisible)
       window.removeEventListener('focus', refreshIfVisible)
     }
-  }, [activeView, customerServiceQuery, selectedBranchId, session, token])
+  }, [activeView, canAccessCustomerService, customerServiceQuery, selectedBranchId, session, token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadCustomerFollowups() {
+      const role = String(session?.normalized_role ?? session?.role ?? '').toLowerCase()
+      if (!token || !session || activeView !== 'Customer Service' || !['manager', 'receptionist'].includes(role)) return
+      setIsLoadingCustomerFollowups(true)
+      setCustomerFollowupError('')
+      try {
+        const branchId = session.is_admin ? selectedBranchId : session.branch_id
+        const params = new URLSearchParams({
+          branch_id: String(branchId),
+          page: String(customerFollowupQuery.page),
+          per_page: String(customerFollowupQuery.per_page),
+        })
+        for (const [key, value] of Object.entries(customerFollowupQuery)) {
+          if (!value || value === 'all' || key === 'page' || key === 'per_page') continue
+          params.set(key, value)
+        }
+        const response = await apiFetch(`/customer-service/followups?${params.toString()}`, { token })
+        if (!cancelled) setCustomerFollowupsData(response)
+      } catch (error) {
+        if (!cancelled) setCustomerFollowupError(error.message)
+      } finally {
+        if (!cancelled) setIsLoadingCustomerFollowups(false)
+      }
+    }
+
+    loadCustomerFollowups()
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') loadCustomerFollowups()
+    }
+    const intervalId = window.setInterval(refreshIfVisible, 30_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
+    }
+  }, [activeView, customerFollowupQuery, selectedBranchId, session, token])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadOptometristReferrals() {
+      if (!token || !session || activeView !== 'Optometrist Referrals' || !isOptometrist) return
+      setIsLoadingOptometristReferrals(true)
+      setOptometristReferralError('')
+      try {
+        const params = new URLSearchParams({
+          page: String(optometristReferralQuery.page),
+          per_page: String(optometristReferralQuery.per_page),
+        })
+        if (optometristReferralQuery.search.trim()) {
+          params.set('search', optometristReferralQuery.search.trim())
+        }
+        const response = await apiFetch(`/optometrist/referrals?${params.toString()}`, { token })
+        if (!cancelled) setOptometristReferralData(response)
+      } catch (error) {
+        if (!cancelled) setOptometristReferralError(error.message)
+      } finally {
+        if (!cancelled) setIsLoadingOptometristReferrals(false)
+      }
+    }
+
+    loadOptometristReferrals()
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') loadOptometristReferrals()
+    }
+    const intervalId = window.setInterval(refreshIfVisible, 30_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
+    }
+  }, [activeView, isOptometrist, optometristReferralQuery, session, token])
 
   useEffect(() => {
     let cancelled = false
@@ -2968,6 +3099,11 @@ function App() {
     if (session?.role !== 'technician' || technicianViews.includes(activeView)) return
     setActiveView('Dashboard')
   }, [activeView, session?.role])
+
+  useEffect(() => {
+    if (!session || activeView !== 'Prescription Reference' || isGeneralManager || isTechnician) return
+    setActiveView('Dashboard')
+  }, [activeView, isGeneralManager, isTechnician, session])
 
   useEffect(() => {
     if (activeView !== 'Lens Orders' || ['manager', 'technician'].includes(session?.role)) return
@@ -3613,6 +3749,19 @@ function App() {
     if (dateTo) params.set('date_to', dateTo)
 
     return apiFetch(`/glasses-prescriptions?${params.toString()}`, {
+      token,
+    })
+  }
+
+  async function fetchGlassesPrescriptionDemand({ dateFrom = '', dateTo = '' } = {}) {
+    const branchId = session?.is_admin ? selectedBranchId : session?.branch_id
+    const params = new URLSearchParams({
+      branch_id: String(branchId ?? 1),
+    })
+    if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
+
+    return apiFetch(`/glasses-prescriptions/stock-demand?${params.toString()}`, {
       token,
     })
   }
@@ -4912,6 +5061,9 @@ function App() {
             : (plural ? 'Selected pickups confirmed successfully.' : 'Pickup confirmed successfully.'),
       )
       setCustomerServiceQuery((current) => ({ ...current }))
+      if (action === 'picked-up') {
+        setCustomerFollowupQuery((current) => ({ ...current }))
+      }
       return true
     } catch (error) {
       setCustomerServiceError(error.message)
@@ -4919,6 +5071,52 @@ function App() {
       return false
     } finally {
       setPickupBusyIds([])
+    }
+  }
+
+  async function recordCustomerFollowupAttempt(followupId, attempt) {
+    setIsSavingCustomerFollowup(true)
+    setCustomerFollowupError('')
+    setCustomerFollowupSuccess('')
+
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      const response = await apiFetch(`/customer-service/followups/${followupId}/attempts`, {
+        method: 'POST',
+        token,
+        body: { ...attempt, branch_id: branchId },
+      })
+      setCustomerFollowupSuccess(response.message ?? 'Follow-up call recorded.')
+      setCustomerFollowupQuery((current) => ({ ...current }))
+      return true
+    } catch (error) {
+      setCustomerFollowupError(error.message)
+      return false
+    } finally {
+      setIsSavingCustomerFollowup(false)
+    }
+  }
+
+  async function resolveCustomerFollowupComplaint(followupId, resolution) {
+    setIsSavingCustomerFollowup(true)
+    setCustomerFollowupError('')
+    setCustomerFollowupSuccess('')
+
+    try {
+      const branchId = session.is_admin ? selectedBranchId : session.branch_id
+      const response = await apiFetch(`/customer-service/followups/${followupId}/resolve-complaint`, {
+        method: 'POST',
+        token,
+        body: { resolution_notes: resolution, branch_id: branchId },
+      })
+      setCustomerFollowupSuccess(response.message ?? 'Complaint resolution recorded.')
+      setCustomerFollowupQuery((current) => ({ ...current }))
+      return true
+    } catch (error) {
+      setCustomerFollowupError(error.message)
+      return false
+    } finally {
+      setIsSavingCustomerFollowup(false)
     }
   }
 
@@ -5726,6 +5924,16 @@ function App() {
               />
             ) : null}
 
+            {activeView === 'Optometrist Referrals' && isOptometrist ? (
+              <OptometristReferralInbox
+                data={optometristReferralData}
+                query={optometristReferralQuery}
+                setQuery={setOptometristReferralQuery}
+                error={optometristReferralError}
+                isLoading={isLoadingOptometristReferrals}
+              />
+            ) : null}
+
             {activeView === 'Billing' ? (
               <BillingSection
                 session={session}
@@ -6309,9 +6517,10 @@ function App() {
               />
             ) : null}
 
-            {activeView === 'Prescription Reference' && isTechnician ? (
+            {activeView === 'Prescription Reference' && (isGeneralManager || isTechnician) ? (
               <TechnicianPrescriptionReferenceSection
                 fetchGlassesPrescriptions={fetchGlassesPrescriptions}
+                fetchGlassesPrescriptionDemand={fetchGlassesPrescriptionDemand}
                 session={session}
                 selectedBranchId={selectedBranchId}
               />
@@ -6388,7 +6597,7 @@ function App() {
               />
             ) : null}
 
-            {activeView === 'Customer Service' ? (
+            {activeView === 'Customer Service' && canAccessCustomerService ? (
               <CustomerServiceSection
                 customerServiceData={customerServiceData}
                 customerServiceFilters={customerServiceFilters}
@@ -6411,6 +6620,16 @@ function App() {
                 isSavingTemplate={isSavingTemplate}
                 session={session}
                 selectedBranchId={selectedBranchId}
+                customerFollowupsData={customerFollowupsData}
+                customerFollowupFilters={customerFollowupFilters}
+                setCustomerFollowupFilters={setCustomerFollowupFilters}
+                setCustomerFollowupQuery={setCustomerFollowupQuery}
+                customerFollowupError={customerFollowupError}
+                customerFollowupSuccess={customerFollowupSuccess}
+                isLoadingCustomerFollowups={isLoadingCustomerFollowups}
+                isSavingCustomerFollowup={isSavingCustomerFollowup}
+                recordCustomerFollowupAttempt={recordCustomerFollowupAttempt}
+                resolveCustomerFollowupComplaint={resolveCustomerFollowupComplaint}
               />
             ) : null}
 
@@ -6468,7 +6687,7 @@ function App() {
               />
             ) : null}
 
-            {!['Dashboard', 'Appraisals', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Selling Pricelist', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
+            {!['Dashboard', 'Appraisals', 'Users', 'Staff Profiles', 'Patients', 'Billing', 'Finance', 'Sales', 'Revenue Tracking', 'The Monitor', 'Expenses', 'Working Capital Liabilities', 'Insurance', 'Insurance Claims', 'Debt Management', 'Debts', 'BSMI Tracking', 'Assets Register', 'Lens Tracker', 'Product Tracker', 'Lens Orders', 'Place Lens Order', 'Prescription Reference', 'Selling Pricelist', 'Memos', 'Payroll', 'Bank Deposits', 'Audit Log', 'Extract', 'Reports', 'Inventory', 'Customer Service', 'Optometrist Referrals', 'Settings', ...optometristPatientViews, 'Appointments', ...optometristClinicalViews, 'Patient Uploads', 'Notes', 'Profile'].includes(activeView) ? (
               <section className="module-section">
                 <div className="panel-heading">
                   <div>

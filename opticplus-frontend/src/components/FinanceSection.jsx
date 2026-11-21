@@ -378,6 +378,7 @@ export default function FinanceSection(props) {
           tabs={financeWorkspaceTabs}
           activeTab={activeTab}
           onChange={setActiveTab}
+          storageKey={`opticplus:workspace-tab:v1:finance:${props.session?.id ?? props.session?.role ?? 'user'}:${pageMode}:${props.selectedBranchId ?? props.session?.branch_id ?? 'default'}`}
           ariaLabel="Finance workspaces"
           heading="Choose a finance workspace"
           description="Switch between payments, sales, and expense activity."

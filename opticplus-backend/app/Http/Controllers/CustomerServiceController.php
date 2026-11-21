@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\AuditLog;
+use App\Services\CustomerFollowupSchedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,10 @@ class CustomerServiceController extends Controller
 {
     public function dashboard(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $this->ensureSmsTemplateSchema();
         $this->ensureLensOrderPickupSchema();
         $branchId = $this->resolveBranchId($request);
@@ -31,6 +36,12 @@ class CustomerServiceController extends Controller
             WHEN BINARY gp.status = 0x7265616479 OR BINARY form_order.pickup_status = 0x7265616479 THEN 'ready'
             WHEN BINARY gp.status = 0x70656e64696e67 OR BINARY form_order.pickup_status = 0x70656e64696e67 THEN 'pending'
             ELSE COALESCE(NULLIF(gp.status, ''), NULLIF(form_order.pickup_status, ''))
+        END";
+        $pickupSortOrderSql = "CASE BINARY ({$effectivePickupStatusSql})
+            WHEN 0x7265616479 THEN 1
+            WHEN 0x6e6f746966696564 THEN 2
+            WHEN 0x7069636b65645f7570 THEN 3
+            ELSE 4
         END";
         $page = max((int) $request->integer('page', 1), 1);
         $perPage = min(max((int) $request->integer('per_page', 12), 8), 30);
@@ -128,6 +139,7 @@ class CustomerServiceController extends Controller
             'b.health_insurance',
             'b.receipt_number',
             DB::raw("{$effectivePickupStatusSql} as pickup_status"),
+            DB::raw("{$pickupSortOrderSql} as pickup_sort_order"),
             'gp.created_at as pickup_created_at',
             'gp.prescription_id',
         ];
@@ -145,17 +157,14 @@ class CustomerServiceController extends Controller
         }
 
         $records = $query
-            ->orderByRaw("CASE BINARY pickup_status
-                WHEN 0x7265616479 THEN 1
-                WHEN 0x6e6f746966696564 THEN 2
-                WHEN 0x7069636b65645f7570 THEN 3
-                ELSE 4
-            END")
+            ->orderBy('pickup_sort_order')
             ->orderByDesc('b.date')
             ->limit($perPage)
             ->offset($offset)
             ->get($recordColumns)
             ->map(function ($record) {
+                unset($record->pickup_sort_order);
+
                 $record->payment_status_display = match (true) {
                     (float) $record->balance <= 0 => 'Paid in Full',
                     (float) $record->balance < (float) $record->total_amount => 'Partial Payment',
@@ -223,11 +232,7 @@ class CustomerServiceController extends Controller
                 }
             })
             ->whereRaw("BINARY ({$effectivePickupStatusSql}) IN (0x7265616479, 0x6e6f746966696564)")
-            ->orderByRaw("CASE BINARY pickup_status
-                WHEN 0x7265616479 THEN 1
-                WHEN 0x6e6f746966696564 THEN 2
-                ELSE 3
-            END")
+            ->orderBy('pickup_sort_order')
             ->orderByDesc('b.date')
             ->limit(10)
             ->get([
@@ -241,8 +246,11 @@ class CustomerServiceController extends Controller
                 'b.date as billing_date',
                 'pr.phone',
                 DB::raw("{$effectivePickupStatusSql} as pickup_status"),
+                DB::raw("{$pickupSortOrderSql} as pickup_sort_order"),
             ])
             ->map(function ($record) {
+                unset($record->pickup_sort_order);
+
                 $record->pickup_status_display = match ($record->pickup_status) {
                     'ready' => 'Ready for Pickup',
                     'notified' => 'Notified',
@@ -289,6 +297,10 @@ class CustomerServiceController extends Controller
 
     public function storeTemplate(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $this->ensureSmsTemplateSchema();
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -318,6 +330,10 @@ class CustomerServiceController extends Controller
 
     public function updateTemplate(Request $request, int $templateId): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $this->ensureSmsTemplateSchema();
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -347,6 +363,10 @@ class CustomerServiceController extends Controller
 
     public function deleteTemplate(Request $request, int $templateId): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $this->ensureSmsTemplateSchema();
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
@@ -364,6 +384,10 @@ class CustomerServiceController extends Controller
 
     public function sendMessage(Request $request): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $this->ensureSmsTemplateSchema();
         $branchId = $this->resolveBranchId($request);
         $validated = $request->validate([
@@ -527,6 +551,10 @@ class CustomerServiceController extends Controller
 
     public function markReady(Request $request, int $billingId): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
@@ -635,6 +663,10 @@ class CustomerServiceController extends Controller
 
     public function markPickedUp(Request $request, int $billingId): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
@@ -673,6 +705,14 @@ class CustomerServiceController extends Controller
             return response()->json(['message' => 'Pickup record was not found.'], 404);
         }
 
+        app(CustomerFollowupSchedule::class)->scheduleForPickup(
+            (int) $billing->id,
+            $branchId,
+            $billing->patient_id ? (int) $billing->patient_id : null,
+            $billing->folder_id ? (string) $billing->folder_id : null,
+            (int) $request->user()->id,
+        );
+
         AuditLog::logManual($request, 'edit', 'pickup', 'billing_id: '.$billingId, [
             'status' => 'picked_up',
         ]);
@@ -684,6 +724,10 @@ class CustomerServiceController extends Controller
 
     public function markNotReady(Request $request, int $billingId): JsonResponse
     {
+        if ($response = $this->authorizeCustomerCare($request)) {
+            return $response;
+        }
+
         $branchId = $this->resolveBranchId($request);
         if ($response = $this->ensureWritableBranch($branchId)) {
             return $response;
@@ -805,6 +849,18 @@ class CustomerServiceController extends Controller
         return response()->json([
             'message' => 'Merged mode is read-only. Switch to a branch before changing customer service records or templates.',
         ], 422);
+    }
+
+    private function authorizeCustomerCare(Request $request): ?JsonResponse
+    {
+        $role = strtolower((string) ($request->user()?->normalized_role ?? $request->user()?->role ?? ''));
+        if (in_array($role, ['manager', 'receptionist'], true)) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => 'Only the General Manager and receptionists can access customer service.',
+        ], 403);
     }
 
     private function arkeselConfigured(): bool

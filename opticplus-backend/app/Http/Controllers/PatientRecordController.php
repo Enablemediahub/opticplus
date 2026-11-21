@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\LensPrescriptionDemandService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1549,7 +1550,7 @@ class PatientRecordController extends Controller
             ->values();
 
         $placedKeys = DB::table('lens_order_requests')
-            ->where('branch_id', $branchId)
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
             ->where('status', 'placed')
             ->get(['source', 'source_id'])
             ->mapWithKeys(fn ($item) => [$item->source.'|'.$item->source_id => true]);
@@ -1589,6 +1590,131 @@ class PatientRecordController extends Controller
                 'total_pages' => (int) ceil($total / $perPage),
             ],
             'prescriptions' => $prescriptions,
+        ]);
+    }
+
+    public function glassesPrescriptionDemand(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $role = strtolower((string) ($user?->normalized_role ?? $user?->role ?? ''));
+        if (! in_array($role, ['manager', 'technician'], true)) {
+            return response()->json(['message' => 'You are not authorized to view lens stock planning.'], 403);
+        }
+
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $dateFrom = $validated['date_from'] ?? null;
+        $dateTo = $validated['date_to'] ?? null;
+        if ($dateFrom && $dateTo && $dateTo < $dateFrom) {
+            return response()->json(['message' => 'The end date must be on or after the start date.'], 422);
+        }
+
+        $this->ensurePrescriptionAuditColumns();
+        $this->ensurePatientFormDataTable();
+        $branchId = $this->resolveBranchId($request);
+
+        $formRows = DB::table('patient_form_data as pfd')
+            ->join('patient_records as pr', 'pfd.folder_id', '=', 'pr.folder_id');
+        $this->applyBranchScope($formRows, 'pfd.branch_id', $branchId);
+        $this->applyBranchScope($formRows, 'pr.branch_id', $branchId);
+        $latestFormRows = $formRows
+            ->where('pfd.status', 'completed')
+            ->whereNull('pfd.prescription_deleted_at')
+            ->orderByDesc('pfd.version')
+            ->orderByDesc('pfd.updated_at')
+            ->get([
+                'pfd.id as form_id',
+                'pfd.folder_id',
+                'pfd.version',
+                'pfd.status',
+                'pfd.updated_at',
+                'pfd.form_data',
+                'pfd.prescription_deleted_at',
+                'pr.id as patient_id',
+            ])
+            ->groupBy('patient_id')
+            ->map(fn ($versions) => $versions->first())
+            ->values();
+
+        $formPrescriptions = $latestFormRows
+            ->map(function ($item): ?array {
+                $record = (object) [
+                    'id' => $item->patient_id,
+                    'folder_id' => $item->folder_id,
+                ];
+                $form = (object) [
+                    'id' => $item->form_id,
+                    'version' => $item->version,
+                    'status' => $item->status,
+                    'updated_at' => $item->updated_at,
+                    'form_data' => $item->form_data,
+                    'prescription_deleted_at' => $item->prescription_deleted_at,
+                ];
+
+                return $this->formatExamFormPrescriptionRow($record, $form);
+            })
+            ->filter()
+            ->filter(fn (array $item) => empty($item['prescription_deleted_at']))
+            ->values();
+
+        $activeFormPatientIds = $formPrescriptions
+            ->pluck('patient_id')
+            ->map(fn ($patientId) => (string) $patientId)
+            ->all();
+
+        $legacyQuery = DB::table('glasses_prescriptions as gp')
+            ->join('patient_records as pr', 'gp.patient_id', '=', 'pr.id');
+        $this->applyBranchScope($legacyQuery, 'gp.branch_id', $branchId);
+        $this->applyBranchScope($legacyQuery, 'pr.branch_id', $branchId);
+        $legacyRows = $legacyQuery
+            ->whereNull('gp.deleted_at')
+            ->orderByDesc('gp.date')
+            ->orderByDesc('gp.prescription_id')
+            ->get([
+                'gp.patient_id',
+                'gp.date',
+                'gp.sph_od',
+                'gp.sph_os',
+                'gp.cyl_od',
+                'gp.cyl_os',
+                'gp.add_od',
+                'gp.add_os',
+                'gp.lens_type',
+                'gp.lens_material',
+            ])
+            ->unique('patient_id')
+            ->reject(fn ($item) => in_array((string) $item->patient_id, $activeFormPatientIds, true))
+            ->values()
+            ->map(fn ($item) => (array) $item);
+
+        $withinDateRange = static function (array $item) use ($dateFrom, $dateTo): bool {
+            $date = substr((string) ($item['date'] ?? ''), 0, 10);
+            if ($date === '') {
+                return ! $dateFrom && ! $dateTo;
+            }
+
+            return (! $dateFrom || $date >= $dateFrom) && (! $dateTo || $date <= $dateTo);
+        };
+        $prescriptions = $formPrescriptions
+            ->filter($withinDateRange)
+            ->concat($legacyRows->filter($withinDateRange))
+            ->values();
+
+        $groups = (new LensPrescriptionDemandService())->aggregate($prescriptions);
+        $totalPrescriptions = array_sum(array_column($groups, 'prescription_count'));
+
+        return response()->json([
+            'branch_id' => $branchId,
+            'branch_name' => $this->branchName($branchId),
+            'filters' => [
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+            ],
+            'basis' => 'Latest completed prescription per patient, falling back to the legacy prescription record.',
+            'total_prescriptions' => $totalPrescriptions,
+            'groups' => $groups,
         ]);
     }
 

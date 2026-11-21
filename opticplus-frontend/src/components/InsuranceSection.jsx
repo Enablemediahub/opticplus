@@ -593,6 +593,7 @@ export default function InsuranceSection(props) {
             tabs={claimsWorkspaceTabs}
             activeTab={claimsTab}
             onChange={setClaimsTab}
+            storageKey={`opticplus:workspace-tab:v1:insurance-claims:${props.session?.id ?? props.session?.role ?? 'user'}:${props.selectedBranchId ?? props.session?.branch_id ?? 'default'}`}
             ariaLabel="Insurance claims workspaces"
             heading="Choose an insurance workspace"
             description="Switch between the claims ledger and insurer payment reconciliation."

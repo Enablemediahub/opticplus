@@ -1921,6 +1921,39 @@
   color: var(--text-secondary);
 }
 
+.customer-pickup-selection-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.customer-pickup-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.customer-pickup-page-size select {
+  min-height: 34px;
+  padding: 5px 25px 5px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.customer-pickup-selected-count {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .extract-select-all input,
 .extract-table input[type='checkbox'] {
   width: auto;
@@ -16047,6 +16080,659 @@ td.billing-balance-due,
     align-items: flex-start;
     padding-left: 21px;
     text-align: left;
+  }
+}
+
+.customer-aftercare {
+  display: grid;
+  gap: 20px;
+}
+
+.customer-aftercare-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  padding: clamp(20px, 3vw, 32px);
+  border: 1px solid rgba(115, 167, 255, 0.22);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 90% 15%, rgba(116, 179, 255, 0.22), transparent 34%),
+    linear-gradient(125deg, #10243d, #172f50 58%, #1b4264);
+  color: #f7fbff;
+  box-shadow: 0 18px 42px rgba(13, 35, 59, 0.16);
+}
+
+.customer-aftercare-hero__copy {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  max-width: 680px;
+}
+
+.customer-aftercare-hero__mark {
+  display: grid;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #b8dcff;
+  font-size: 1.4rem;
+}
+
+.customer-aftercare-hero .eyebrow {
+  margin: 0 0 8px;
+  color: #a9d2fa;
+}
+
+.customer-aftercare-hero h3 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  letter-spacing: -0.035em;
+}
+
+.customer-aftercare-hero p:last-child {
+  max-width: 600px;
+  margin: 9px 0 0;
+  color: rgba(239, 247, 255, 0.8);
+  line-height: 1.6;
+}
+
+.customer-aftercare-hero__rhythm {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 15px;
+  background: rgba(6, 20, 36, 0.25);
+}
+
+.customer-aftercare-hero__rhythm span {
+  display: grid;
+  gap: 3px;
+  color: #d7e8f9;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.customer-aftercare-hero__rhythm b {
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.customer-aftercare-hero__rhythm i {
+  width: 20px;
+  height: 1px;
+  background: rgba(207, 228, 250, 0.42);
+}
+
+.customer-aftercare-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.customer-aftercare-kpi,
+.customer-aftercare-queue {
+  min-width: 0;
+}
+
+.customer-aftercare-section-heading {
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.customer-aftercare-section-heading .muted-copy {
+  max-width: 720px;
+  margin: 7px 0 0;
+  line-height: 1.5;
+}
+
+.customer-aftercare-month {
+  display: grid;
+  flex: 0 0 180px;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.customer-aftercare-month input,
+.customer-aftercare-filters input,
+.customer-aftercare-filters select,
+.customer-aftercare-call-form input:not([type='checkbox']),
+.customer-aftercare-call-form select,
+.customer-aftercare-call-form textarea,
+.customer-aftercare-resolution textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.customer-aftercare-kpi__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.customer-aftercare-kpi__foot strong {
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.customer-aftercare-filters {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.5fr) repeat(3, minmax(135px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 0 0 16px;
+}
+
+.customer-aftercare-filters label,
+.customer-aftercare-call-form > label,
+.customer-aftercare-resolution label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.customer-aftercare-filters .filter-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.customer-aftercare-filters .filter-actions-row button {
+  white-space: nowrap;
+}
+
+.customer-aftercare-table td > strong,
+.customer-aftercare-table td > span {
+  display: block;
+}
+
+.customer-aftercare-subline {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.customer-aftercare-status {
+  display: inline-flex !important;
+  width: fit-content;
+  margin-top: 7px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.customer-aftercare-status.is-completed {
+  border-color: rgba(22, 163, 74, 0.2);
+  background: rgba(22, 163, 74, 0.1);
+  color: #16803d;
+}
+
+.customer-aftercare-status.is-overdue,
+.customer-aftercare-status.is-concern {
+  border-color: rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.09);
+  color: #bd2929;
+}
+
+.customer-aftercare-status.is-due {
+  border-color: rgba(217, 119, 6, 0.22);
+  background: rgba(217, 119, 6, 0.1);
+  color: #a45b08;
+}
+
+.customer-aftercare-status.is-upcoming {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: rgba(37, 99, 235, 0.08);
+  color: #2860b7;
+}
+
+.customer-aftercare-empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 34px 16px;
+  text-align: center;
+}
+
+.customer-aftercare-empty > span {
+  color: var(--accent-strong);
+  font-size: 1.4rem;
+}
+
+.customer-aftercare-empty p {
+  max-width: 450px;
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.customer-aftercare-overlay {
+  z-index: 1200;
+  overflow-y: auto;
+  align-items: flex-start;
+  padding: 24px;
+}
+
+.customer-aftercare-modal {
+  width: min(940px, 100%);
+  max-height: calc(100vh - 48px);
+  margin: auto;
+  overflow-y: auto;
+}
+
+.customer-aftercare-modal__heading {
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.customer-aftercare-modal__heading p:last-child {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+}
+
+.customer-aftercare-alert {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  border-radius: 12px;
+  background: rgba(217, 119, 6, 0.08);
+  color: var(--text-primary);
+}
+
+.customer-aftercare-alert > span {
+  display: grid;
+  flex: 0 0 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #d97706;
+  color: #fff;
+  font-weight: 800;
+}
+
+.customer-aftercare-alert p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.customer-aftercare-resolution-summary {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  border-radius: 12px;
+  background: rgba(22, 163, 74, 0.07);
+  color: var(--text-primary);
+}
+
+.customer-aftercare-resolution-summary p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.customer-aftercare-history {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 15px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 86%, var(--accent-strong) 4%);
+}
+
+.customer-aftercare-history__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-primary);
+}
+
+.customer-aftercare-history__heading span,
+.customer-aftercare-history small {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.customer-aftercare-history > article {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 11px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.customer-aftercare-history__dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+}
+
+.customer-aftercare-history > article > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.customer-aftercare-history p {
+  margin: 3px 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.customer-aftercare-history em {
+  color: #a45b08;
+  font-size: 0.73rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.customer-aftercare-call-form,
+.customer-aftercare-resolution {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+}
+
+.customer-aftercare-form-heading {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 10px;
+  align-items: center;
+}
+
+.customer-aftercare-form-heading > span {
+  display: grid;
+  flex: 0 0 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.customer-aftercare-form-heading > div {
+  display: grid;
+  gap: 3px;
+  color: var(--text-primary);
+}
+
+.customer-aftercare-form-heading small {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.customer-aftercare-call-form textarea,
+.customer-aftercare-resolution textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.customer-aftercare-form-wide {
+  grid-column: 1 / -1;
+}
+
+.customer-aftercare-checkbox {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.customer-aftercare-checkbox input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent-strong);
+}
+
+.customer-aftercare-modal__actions {
+  align-items: center;
+  gap: 12px;
+}
+
+.customer-aftercare-modal__actions > span {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.customer-aftercare-resolution {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  border-color: rgba(217, 119, 6, 0.25);
+}
+
+.customer-aftercare-resolution .customer-aftercare-form-heading,
+.customer-aftercare-resolution label {
+  grid-column: 1 / -1;
+}
+
+.customer-aftercare-complete-note {
+  margin: 14px 0 0;
+  color: #16803d;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1050px) {
+  .customer-aftercare-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .customer-aftercare-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customer-aftercare-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .customer-aftercare-stats,
+  .customer-aftercare-filters,
+  .customer-aftercare-call-form,
+  .customer-aftercare-resolution {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-aftercare-hero__copy {
+    flex-direction: column;
+  }
+
+  .customer-aftercare-hero__rhythm {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 11px;
+  }
+
+  .customer-aftercare-hero__rhythm i {
+    width: 10px;
+  }
+
+  .customer-aftercare-section-heading,
+  .customer-aftercare-modal__heading,
+  .customer-aftercare-kpi__foot {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .customer-aftercare-month {
+    flex-basis: auto;
+  }
+
+  .customer-aftercare-filters .filter-actions-row {
+    grid-column: 1 / -1;
+  }
+
+  .customer-aftercare-filters .filter-actions-row button {
+    flex: 1;
+  }
+
+  .customer-aftercare-form-wide,
+  .customer-aftercare-form-heading,
+  .customer-aftercare-resolution .customer-aftercare-form-heading,
+  .customer-aftercare-resolution label {
+    grid-column: 1;
+  }
+
+  .customer-aftercare-overlay {
+    padding: 10px;
+  }
+
+  .customer-aftercare-modal {
+    max-height: calc(100vh - 20px);
+    padding: 16px;
+  }
+
+  .customer-aftercare-modal__actions {
+    align-items: stretch;
+  }
+
+  .customer-aftercare-resolution {
+    align-items: stretch;
+  }
+}
+
+.optometrist-referrals__heading {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.optometrist-referrals__heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.optometrist-referrals__heading .muted-copy {
+  max-width: 760px;
+  margin: 8px 0 0;
+}
+
+.optometrist-referrals__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.optometrist-referrals__filters label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.optometrist-referrals__filters input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text-primary);
+}
+
+.optometrist-referrals__subline {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.optometrist-referrals__details summary {
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.optometrist-referrals__details > div {
+  min-width: 220px;
+  max-width: 420px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+
+.optometrist-referrals__details p {
+  margin: 7px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.optometrist-referrals__empty {
+  padding: 24px;
+  text-align: center;
+}
+
+.optometrist-referrals__empty p {
+  margin: 7px auto 0;
+  max-width: 520px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .optometrist-referrals__filters {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -253,7 +253,7 @@ export default function SellingPricelistSection({
 
       <div className="selling-pricelist-notice">
         <strong>Approval control</strong>
-        <span>Entries saved here are approved customer-facing prices. This page does not change Lens Tracker cost prices.</span>
+        <span>Entries saved here are approved customer-facing prices. Recorded Rx examples are not a percentage of all prescriptions, and this page does not change Lens Tracker cost prices.</span>
       </div>
 
       <div className="selling-pricelist-toolbar">
@@ -289,7 +289,7 @@ export default function SellingPricelistSection({
         </form>
         <div className="table-shell">
           <table className="portal-table inventory-table-wide">
-            <thead><tr><th>Category</th><th>Lens type</th><th>Index</th><th>SPH</th><th>CYL</th><th>ADD</th><th>Prescription count</th><th>Price label</th><th>Selling price (GHS)</th><th>Status</th><th>Action</th></tr></thead>
+            <thead><tr><th>Category</th><th>Lens type</th><th>Index</th><th>SPH</th><th>CYL</th><th>ADD</th><th>Recorded Rx examples</th><th>Price label</th><th>Selling price (GHS)</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>{groupedEntries.length === 0 ? <tr><td colSpan="11" className="selling-pricelist-empty">No catalogue ranges found.</td></tr> : groupedEntries.map(([category, categoryEntries]) => (
               <Fragment key={category}>
                 <tr className="selling-pricelist-category-row"><th colSpan="11" scope="rowgroup">{category}<span>{categoryEntries.length} {categoryEntries.length === 1 ? 'entry' : 'entries'}</span></th></tr>
