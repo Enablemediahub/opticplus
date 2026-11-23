@@ -70,19 +70,39 @@ class StaffHrController extends Controller
     public function myLetters(Request $request): JsonResponse
     {
         $employee = $request->attributes->get('staff_portal_account');
-        $letters = DB::table('hr_letters')
-            ->where('status', 'published')
+        if (! $this->letterSignatureWorkflowReady()) {
+            return response()->json([
+                'message' => 'Staff letter signing is not configured. Run the latest database migrations, including 2026_11_23_000001_add_staff_letter_signature_workflow.',
+            ], 503);
+        }
+
+        $letters = DB::table('hr_letters as letter')
+            ->leftJoin('hr_letter_signatures as signing', function ($join) use ($employee): void {
+                $join->on('signing.letter_id', '=', 'letter.id')
+                    ->where('signing.employee_id', '=', $employee->id);
+            })
+            ->where('letter.status', 'published')
             ->where(function ($query) use ($employee): void {
-                $query->where('employee_id', $employee->id)
+                $query->where('letter.employee_id', $employee->id)
                     ->orWhere(function ($circular) use ($employee): void {
-                        $circular->whereNull('employee_id')->where(function ($role) use ($employee): void {
-                            $role->whereNull('target_role')
-                                ->orWhereRaw('LOWER(TRIM(target_role)) = ?', [mb_strtolower(trim((string) $employee->job_title))]);
+                        $circular->whereNull('letter.employee_id')->where(function ($role) use ($employee): void {
+                            $role->whereNull('letter.target_role')
+                                ->orWhereRaw('LOWER(TRIM(letter.target_role)) = ?', [mb_strtolower(trim((string) $employee->job_title))]);
                         });
                     });
             })
-            ->orderByDesc('published_at')
-            ->get(['id', 'title', 'body', 'published_at', 'attachment_name'])
+            ->orderByDesc('letter.published_at')
+            ->get([
+                'letter.id',
+                'letter.title',
+                'letter.body',
+                'letter.published_at',
+                'letter.attachment_name',
+                'letter.requires_signature',
+                'signing.signed_at',
+                'signing.signature_path',
+                'signing.mime_type as signature_mime_type',
+            ])
             ->map(function ($letter) use ($employee) {
                 $letter->body = strtr($letter->body, [
                     '{employee_name}' => $employee->ghana_card_name,
@@ -91,14 +111,124 @@ class StaffHrController extends Controller
                     '{department}' => $employee->department,
                     '{date}' => $letter->published_at ? \Illuminate\Support\Carbon::parse($letter->published_at)->format('j F Y') : now()->format('j F Y'),
                 ]);
+                $letter->signed_signature = null;
+                if ($letter->signed_at && $letter->signature_path) {
+                    if (! Storage::disk('local')->exists($letter->signature_path)) {
+                        abort(500, 'A submitted letter signature is missing from private storage.');
+                    }
+                    $contents = Storage::disk('local')->get($letter->signature_path);
+                    $letter->signed_signature = 'data:'.$letter->signature_mime_type.';base64,'.base64_encode($contents);
+                }
+                unset($letter->signature_path, $letter->signature_mime_type);
+
                 return $letter;
             });
 
-        $managerSignature = $letters->isNotEmpty() ? $this->managerLetterSignatureData() : null;
+        $managerSignature = $this->managerLetterSignatureData();
 
         return response()->json([
             'letters' => $letters,
             'manager_signature' => $managerSignature['data'] ?? null,
+        ])->header('Cache-Control', 'private, no-store, max-age=0');
+    }
+
+    public function signLetter(Request $request, int $letterId): JsonResponse
+    {
+        $employee = $request->attributes->get('staff_portal_account');
+        if (! $this->letterSignatureWorkflowReady()) {
+            return response()->json([
+                'message' => 'Staff letter signing is not configured. Run the latest database migrations, including 2026_11_23_000001_add_staff_letter_signature_workflow.',
+            ], 503);
+        }
+
+        $signedPath = null;
+        try {
+            $signedAt = DB::transaction(function () use ($employee, $letterId, &$signedPath) {
+                $letter = DB::table('hr_letters')
+                    ->where('id', $letterId)
+                    ->where('status', 'published')
+                    ->where(function ($query) use ($employee): void {
+                        $query->where('employee_id', $employee->id)
+                            ->orWhere(function ($circular) use ($employee): void {
+                                $circular->whereNull('employee_id')->where(function ($role) use ($employee): void {
+                                    $role->whereNull('target_role')
+                                        ->orWhereRaw('LOWER(TRIM(target_role)) = ?', [mb_strtolower(trim((string) $employee->job_title))]);
+                                });
+                            });
+                    })
+                    ->lockForUpdate()
+                    ->first();
+                if (! $letter) {
+                    return response()->json(['message' => 'This letter is not available to your account.'], 404);
+                }
+                if (! $letter->requires_signature) {
+                    return response()->json(['message' => 'This letter does not require a staff signature.'], 422);
+                }
+
+                $existing = DB::table('hr_letter_signatures')
+                    ->where('letter_id', $letterId)
+                    ->where('employee_id', $employee->id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    return response()->json([
+                        'message' => 'Your signature has already been submitted for this letter.',
+                        'signed_at' => $existing->signed_at,
+                    ], 409);
+                }
+
+                $signature = DB::table('hr_staff_signatures')->where('employee_id', $employee->id)->first();
+                if (! $signature || ! Storage::disk('local')->exists($signature->file_path)) {
+                    return response()->json(['message' => 'Save your reusable signature before signing this letter.'], 422);
+                }
+
+                $extension = match ($signature->mime_type) {
+                    'image/jpeg' => 'jpg',
+                    'image/webp' => 'webp',
+                    default => 'png',
+                };
+                $signedPath = sprintf('hr-letter-signatures/%d/%d-%s.%s', $letterId, $employee->id, bin2hex(random_bytes(12)), $extension);
+                if (! Storage::disk('local')->copy($signature->file_path, $signedPath)) {
+                    $signedPath = null;
+                    return response()->json(['message' => 'Your signature could not be attached to the letter. Please try again.'], 500);
+                }
+
+                $signedAt = now();
+                DB::table('hr_letter_signatures')->insert([
+                    'letter_id' => $letterId,
+                    'employee_id' => $employee->id,
+                    'signature_path' => $signedPath,
+                    'mime_type' => $signature->mime_type,
+                    'signed_at' => $signedAt,
+                    'created_at' => $signedAt,
+                    'updated_at' => $signedAt,
+                ]);
+
+                return $signedAt;
+            });
+        } catch (\Throwable $error) {
+            if ($signedPath) {
+                Storage::disk('local')->delete($signedPath);
+            }
+            throw $error;
+        }
+
+        if ($signedAt instanceof JsonResponse) {
+            return $signedAt;
+        }
+
+        $signedRecord = DB::table('hr_letter_signatures')
+            ->where('letter_id', $letterId)
+            ->where('employee_id', $employee->id)
+            ->first();
+        if (! $signedRecord || ! Storage::disk('local')->exists($signedRecord->signature_path)) {
+            abort(500, 'The submitted letter signature is missing from private storage.');
+        }
+
+        return response()->json([
+            'message' => 'Your signature has been submitted to HR.',
+            'signed_at' => $signedAt,
+            'signed_signature' => 'data:'.$signedRecord->mime_type.';base64,'.base64_encode(Storage::disk('local')->get($signedRecord->signature_path)),
         ])->header('Cache-Control', 'private, no-store, max-age=0');
     }
 
@@ -389,7 +519,6 @@ class StaffHrController extends Controller
             ->where('employee_id', $employee->id)
             ->orderByDesc('submitted_at')
             ->get(['id', 'request_type', 'leave_type', 'start_date', 'end_date', 'working_days_requested', 'working_days_approved', 'leave_remuneration', 'handover_person', 'outstanding_duties', 'notification_date', 'reason', 'attachment_name', 'status', 'review_note', 'reviewed_at', 'submitted_at']);
-
         return response()->json(['requests' => $requests]);
     }
 
@@ -397,7 +526,7 @@ class StaffHrController extends Controller
     {
         $employee = $request->attributes->get('staff_portal_account');
         $year = (int) now()->format('Y');
-        $entitlement = $this->ensureLeaveEntitlement($employee, $year, now());
+        $entitlement = $this->ensureLeaveEntitlement($employee, $year);
         $approved = DB::table('hr_requests')->where('employee_id', $employee->id)->where('leave_year', $year)
             ->where('request_type', 'leave')->where('leave_type', 'annual')->where('status', 'approved')
             ->selectRaw('COALESCE(SUM(GREATEST(working_days_approved - interrupted_working_days, 0)), 0) as days')->value('days');
@@ -414,7 +543,6 @@ class StaffHrController extends Controller
 
         return response()->json([
             'year' => $year,
-            'eligible_on' => $this->leaveEligibilityDate($employee)->toDateString(),
             'entitlement_days' => $daysEntitled,
             'carried_forward_days' => $carry,
             'days_used' => $used,
@@ -449,10 +577,7 @@ class StaffHrController extends Controller
             $start = Carbon::parse($validated['start_date'])->startOfDay();
             $end = Carbon::parse($validated['end_date'])->startOfDay();
             if ($start->year !== $end->year) return response()->json(['message' => 'Submit annual leave dates within one calendar year. Split requests that cross into another year.'], 422);
-            $entitlement = $this->ensureLeaveEntitlement($employee, $leaveYear, $start);
-            if (! $entitlement) {
-                return response()->json(['message' => 'Annual leave entitlement begins after 12 months of continuous service. Your eligibility date is '.$this->leaveEligibilityDate($employee)->format('j F Y').'.'], 422);
-            }
+            $entitlement = $this->ensureLeaveEntitlement($employee, $leaveYear);
             $daysRequested = $this->countScheduledWorkingDays($start, $end, $entitlement->working_days);
             if ($daysRequested < 1) return response()->json(['message' => 'The selected dates contain no scheduled working days.'], 422);
             $declaredDays = (float) ($validated['working_days_requested'] ?? $daysRequested);
@@ -567,8 +692,9 @@ class StaffHrController extends Controller
 
         $requiredSchema = [
             'employees_comprehensive' => ['id', 'status', 'ghana_card_name', 'staff_id', 'job_title', 'department', 'branch', 'salary', 'photo_path', 'date_employed'],
-            'hr_letters' => ['id', 'employee_id', 'target_role', 'title', 'body', 'attachment_path', 'attachment_name', 'status', 'created_by', 'published_at', 'created_at', 'updated_at'],
-            'hr_letter_templates' => ['id', 'title', 'body', 'active', 'created_by', 'created_at', 'updated_at'],
+            'hr_letters' => ['id', 'employee_id', 'target_role', 'title', 'body', 'attachment_path', 'attachment_name', 'requires_signature', 'status', 'created_by', 'published_at', 'created_at', 'updated_at'],
+            'hr_letter_templates' => ['id', 'title', 'body', 'requires_signature', 'active', 'created_by', 'created_at', 'updated_at'],
+            'hr_letter_signatures' => ['id', 'letter_id', 'employee_id', 'signature_path', 'mime_type', 'signed_at', 'created_at', 'updated_at'],
             'hr_requests' => ['id', 'employee_id', 'request_type', 'start_date', 'end_date', 'reason', 'attachment_path', 'attachment_name', 'status', 'review_note', 'reviewed_by', 'reviewed_at', 'submitted_at', 'created_at', 'updated_at'],
             'hr_kpi_rules' => ['id', 'title', 'description', 'target_value', 'full_score_allowance', 'active', 'created_by', 'created_at', 'updated_at'],
             'hr_kpi_results' => ['id', 'employee_id', 'rule_id', 'period', 'score', 'calculated_allowance', 'status', 'notes', 'evaluated_by', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
@@ -594,6 +720,22 @@ class StaffHrController extends Controller
             ->leftJoin('employees_comprehensive as employee', 'employee.id', '=', 'letter.employee_id')
             ->orderByDesc('letter.updated_at')
             ->get(['letter.*', 'employee.ghana_card_name as employee_name', 'employee.staff_id']);
+        $letterSignatures = DB::table('hr_letter_signatures as signing')
+            ->join('employees_comprehensive as employee', 'employee.id', '=', 'signing.employee_id')
+            ->orderBy('signing.signed_at')
+            ->get([
+                'signing.letter_id',
+                'signing.employee_id',
+                'signing.signed_at',
+                'employee.ghana_card_name as employee_name',
+                'employee.staff_id',
+            ])
+            ->groupBy('letter_id');
+        $letters = $letters->map(function ($letter) use ($letterSignatures) {
+            $letter->signatures = $letterSignatures->get($letter->id, collect())->values();
+
+            return $letter;
+        });
         $templates = DB::table('hr_letter_templates')->orderByDesc('active')->orderBy('title')->get();
         $requests = DB::table('hr_requests as item')
             ->join('employees_comprehensive as employee', 'employee.id', '=', 'item.employee_id')
@@ -614,7 +756,7 @@ class StaffHrController extends Controller
             && Schema::hasTable('hr_public_holidays')
             && collect($leaveSchemaColumns)->every(fn ($column) => Schema::hasColumn('hr_requests', $column));
         if ($leaveTrackingReady) {
-            foreach ($employees as $employee) $this->ensureLeaveEntitlement($employee, $leaveYear, now());
+            foreach ($employees as $employee) $this->ensureLeaveEntitlement($employee, $leaveYear);
             $leaveEntitlements = DB::table('hr_leave_entitlements as entitlement')
                 ->join('employees_comprehensive as employee', 'employee.id', '=', 'entitlement.employee_id')
                 ->where('entitlement.leave_year', $leaveYear)
@@ -733,10 +875,6 @@ class StaffHrController extends Controller
         if ((float) $validated['entitlement_days'] < 15 && empty(trim((string) ($validated['adjustment_note'] ?? '')))) {
             return response()->json(['message' => 'Add a note explaining the reviewed entitlement adjustment below the 15-day baseline.'], 422);
         }
-        $employee = DB::table('employees_comprehensive')->where('id', $validated['employee_id'])->first();
-        if ($this->leaveEligibilityDate($employee)->gt(Carbon::create((int) $validated['leave_year'], 12, 31))) {
-            return response()->json(['message' => 'This employee has not completed 12 months of continuous service during the selected leave year.'], 422);
-        }
         $workdays = array_values(array_unique(array_map('intval', $validated['working_days'])));
         sort($workdays);
         $existing = DB::table('hr_leave_entitlements')->where('employee_id', $validated['employee_id'])->where('leave_year', $validated['leave_year'])->first();
@@ -745,7 +883,7 @@ class StaffHrController extends Controller
                 'carried_forward_days' => $validated['carried_forward_days'] ?? 0,
                 'working_days' => json_encode($workdays),
                 'adjustment_note' => $validated['adjustment_note'] ?? null,
-                'entitlement_start_date' => $this->leaveEligibilityDate($employee)->toDateString(),
+                'entitlement_start_date' => Carbon::create((int) $validated['leave_year'], 1, 1)->toDateString(),
                 'updated_by' => $request->user()->id,
                 'updated_at' => now(),
             ];
@@ -786,11 +924,13 @@ class StaffHrController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'body' => ['required', 'string', 'max:50000'],
+            'requires_signature' => ['sometimes', 'boolean'],
             'active' => ['sometimes', 'boolean'],
         ]);
         $data = [
             'title' => $validated['title'],
             'body' => $validated['body'],
+            'requires_signature' => $validated['requires_signature'] ?? false,
             'active' => $validated['active'] ?? true,
             'updated_at' => now(),
         ];
@@ -811,6 +951,7 @@ class StaffHrController extends Controller
             'target_role' => ['nullable', 'string', 'max:180'],
             'title' => ['required', 'string', 'max:180'],
             'body' => ['required', 'string', 'max:50000'],
+            'requires_signature' => ['sometimes', 'boolean'],
             'attachment' => ['nullable', 'file', 'mimes:pdf,doc,docx,png,jpg,jpeg', 'max:15360'],
         ]);
 
@@ -819,12 +960,16 @@ class StaffHrController extends Controller
             'target_role' => empty($validated['employee_id']) ? ($validated['target_role'] ?? null) : null,
             'title' => $validated['title'],
             'body' => $validated['body'],
+            'requires_signature' => $validated['requires_signature'] ?? false,
             'updated_at' => now(),
         ];
         if ($letterId) {
             $letter = DB::table('hr_letters')->where('id', $letterId)->first();
             if (! $letter) return response()->json(['message' => 'Letter not found.'], 404);
             if ($letter->status === 'published') return response()->json(['message' => 'Unpublish a letter before editing it.'], 422);
+            if (DB::table('hr_letter_signatures')->where('letter_id', $letterId)->exists()) {
+                return response()->json(['message' => 'A letter with submitted signatures cannot be changed. Create a new letter to preserve the signed record.'], 422);
+            }
             if ($request->hasFile('attachment')) {
                 if ($letter->attachment_path) Storage::disk('local')->delete($letter->attachment_path);
                 $data['attachment_path'] = $request->file('attachment')->store('hr-letters', 'local');
@@ -853,6 +998,9 @@ class StaffHrController extends Controller
         $letter = DB::table('hr_letters')->where('id', $letterId)->first();
         if (! $letter) return response()->json(['message' => 'Letter not found.'], 404);
         if ($letter->status === 'published') return response()->json(['message' => 'Unpublish the letter before deleting it.'], 422);
+        if (DB::table('hr_letter_signatures')->where('letter_id', $letterId)->exists()) {
+            return response()->json(['message' => 'A letter with submitted signatures cannot be deleted.'], 422);
+        }
         if ($letter->attachment_path) Storage::disk('local')->delete($letter->attachment_path);
         DB::table('hr_letters')->where('id', $letterId)->delete();
         return response()->json(['message' => 'Draft letter deleted.']);
@@ -871,11 +1019,69 @@ class StaffHrController extends Controller
         return $this->downloadLetterAttachment(DB::table('hr_letters')->where('id', $letterId)->first());
     }
 
+    public function viewSignedLetter(Request $request, int $letterId, int $employeeId): JsonResponse
+    {
+        if ($denied = $this->requireManager($request)) return $denied;
+        $submission = DB::table('hr_letter_signatures as signing')
+            ->join('hr_letters as letter', 'letter.id', '=', 'signing.letter_id')
+            ->join('employees_comprehensive as employee', 'employee.id', '=', 'signing.employee_id')
+            ->where('signing.letter_id', $letterId)
+            ->where('signing.employee_id', $employeeId)
+            ->first([
+                'letter.title',
+                'letter.body',
+                'letter.published_at',
+                'signing.signature_path',
+                'signing.mime_type',
+                'signing.signed_at',
+                'employee.ghana_card_name',
+                'employee.staff_id',
+                'employee.job_title',
+                'employee.department',
+            ]);
+        if (! $submission) {
+            return response()->json(['message' => 'The signed letter was not found.'], 404);
+        }
+        if (! Storage::disk('local')->exists($submission->signature_path)) {
+            return response()->json(['message' => 'The submitted signature is missing from private storage.'], 500);
+        }
+
+        $submission->body = strtr($submission->body, [
+            '{employee_name}' => $submission->ghana_card_name,
+            '{staff_id}' => $submission->staff_id,
+            '{job_title}' => $submission->job_title,
+            '{department}' => $submission->department,
+            '{date}' => $submission->published_at
+                ? Carbon::parse($submission->published_at)->format('j F Y')
+                : Carbon::parse($submission->signed_at)->format('j F Y'),
+        ]);
+        $managerSignature = $this->managerLetterSignatureData();
+
+        return response()->json([
+            'letter' => ['title' => $submission->title, 'body' => $submission->body],
+            'employee' => [
+                'name' => $submission->ghana_card_name,
+                'staff_id' => $submission->staff_id,
+            ],
+            'signature' => 'data:'.$submission->mime_type.';base64,'.base64_encode(Storage::disk('local')->get($submission->signature_path)),
+            'signed_at' => $submission->signed_at,
+            'manager_signature' => $managerSignature['data'] ?? null,
+        ])->header('Cache-Control', 'private, no-store, max-age=0');
+    }
+
     public function downloadMyLetterAttachment(Request $request, int $letterId): StreamedResponse|JsonResponse
     {
         $employee = $request->attributes->get('staff_portal_account');
         $record = DB::table('hr_letters')->where('id', $letterId)->where('status', 'published')
-            ->where(fn ($query) => $query->whereNull('employee_id')->orWhere('employee_id', $employee->id))->first();
+            ->where(function ($query) use ($employee): void {
+                $query->where('employee_id', $employee->id)
+                    ->orWhere(function ($circular) use ($employee): void {
+                        $circular->whereNull('employee_id')->where(function ($role) use ($employee): void {
+                            $role->whereNull('target_role')
+                                ->orWhereRaw('LOWER(TRIM(target_role)) = ?', [mb_strtolower(trim((string) $employee->job_title))]);
+                        });
+                    });
+            })->first();
         return $this->downloadLetterAttachment($record);
     }
 
@@ -1491,6 +1697,13 @@ class StaffHrController extends Controller
         ];
     }
 
+    private function letterSignatureWorkflowReady(): bool
+    {
+        return Schema::hasColumn('hr_letters', 'requires_signature')
+            && Schema::hasColumn('hr_letter_templates', 'requires_signature')
+            && Schema::hasTable('hr_letter_signatures');
+    }
+
     private function hasKpiFramework(): bool
     {
         return collect([
@@ -1509,14 +1722,8 @@ class StaffHrController extends Controller
             : response()->json(['message' => 'Only the General Manager can manage HR Space.'], 403);
     }
 
-    private function leaveEligibilityDate(object $employee): Carbon
+    private function ensureLeaveEntitlement(object $employee, int $year): object
     {
-        return Carbon::parse($employee->date_employed)->startOfDay()->addYear();
-    }
-
-    private function ensureLeaveEntitlement(object $employee, int $year, Carbon $eligibilityCheckDate): ?object
-    {
-        if ($this->leaveEligibilityDate($employee)->gt($eligibilityCheckDate->copy()->startOfDay())) return null;
         $existing = DB::table('hr_leave_entitlements')->where('employee_id', $employee->id)->where('leave_year', $year)->first();
         if ($existing) return $existing;
 
@@ -1527,7 +1734,7 @@ class StaffHrController extends Controller
             'carried_forward_days' => 0,
             'working_days' => json_encode([1, 2, 3, 4, 5, 6]),
             'adjustment_note' => 'Default statutory baseline: 15 paid working days. Confirm the individual work schedule and applicable entitlement.',
-            'entitlement_start_date' => $this->leaveEligibilityDate($employee)->toDateString(),
+            'entitlement_start_date' => Carbon::create($year, 1, 1)->toDateString(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);

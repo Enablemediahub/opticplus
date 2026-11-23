@@ -54,6 +54,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::get('/communications/{communicationId}/attachment', [StaffHrController::class, 'downloadMyCommunicationAttachment']);
         Route::post('/kpi-assessments/{assessmentId}/comment', [StaffHrController::class, 'commentOnKpiAssessment']);
         Route::get('/letters', [StaffHrController::class, 'myLetters']);
+        Route::post('/letters/{letterId}/signature', [StaffHrController::class, 'signLetter']);
         Route::get('/letters/{letterId}/attachment', [StaffHrController::class, 'downloadMyLetterAttachment']);
         Route::get('/payroll', [StaffHrController::class, 'payroll']);
         Route::get('/requests', [StaffHrController::class, 'myRequests']);
@@ -88,6 +89,7 @@ Route::prefix('v1')->middleware('idempotency')->group(function (): void {
         Route::put('/manager/hr-space/letters/{letterId}', [StaffHrController::class, 'saveLetter']);
         Route::delete('/manager/hr-space/letters/{letterId}', [StaffHrController::class, 'deleteLetter']);
         Route::get('/manager/hr-space/letters/{letterId}/attachment', [StaffHrController::class, 'downloadAdminLetterAttachment']);
+        Route::get('/manager/hr-space/letters/{letterId}/signatures/{employeeId}', [StaffHrController::class, 'viewSignedLetter']);
         Route::post('/manager/hr-space/letter-templates', [StaffHrController::class, 'saveLetterTemplate']);
         Route::put('/manager/hr-space/letter-templates/{templateId}', [StaffHrController::class, 'saveLetterTemplate']);
         Route::delete('/manager/hr-space/letter-templates/{templateId}', [StaffHrController::class, 'deleteLetterTemplate']);

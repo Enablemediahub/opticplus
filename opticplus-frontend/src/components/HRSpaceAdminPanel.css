@@ -49,6 +49,16 @@
 .staff-hr-record-list > article { border-color: #e3ebf4; background: #fff; }
 .staff-hr-record-list > article strong { color: #183b5d; }
 .staff-hr-record-list > article small { color: #72859a; }
+.staff-hr-collapsible-list { margin-top: 14px; border: 1px solid #dfe8f2; border-radius: 12px; background: #f8fbff; }
+.staff-hr-collapsible-list > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 15px; color: #173b60; cursor: pointer; list-style: none; }
+.staff-hr-collapsible-list > summary::-webkit-details-marker { display: none; }
+.staff-hr-collapsible-list > summary::after { content: '+'; color: #3979b7; font-size: 18px; font-weight: 700; }
+.staff-hr-collapsible-list[open] > summary::after { content: '-'; }
+.staff-hr-collapsible-list > summary strong { font-size: 13px; }
+.staff-hr-collapsible-list > summary span { margin-left: auto; color: #71859a; font-size: 11px; }
+.staff-hr-collapsible-list > summary:focus-visible { outline: 2px solid #2783e3; outline-offset: -2px; }
+.staff-hr-collapsible-list > .muted-copy { margin: 0 13px 12px; }
+.staff-hr-collapsible-list > .staff-hr-record-list { margin: 0 12px 12px; }
 .staff-hr-admin-workspace .primary-button { background: #1677d2; }
 .staff-hr-admin-workspace .primary-button:hover { background: #0f61b3; }
 .staff-hr-admin-workspace .secondary-button { border-color: #d2e1f1; color: #245f9c; }
@@ -235,6 +245,8 @@
 .staff-hr-communications .staff-hr-record-list { margin-top: 16px; }
 .staff-hr-communications .staff-hr-record-list article p { white-space: pre-wrap; }
 .staff-hr-communications .staff-hr-record-list article { align-items: flex-start; }
+.staff-hr-signature-submission { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.staff-hr-signature-submission .secondary-button { flex: 0 0 auto; }
 .staff-hr-letter-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr); align-items: start; gap: 22px; }
 .staff-hr-letter-editor { min-width: 0; }
 .staff-hr-manager-signature { display: grid; gap: 10px; margin: 0 0 18px; border: 1px solid #dce7f1; border-radius: 12px; padding: 14px; background: #f8fbff; }

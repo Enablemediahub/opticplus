@@ -1,32 +1,38 @@
-OPTICPLUS HOSTINGER FILEZILLA UPDATE — LATEST CHANGES
-Prepared: 2026-11-21
+OPTICPLUS HOSTINGER FILEZILLA UPDATE
+Prepared: 2026-11-23
 
-Upload only the files listed below. Upload backend and asset files first,
-then upload public/index.html last. Keep older hashed assets on the server
-for users with an already-open browser session.
+Upload each listed file to the same relative path under the Laravel application
+root. Upload backend files and hashed assets first; upload public/index.html
+last so it only references assets that are already present.
 
-app/Http/Controllers/StaffPortalController.php
-app/Http/Controllers/BillingController.php
-app/Http/Controllers/PatientRecordController.php
-app/Http/Controllers/CustomerServiceController.php
+Backend files:
 app/Http/Controllers/CustomerFollowupController.php
+app/Http/Controllers/CustomerServiceController.php
+app/Http/Controllers/ManagerNotificationController.php
 app/Http/Controllers/OptometristReferralController.php
-app/Services/LensPrescriptionDemandService.php
+app/Http/Controllers/PatientRecordController.php
+app/Http/Controllers/BillingController.php
+app/Http/Controllers/StaffHrController.php
+app/Http/Controllers/StaffPortalController.php
 app/Services/CustomerFollowupSchedule.php
-database/migrations/2026_11_20_000001_create_customer_followup_tables.php
-database/manual_sql/customer_followups.mysql.sql
+app/Services/LensPrescriptionDemandService.php
 routes/api.php
-public/.htaccess
-public/assets/App-DJZzb2eX.css
-public/assets/App-vuQbB0-0.js
+database/migrations/2026_11_20_000001_create_customer_followup_tables.php
+database/migrations/2026_11_23_000001_add_staff_letter_signature_workflow.php
+database/manual_sql/customer_followups.mysql.sql
+database/manual_sql/hr_letter_signature_workflow.mysql.sql
+
+Frontend files:
+public/assets/App-BzT0voUi.css
+public/assets/App-DqQzztkH.js
 public/assets/PublicPatientIdCard-B4rycR1h.css
 public/assets/PublicPatientIdCard-Bwvn218u.js
 public/assets/PublicRegistrationPage-CdPH3cx_.css
 public/assets/PublicRegistrationPage-D7ce49c1.js
-public/assets/StaffSpace-7Jf9x8Jp.js
+public/assets/StaffSpace-B-UOpv9g.js
 public/assets/StaffSpace-BgHiqpDQ.css
+public/assets/index-BfPo_hwf.js
 public/assets/index-C-2ResrQ.css
-public/assets/index-ChMLEB2g.js
 public/assets/jsx-runtime-CQVmOSz-.js
 public/assets/react-dom-CNfC-q5X.js
 public/manifest.webmanifest
@@ -36,7 +42,17 @@ public/icons/opticplus-180.png
 public/icons/opticplus-192.png
 public/icons/opticplus-512.png
 public/registration/index.html
+public/.htaccess
 public/index.html
 
-Run database/manual_sql/customer_followups.mysql.sql in phpMyAdmin before
-using customer follow-ups; uploading the SQL file does not run it.
+Database instructions:
+- Back up the Hostinger database first.
+- Apply database/manual_sql/customer_followups.mysql.sql if the customer
+  follow-up schema has not already been installed.
+- Apply database/manual_sql/hr_letter_signature_workflow.mysql.sql once if
+  the two requires_signature columns and hr_letter_signatures table are absent.
+  Running it again after successful application will report duplicate objects.
+- The calendar-year leave entitlement, notifications, and uppercase leave
+  labels require no additional database schema changes.
+- Keep previously uploaded hashed files in public/assets; do not delete older
+  assets, which may still be in use by already-open browser sessions.

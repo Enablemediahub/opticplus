@@ -60,22 +60,6 @@ Phone push notifications require HTTPS, the `push_subscriptions` database table,
 
 General Managers receive approval and SMS-review alerts. CEOs see configured bank and MoMo account balances by branch on the executive dashboard; web and phone alerts are sent only when a newly received bank SMS changes an account's reported balance, not for every SMS. The portal's in-app notifications work without push credentials. Push delivery and app-icon badges depend on browser/OS support; the user must allow notifications and install the portal as an app where required.
 
-## GTBank Gmail balance sync
-
-GTBank reported balances are read only from Gmail notifications sent by `gh.gens@gtbank.com`; GTBank SMS alerts are ignored. Other bank SMS workflows are unchanged. The Gmail sync uses the email's Current Balance and records message IDs to prevent processing a notification twice.
-
-Before deploying, create a Google Cloud OAuth web client with the Gmail API enabled and the `https://www.googleapis.com/auth/gmail.readonly` scope. Register this exact authorized redirect URI:
-
-```text
-https://opticplus.bealet.com/api/v1/bank-alerts/gmail/callback
-```
-
-Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`, and `FRONTEND_URL` in the live server `.env`. Keep OAuth secrets out of this package and out of source control. The sample values are in `.env.hostinger.example`; do not upload that file over the live `.env`.
-
-For Hostinger deployments without Artisan migration access, run `database/manual_sql/gtbank_gmail_tables.sql` against the OpticPlus database in phpMyAdmin. If Artisan migrations are available, run `php artisan migrate --force` instead. Then run `php artisan config:clear`.
-
-The Bank Deposits page can sync manually. To keep balances updating automatically, configure a Hostinger cron job to run Laravel's `schedule:run` every minute from the application root; the scheduled Gmail poll runs every five minutes. Connect the mailbox from Bank Deposits after the deployment and database setup.
-
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

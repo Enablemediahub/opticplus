@@ -19,6 +19,8 @@ class ManagerNotificationController extends Controller
         $memoCount = 0;
         $expenseCount = 0;
         $smsCount = 0;
+        $hrRequestCount = 0;
+        $staffMessageCount = 0;
 
         if (Schema::hasTable('memos')) {
             $memoQuery = DB::table('memos')
@@ -41,6 +43,29 @@ class ManagerNotificationController extends Controller
             $smsCount = $smsQuery->count();
         }
 
+        if (Schema::hasTable('hr_requests')
+            && Schema::hasTable('employees_comprehensive')
+            && Schema::hasColumn('employees_comprehensive', 'branch_id')) {
+            $hrRequestQuery = DB::table('hr_requests as hr_request')
+                ->join('employees_comprehensive as employee', 'employee.id', '=', 'hr_request.employee_id')
+                ->where('hr_request.status', 'pending');
+            $this->applyBranchScope($hrRequestQuery, 'employee.branch_id', $branchId);
+            $hrRequestCount = $hrRequestQuery->count();
+        }
+
+        if (Schema::hasTable('hr_kpi_assessments')
+            && Schema::hasTable('employees_comprehensive')
+            && Schema::hasColumn('employees_comprehensive', 'branch_id')
+            && Schema::hasColumn('hr_kpi_assessments', 'employee_comment')
+            && Schema::hasColumn('hr_kpi_assessments', 'manager_response')) {
+            $staffMessageQuery = DB::table('hr_kpi_assessments as assessment')
+                ->join('employees_comprehensive as employee', 'employee.id', '=', 'assessment.employee_id')
+                ->whereNotNull('assessment.employee_comment')
+                ->whereNull('assessment.manager_response');
+            $this->applyBranchScope($staffMessageQuery, 'employee.branch_id', $branchId);
+            $staffMessageCount = $staffMessageQuery->count();
+        }
+
         $subscribed = Schema::hasTable('push_subscriptions')
             && DB::table('push_subscriptions')
                 ->where('user_id', $request->user()->id)
@@ -53,7 +78,9 @@ class ManagerNotificationController extends Controller
                 'memos' => $memoCount,
                 'expenses' => $expenseCount,
                 'sms_reviews' => $smsCount,
-                'total' => $memoCount + $expenseCount + $smsCount,
+                'hr_requests' => $hrRequestCount,
+                'staff_messages' => $staffMessageCount,
+                'total' => $memoCount + $expenseCount + $smsCount + $hrRequestCount + $staffMessageCount,
             ],
             'push' => [
                 'enabled' => $this->pushIsConfigured() && Schema::hasTable('push_subscriptions'),

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './HRSpaceAdminPanel.css'
 
-const initialLetter = { employee_id: '', target_role: '', title: '', body: '' }
+const initialLetter = { employee_id: '', target_role: '', title: '', body: '', requires_signature: false }
 const initialCommunication = { employee_id: '', title: '', message: '' }
 const initialRule = { title: '', description: '', target_value: '', full_score_allowance: '', active: true }
 const initialScore = { employee_id: '', rule_id: '', period: new Date().toISOString().slice(0, 7), score: '', notes: '' }
@@ -10,6 +10,20 @@ const initialScorecard = { role_title: '', branch: '*', max_monthly_allowance: '
 const initialAssessment = { employee_id: '', scorecard_id: '', period: new Date().toISOString().slice(0, 7), targets_confirmed: false, summary_notes: '', items: [] }
 const hrSections = ['letters', 'requests', 'leave', 'people', 'performance']
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
+const formatLeaveType = (value) => {
+  const leaveType = String(value || '').trim().toLowerCase().replaceAll('_', ' ')
+  const labels = { annual: 'ANNUAL', sick: 'SICK', maternity: 'MATERNITY', compassionate: 'COMPASSIONATE', unpaid: 'UNPAID', other: 'OTHER' }
+  return labels[leaveType] || leaveType.toUpperCase()
+}
+const formatRequestReason = (request) => request.request_type === 'leave'
+  ? String(request.reason || '').replace(/^(Leave type:\s*)([^\r\n]+)/mi, (_, prefix, value) => `${prefix}${formatLeaveType(value)}`)
+  : request.reason
+const fillLetterTemplate = (body, employee, date = new Date()) => String(body || '')
+  .replaceAll('{employee_name}', employee?.ghana_card_name || 'Employee name')
+  .replaceAll('{staff_id}', employee?.staff_id || 'Staff ID')
+  .replaceAll('{job_title}', employee?.job_title || 'Position')
+  .replaceAll('{department}', employee?.department || 'Department')
+  .replaceAll('{date}', date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))
 const needsAnnualLeaveNoticeReview = (request) => {
   if (!request.start_date) return false
   const daysUntil = (new Date(`${request.start_date}T00:00:00`).getTime() - Date.now()) / 86400000
@@ -123,16 +137,27 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
     }
   }
 
-  function saveLetter(event) {
-    event.preventDefault()
+  async function saveLetter(event, publishToStaff = false) {
+    event?.preventDefault()
     const payload = new FormData()
     payload.append('employee_id', letter.employee_id || '')
     payload.append('target_role', letter.target_role || '')
     payload.append('title', letter.title)
     payload.append('body', letter.body)
+    payload.append('requires_signature', letter.requires_signature ? '1' : '0')
     if (letterAttachment) payload.append('attachment', letterAttachment)
-    perform(() => apiFetch('/manager/hr-space/letters', { method: 'POST', token, body: payload }), 'Draft letter created.')
-      .then((response) => { if (response) { setLetter(initialLetter); setLetterAttachment(null) } })
+    const response = await perform(() => apiFetch('/manager/hr-space/letters', { method: 'POST', token, body: payload }), 'Draft letter created.')
+    if (!response) return
+    setLetter(initialLetter)
+    setLetterAttachment(null)
+    if (publishToStaff) {
+      await perform(() => apiFetch(`/manager/hr-space/letters/${response.id}/publish`, { method: 'PATCH', token }), 'Letter published to staff documents.')
+    }
+  }
+
+  function saveLetterFromForm(event, publishToStaff) {
+    const form = event.currentTarget.closest('form')
+    if (form?.reportValidity()) saveLetter(null, publishToStaff)
   }
 
   function saveTemplate(event) {
@@ -143,7 +168,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
     }
     const existingTemplate = data.templates.find((item) => item.id === editingTemplateId)
     perform(() => apiFetch(editingTemplateId ? `/manager/hr-space/letter-templates/${editingTemplateId}` : '/manager/hr-space/letter-templates', {
-      method: editingTemplateId ? 'PUT' : 'POST', token, body: { title: letter.title, body: letter.body, active: existingTemplate?.active ?? true },
+      method: editingTemplateId ? 'PUT' : 'POST', token, body: { title: letter.title, body: letter.body, requires_signature: letter.requires_signature, active: existingTemplate?.active ?? true },
     }), 'Reusable letter template saved.').then((response) => { if (response) { setEditingTemplateId(null); setLetter(initialLetter) } })
   }
 
@@ -233,7 +258,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
       setError('Unpublish the letter before changing its content.')
       return
     }
-    setLetter({ employee_id: item.employee_id || '', target_role: item.target_role || '', title: item.title, body: item.body })
+    setLetter({ employee_id: item.employee_id || '', target_role: item.target_role || '', title: item.title, body: item.body, requires_signature: Boolean(item.requires_signature) })
     setLetterAttachment(null)
     setError('Editing this draft: make changes below and use Save draft.')
     setNotice('')
@@ -241,7 +266,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
   }
 
   function previewSavedLetter(item) {
-    setLetter({ employee_id: item.employee_id || '', target_role: item.target_role || '', title: item.title, body: item.body })
+    setLetter({ employee_id: item.employee_id || '', target_role: item.target_role || '', title: item.title, body: item.body, requires_signature: Boolean(item.requires_signature) })
     setEditingLetterId(null)
     setEditingTemplateId(null)
     setError('Previewing the saved letter. Changes here are not saved unless you choose a save action.')
@@ -258,6 +283,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
     payload.append('target_role', letter.target_role || '')
     payload.append('title', letter.title)
     payload.append('body', letter.body)
+    payload.append('requires_signature', letter.requires_signature ? '1' : '0')
     if (letterAttachment) payload.append('attachment', letterAttachment)
     const response = await perform(() => apiFetch(`/manager/hr-space/letters/${editingLetterId}`, {
       method: 'POST', token, body: payload,
@@ -279,6 +305,31 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
     } catch (nextError) { setError(nextError.message) }
   }
 
+  async function viewSignedLetter(letterId, employeeId) {
+    const popup = window.open('', '_blank', 'width=900,height=1100')
+    if (!popup) {
+      setError('Allow pop-ups to view or print the signed letter.')
+      return
+    }
+    popup.document.write('<!doctype html><html><body style="font:14px Arial;padding:24px">Loading signed letter…</body></html>')
+    popup.document.close()
+    try {
+      const signed = await apiFetch(`/manager/hr-space/letters/${letterId}/signatures/${employeeId}`, { token })
+      const title = escapeHtml(signed.letter.title)
+      const body = escapeHtml(signed.letter.body).replace(/\n/g, '<br>')
+      const managerSignature = signed.manager_signature
+        ? `<img class="signature-image" src="${escapeHtml(signed.manager_signature)}" alt="General Manager signature">`
+        : ''
+      const employeeSignature = `<img class="signature-image" src="${escapeHtml(signed.signature)}" alt="Employee signature">`
+      popup.document.open()
+      popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>@page{size:letter;margin:56mm 22mm 30mm}*{box-sizing:border-box}html,body{margin:0;width:216mm;min-height:279mm;font-family:Arial,sans-serif;color:#202020}.letterhead{position:fixed;z-index:0;inset:0;width:216mm;height:279mm;object-fit:fill}.content{position:relative;z-index:1;font-size:11pt;line-height:1.55}.content h1{margin:0 0 10mm;color:#17324f;font-size:15pt}.signatures{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:12mm;margin-top:12mm;break-inside:avoid;page-break-inside:avoid}.signature-block{min-width:0;font-size:9pt;line-height:1.35}.signature-image{display:block;max-width:48mm;max-height:16mm;object-fit:contain;object-position:left bottom;margin:0 0 2mm}.signature-block strong{display:block;margin-top:2mm}.toolbar{position:fixed;right:20px;top:20px;z-index:2;border:0;border-radius:8px;padding:11px 15px;background:#176fc2;color:#fff;font:600 13px Arial;cursor:pointer}@media screen{body{padding:56mm 22mm 30mm}.letterhead{position:absolute}}@media print{html,body{width:auto;min-height:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}}</style></head><body><img class="letterhead" src="/bealet-letterhead.png" alt=""><article class="content"><h1>${title}</h1>${body}<div class="signatures"><div class="signature-block">${managerSignature}<div>General Manager</div><strong>For Bealet Optical Centre Limited</strong></div><div class="signature-block">${employeeSignature}<div>Employee acknowledgement · ${escapeHtml(signed.employee.name)}</div><strong>${escapeHtml(signed.employee.staff_id)}</strong><div>Submitted ${escapeHtml(new Date(signed.signed_at).toLocaleString())}</div></div></div></article><button class="toolbar" onclick="window.print()">Print / Save as PDF</button></body></html>`)
+      popup.document.close()
+    } catch (nextError) {
+      popup.close()
+      setError(nextError.message)
+    }
+  }
+
   function deleteLetter(item) {
     if (item.status === 'published' || !window.confirm(`Delete the draft “${item.title}”?`)) return
     perform(() => apiFetch(`/manager/hr-space/letters/${item.id}`, { method: 'DELETE', token }), 'Draft letter deleted.')
@@ -292,6 +343,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
   const query = search.trim().toLowerCase()
   const matches = (item) => !query || [item.title, item.role_title, item.role_title_snapshot, item.employee_name, item.staff_id, item.ghana_card_name, item.job_title, item.employee_branch, item.branch, item.department, item.request_type, item.status, item.rule_title, item.name].some((value) => String(value || '').toLowerCase().includes(query))
   const filteredLetters = data.letters.filter(matches)
+  const filteredTemplates = data.templates.filter(matches)
   const filteredRequests = data.requests.filter(matches)
   const filteredEmployees = data.employees.filter(matches)
   const filteredRules = data.rules.filter(matches)
@@ -308,6 +360,10 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
     String(item.employee_id || '') === String(selectedEmployee.id)
     || (!item.employee_id && (!item.target_role || item.target_role.trim().toLowerCase() === String(selectedEmployee.job_title || '').trim().toLowerCase()))
   )) : []
+  const letterAudience = (item) => data.employees.filter((employee) => (
+    String(item.employee_id || '') === String(employee.id)
+    || (!item.employee_id && (!item.target_role || item.target_role.trim().toLowerCase() === String(employee.job_title || '').trim().toLowerCase()))
+  ))
   const currentPeriod = new Date().toISOString().slice(0, 7)
   const selectedPublishedResults = selectedResults.filter((item) => item.status === 'published')
   const selectedPublishedAssessments = selectedAssessments.filter((item) => item.status === 'published')
@@ -324,12 +380,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
   const previewEmployee = data.employees.find((item) => String(item.id) === String(letter.employee_id))
     || data.employees.find((item) => letter.target_role && item.job_title === letter.target_role)
     || data.employees[0]
-  const previewBody = letter.body
-    .replaceAll('{employee_name}', previewEmployee?.ghana_card_name || 'Employee name')
-    .replaceAll('{staff_id}', previewEmployee?.staff_id || 'Staff ID')
-    .replaceAll('{job_title}', previewEmployee?.job_title || 'Position')
-    .replaceAll('{department}', previewEmployee?.department || 'Department')
-    .replaceAll('{date}', new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }))
+  const previewBody = fillLetterTemplate(letter.body, previewEmployee)
   const assessmentScorecard = data.scorecards.find((item) => String(item.id) === String(assessmentForm.scorecard_id))
   const assessmentScore = Number(assessmentForm.items.reduce((total, item) => (
     total + (item.rating === '' || item.rating == null ? 0 : Number(item.weight) * Number(item.rating) / 5)
@@ -677,12 +728,15 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
 
           <section className="staff-hr-admin-block">
             <h4>Employee requests</h4>
-            {selectedRequests.length ? <div className="staff-hr-record-list">{selectedRequests.map((item) => <article key={item.id}><div><strong>{item.request_type.replace('_', ' ')}</strong><small>{item.start_date || 'No date'}{item.end_date ? ` – ${item.end_date}` : ''} · {item.status}{item.working_days_requested != null ? ` · ${Number(item.working_days_requested).toFixed(2)} working days` : ''}</small><p>{item.reason}</p>{item.review_note && <small>Manager note: {item.review_note}</small>}</div>{item.status === 'pending' && <div className="staff-hr-review">{item.leave_type === 'annual' && <label className="staff-hr-inline-field">Leave remuneration paid (GHS)<input type="number" min="0.01" step="0.01" value={reviewLeavePayments[item.id] || ''} onChange={(event) => setReviewLeavePayments({ ...reviewLeavePayments, [item.id]: event.target.value })} /></label>}<div className="modal-actions"><button className="primary-button" onClick={() => reviewRequest(item, 'approved')} disabled={busy || (item.leave_type === 'annual' && !Number(reviewLeavePayments[item.id]))}>Approve</button><button className="secondary-button" onClick={() => reviewRequest(item, 'rejected')} disabled={busy}>Reject</button></div></div>}</article>)}</div> : <p className="muted-copy">No HR requests from this employee.</p>}
+            {selectedRequests.length ? <div className="staff-hr-record-list">{selectedRequests.map((item) => <article key={item.id}><div><strong>{item.request_type.replace('_', ' ')}</strong>{item.request_type === 'leave' && <small>Leave type: {formatLeaveType(item.leave_type)}</small>}<small>{item.start_date || 'No date'}{item.end_date ? ` – ${item.end_date}` : ''} · {item.status}{item.working_days_requested != null ? ` · ${Number(item.working_days_requested).toFixed(2)} working days` : ''}</small><p>{formatRequestReason(item)}</p>{item.review_note && <small>Manager note: {item.review_note}</small>}</div>{item.status === 'pending' && <div className="staff-hr-review">{item.leave_type === 'annual' && <label className="staff-hr-inline-field">Leave remuneration paid (GHS)<input type="number" min="0.01" step="0.01" value={reviewLeavePayments[item.id] || ''} onChange={(event) => setReviewLeavePayments({ ...reviewLeavePayments, [item.id]: event.target.value })} /></label>}<div className="modal-actions"><button className="primary-button" onClick={() => reviewRequest(item, 'approved')} disabled={busy || (item.leave_type === 'annual' && !Number(reviewLeavePayments[item.id]))}>Approve</button><button className="secondary-button" onClick={() => reviewRequest(item, 'rejected')} disabled={busy}>Reject</button></div></div>}</article>)}</div> : <p className="muted-copy">No HR requests from this employee.</p>}
           </section>
 
           <section className="staff-hr-admin-block">
             <h4>Letters for this employee</h4>
-            {selectedLetters.length ? <div className="staff-hr-record-list">{selectedLetters.map((item) => <article key={item.id}><div><strong>{item.title}</strong><small>{item.target_role || (item.employee_id ? 'Direct to employee' : 'All staff')} · {item.status}</small><details><summary>Preview letter</summary><p>{item.body}</p></details></div><div className="modal-actions">{item.attachment_name && <button className="secondary-button" onClick={() => downloadLetter(item)}>Attachment</button>}<button className="secondary-button" onClick={() => toggleLetter(item)}>{item.status === 'published' ? 'Unpublish' : 'Publish'}</button></div></article>)}</div> : <p className="muted-copy">No letters currently target this employee.</p>}
+            {selectedLetters.length ? <div className="staff-hr-record-list">{selectedLetters.map((item) => {
+              const signature = item.signatures?.find((submission) => String(submission.employee_id) === String(selectedEmployee.id))
+              return <article key={item.id}><div><strong>{item.title}</strong><small>{item.target_role || (item.employee_id ? 'Direct to employee' : 'All staff')} · {item.status}</small>{item.requires_signature && <small>Signature required · {signature ? `Signed ${new Date(signature.signed_at).toLocaleString()}` : 'Awaiting signature'}</small>}{signature && <button type="button" className="secondary-button" onClick={() => viewSignedLetter(item.id, signature.employee_id)}>View signed letter</button>}<details><summary>Preview letter with letterhead</summary><div className="staff-hr-document-preview"><div className="staff-hr-document-preview-content"><h2>{item.title}</h2><div className="staff-hr-document-preview-body">{fillLetterTemplate(item.body, selectedEmployee)}</div><div className="staff-hr-document-preview-signature">{managerSignature && <img src={managerSignature} alt="General Manager signature" />}<span>General Manager</span><strong>For Bealet Optical Centre Limited</strong></div></div></div></details></div><div className="modal-actions">{item.attachment_name && <button className="secondary-button" onClick={() => downloadLetter(item)}>Attachment</button>}<button className="secondary-button" onClick={() => toggleLetter(item)}>{item.status === 'published' ? 'Unpublish' : 'Publish to staff'}</button></div></article>
+            })}</div> : <p className="muted-copy">No letters currently target this employee.</p>}
           </section>
         </div>
       </section> : <>
@@ -724,14 +778,19 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
             </div>
             {managerSignatureError && <p className="staff-hr-signature-error" role="alert">{managerSignatureError}</p>}
           </div>
-          <form className="patient-filter-grid" onSubmit={editingLetterId ? saveEditedLetter : editingTemplateId ? saveTemplate : saveLetter}>
-            <label className="staff-hr-wide">Use reusable template<select value="" onChange={(event) => { const item = data.templates.find((template) => String(template.id) === event.target.value); if (item) setLetter({ ...letter, title: item.title, body: item.body }) }}><option value="">Start from a blank letter</option>{data.templates.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-            <label>Specific employee (optional)<select value={letter.employee_id} onChange={(event) => setLetter({ ...letter, employee_id: event.target.value, target_role: '' })}><option value="">No individual employee</option>{data.employees.map((item) => <option key={item.id} value={item.id}>{item.ghana_card_name} · {item.staff_id}</option>)}</select></label>
-            <label>Target role (optional)<select value={letter.target_role} disabled={Boolean(letter.employee_id)} onChange={(event) => setLetter({ ...letter, target_role: event.target.value })}><option value="">All staff</option>{roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
+          <form className="patient-filter-grid" onSubmit={(event) => {
+            event.preventDefault()
+            if (editingLetterId) saveEditedLetter(event)
+            else if (editingTemplateId) saveTemplate(event)
+          }}>
+            {!editingTemplateId && <label className="staff-hr-wide">Use reusable template<select value="" onChange={(event) => { const item = data.templates.find((template) => String(template.id) === event.target.value); if (item) setLetter({ ...letter, title: item.title, body: item.body, requires_signature: Boolean(item.requires_signature) }) }}><option value="">Start from a blank letter</option>{data.templates.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.title}{item.requires_signature ? ' · signature required' : ''}</option>)}</select></label>}
+            {!editingTemplateId && <label>Specific employee (optional)<select value={letter.employee_id} onChange={(event) => setLetter({ ...letter, employee_id: event.target.value, target_role: '' })}><option value="">No individual employee</option>{data.employees.map((item) => <option key={item.id} value={item.id}>{item.ghana_card_name} · {item.staff_id}</option>)}</select></label>}
+            {!editingTemplateId && <label>Target role (optional)<select value={letter.target_role} disabled={Boolean(letter.employee_id)} onChange={(event) => setLetter({ ...letter, target_role: event.target.value })}><option value="">All staff</option>{roleOptions.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>}
             <label>Letter title<input value={letter.title} onChange={(event) => setLetter({ ...letter, title: event.target.value })} maxLength="180" required /></label>
             <label className="staff-hr-wide">Letter body<textarea rows="5" value={letter.body} onChange={(event) => setLetter({ ...letter, body: event.target.value })} required /></label>
-            <label className="staff-hr-wide">Attach a letter or supporting file (PDF, Word or image, up to 15 MB)<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={(event) => setLetterAttachment(event.target.files?.[0] || null)} /></label>
-            <div className="staff-hr-wide modal-actions"><button className="primary-button" disabled={busy}>{editingLetterId ? 'Save draft' : editingTemplateId ? 'Save template changes' : 'Create draft'}</button>{!editingTemplateId && <button type="button" className="secondary-button" onClick={saveTemplate} disabled={busy}>Save as reusable template</button>}{(editingLetterId || editingTemplateId) && <button type="button" className="secondary-button" onClick={() => { setEditingLetterId(null); setEditingTemplateId(null); setLetter(initialLetter); setError('') }}>Cancel edit</button>}</div>
+            <label className="staff-hr-wide"><input type="checkbox" checked={Boolean(letter.requires_signature)} onChange={(event) => setLetter({ ...letter, requires_signature: event.target.checked })} /> Require each recipient to sign and submit this letter in Staff documents &amp; messages</label>
+            {!editingTemplateId && <label className="staff-hr-wide">Attach a letter or supporting file (PDF, Word or image, up to 15 MB)<input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={(event) => setLetterAttachment(event.target.files?.[0] || null)} /></label>}
+            <div className="staff-hr-wide modal-actions">{(editingLetterId || editingTemplateId) ? <button type="submit" className="primary-button" disabled={busy}>{editingLetterId ? 'Save draft' : 'Save template changes'}</button> : <><button type="button" className="primary-button" onClick={(event) => saveLetterFromForm(event, true)} disabled={busy}>Create &amp; publish to staff</button><button type="button" className="secondary-button" onClick={(event) => saveLetterFromForm(event, false)} disabled={busy}>Create draft only</button><button type="button" className="secondary-button" onClick={saveTemplate} disabled={busy}>Save as reusable template</button></>}{(editingLetterId || editingTemplateId) && <button type="button" className="secondary-button" onClick={() => { setEditingLetterId(null); setEditingTemplateId(null); setLetter(initialLetter); setError('') }}>Cancel edit</button>}</div>
           </form>
           </div>
           <aside className="staff-hr-document-preview-panel" aria-live="polite">
@@ -752,18 +811,29 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
           </aside>
           </div>
           <p className="muted-copy">Template variables: {'{employee_name}'}, {'{staff_id}'}, {'{job_title}'}, {'{department}'}, {'{date}'}. Enter any individual figures directly into the letter before publishing.</p>
-          {data.templates.length > 0 && <div className="staff-hr-record-list">{data.templates.filter(matches).map((item) => <article key={item.id}><div><strong>{item.title}</strong><small>Reusable template · {item.active ? 'Active' : 'Inactive'}</small></div><div className="modal-actions"><button className="secondary-button" onClick={() => { setEditingLetterId(null); setEditingTemplateId(item.id); setLetter({ employee_id: '', target_role: '', title: item.title, body: item.body }); setError('Editing reusable template.') }}>Edit</button><button className="secondary-button" onClick={() => perform(() => apiFetch(`/manager/hr-space/letter-templates/${item.id}`, { method: 'PUT', token, body: { ...item, active: !item.active } }), 'Template status updated.')}>{item.active ? 'Deactivate' : 'Activate'}</button><button className="secondary-button staff-hr-danger-button" onClick={() => deleteTemplate(item)}>Delete</button></div></article>)}</div>}
-          <div className="staff-hr-record-list">{filteredLetters.map((item) => <article key={item.id}><div><strong>{item.title}</strong><small>{item.employee_name || item.target_role || 'All staff'} · {item.status}{item.attachment_name ? ` · ${item.attachment_name}` : ''}</small></div><div className="modal-actions"><button className="secondary-button" onClick={() => previewSavedLetter(item)}>Preview</button>{item.attachment_name && <button className="secondary-button" onClick={() => downloadLetter(item)}>Download</button>}<button className="secondary-button" onClick={() => editLetter(item)}>Edit</button><button className="secondary-button" onClick={() => toggleLetter(item)}>{item.status === 'published' ? 'Unpublish' : 'Publish'}</button>{item.status !== 'published' && <button className="secondary-button staff-hr-danger-button" onClick={() => deleteLetter(item)}>Delete</button>}</div></article>)}</div>
+          <details className="staff-hr-collapsible-list">
+            <summary><strong>Reusable templates</strong><span>{filteredTemplates.length} {filteredTemplates.length === 1 ? 'template' : 'templates'}</span></summary>
+            <p className="muted-copy">Only saved reusable templates appear in this list. Drafts and published staff letters are listed separately below.</p>
+            {filteredTemplates.length > 0 ? <div className="staff-hr-record-list">{filteredTemplates.map((item) => <article key={item.id}><div><strong>{item.title}</strong><small>Reusable template · {item.active ? 'Active' : 'Inactive'}{item.requires_signature ? ' · Staff signature required' : ''}</small></div><div className="modal-actions"><button className="secondary-button" onClick={() => { setEditingLetterId(null); setEditingTemplateId(item.id); setLetter({ employee_id: '', target_role: '', title: item.title, body: item.body, requires_signature: Boolean(item.requires_signature) }); setError('Editing reusable template.') }}>Edit</button><button className="secondary-button" onClick={() => perform(() => apiFetch(`/manager/hr-space/letter-templates/${item.id}`, { method: 'PUT', token, body: { ...item, active: !item.active } }), 'Template status updated.')}>{item.active ? 'Deactivate' : 'Activate'}</button><button className="secondary-button staff-hr-danger-button" onClick={() => deleteTemplate(item)}>Delete</button></div></article>)}</div> : <p className="muted-copy">{data.templates.length ? 'No reusable templates match your search.' : 'No reusable templates yet.'}</p>}
+          </details>
+          <details className="staff-hr-collapsible-list">
+            <summary><strong>Staff letters · drafts and published</strong><span>{filteredLetters.length} {filteredLetters.length === 1 ? 'letter' : 'letters'}</span></summary>
+            <div className="staff-hr-record-list">{filteredLetters.map((item) => {
+            const audience = letterAudience(item)
+            const signedIds = new Set((item.signatures || []).map((signature) => String(signature.employee_id)))
+            return <article key={item.id}><div><strong>{item.title}</strong><small>{item.employee_name || item.target_role || 'All staff'} · {item.status}{item.attachment_name ? ` · ${item.attachment_name}` : ''}</small>{item.requires_signature && <><small>Signature submissions: {signedIds.size} of {audience.length} staff</small>{item.signatures?.map((signature) => <div className="staff-hr-signature-submission" key={signature.employee_id}><small>{signature.employee_name} · {signature.staff_id} · signed {new Date(signature.signed_at).toLocaleString()}</small><button type="button" className="secondary-button" onClick={() => viewSignedLetter(item.id, signature.employee_id)}>View signed letter</button></div>)}</>}</div><div className="modal-actions"><button className="secondary-button" onClick={() => previewSavedLetter(item)}>Preview</button>{item.attachment_name && <button className="secondary-button" onClick={() => downloadLetter(item)}>Download</button>}<button className="secondary-button" onClick={() => editLetter(item)}>Edit</button><button className="secondary-button" onClick={() => toggleLetter(item)}>{item.status === 'published' ? 'Unpublish' : 'Publish to staff'}</button>{item.status !== 'published' && <button className="secondary-button staff-hr-danger-button" onClick={() => deleteLetter(item)}>Delete</button>}</div></article>
+            })}</div>
+          </details>
         </section>}
 
         {activeSection === 'requests' && <section id="hr-workspace-requests" className="staff-hr-admin-block">
           <h4>Employee HR requests</h4>
-          {filteredRequests.length ? <div className="staff-hr-record-list">{filteredRequests.map((item) => <article key={item.id} className="staff-hr-request-row"><div><strong>{item.employee_name} · {item.request_type.replace('_', ' ')}</strong><small>{item.staff_id} · {item.start_date || 'No date'}{item.end_date ? ` – ${item.end_date}` : ''} · {item.status}{item.working_days_requested != null ? ` · ${Number(item.working_days_requested).toFixed(2)} working days` : ''}</small>{item.leave_type === 'annual' && needsAnnualLeaveNoticeReview(item) && <small className="staff-hr-notice-warning">Requested dates are less than 30 days away. Section 27 says notice should be given at least 30 days beforehand as far as possible; review the circumstances.</small>}<p>{item.reason}</p>{item.leave_type === 'annual' && <small>Annual entitlement year {item.leave_year} · Leave remuneration recorded: GHS {Number(item.leave_remuneration || 0).toFixed(2)}{Number(item.interrupted_working_days || 0) ? ` · ${Number(item.interrupted_working_days).toFixed(2)} interrupted days restored` : ''}</small>}{item.attachment_name && <button className="secondary-button" onClick={() => downloadAttachment(item)}>Download {item.attachment_name}</button>}</div>{item.status === 'pending' && <div className="staff-hr-review">{item.request_type === 'leave' && item.leave_type === 'annual' && <label className="staff-hr-inline-field">Normal remuneration paid for this leave (GHS)<input type="number" min="0.01" step="0.01" value={reviewLeavePayments[item.id] || ''} onChange={(event) => setReviewLeavePayments({ ...reviewLeavePayments, [item.id]: event.target.value })} required /></label>}<input placeholder="Decision note (optional)" value={reviewNotes[item.id] || ''} onChange={(event) => setReviewNotes({ ...reviewNotes, [item.id]: event.target.value })} /><div className="modal-actions"><button className="primary-button" onClick={() => reviewRequest(item, 'approved')} disabled={busy || (item.leave_type === 'annual' && !Number(reviewLeavePayments[item.id]))}>Approve</button><button className="secondary-button" onClick={() => reviewRequest(item, 'rejected')} disabled={busy}>Reject</button></div></div>}</article>)}</div> : <p className="muted-copy">No employee requests match your search.</p>}
+          {filteredRequests.length ? <div className="staff-hr-record-list">{filteredRequests.map((item) => <article key={item.id} className="staff-hr-request-row"><div><strong>{item.employee_name} · {item.request_type.replace('_', ' ')}</strong>{item.request_type === 'leave' && <small>Leave type: {formatLeaveType(item.leave_type)}</small>}<small>{item.staff_id} · {item.start_date || 'No date'}{item.end_date ? ` – ${item.end_date}` : ''} · {item.status}{item.working_days_requested != null ? ` · ${Number(item.working_days_requested).toFixed(2)} working days` : ''}</small>{item.leave_type === 'annual' && needsAnnualLeaveNoticeReview(item) && <small className="staff-hr-notice-warning">Requested dates are less than 30 days away. Section 27 says notice should be given at least 30 days beforehand as far as possible; review the circumstances.</small>}<p>{formatRequestReason(item)}</p>{item.leave_type === 'annual' && <small>Annual entitlement year {item.leave_year} · Leave remuneration recorded: GHS {Number(item.leave_remuneration || 0).toFixed(2)}{Number(item.interrupted_working_days || 0) ? ` · ${Number(item.interrupted_working_days).toFixed(2)} interrupted days restored` : ''}</small>}{item.attachment_name && <button className="secondary-button" onClick={() => downloadAttachment(item)}>Download {item.attachment_name}</button>}</div>{item.status === 'pending' && <div className="staff-hr-review">{item.request_type === 'leave' && item.leave_type === 'annual' && <label className="staff-hr-inline-field">Normal remuneration paid for this leave (GHS)<input type="number" min="0.01" step="0.01" value={reviewLeavePayments[item.id] || ''} onChange={(event) => setReviewLeavePayments({ ...reviewLeavePayments, [item.id]: event.target.value })} required /></label>}<input placeholder="Decision note (optional)" value={reviewNotes[item.id] || ''} onChange={(event) => setReviewNotes({ ...reviewNotes, [item.id]: event.target.value })} /><div className="modal-actions"><button className="primary-button" onClick={() => reviewRequest(item, 'approved')} disabled={busy || (item.leave_type === 'annual' && !Number(reviewLeavePayments[item.id]))}>Approve</button><button className="secondary-button" onClick={() => reviewRequest(item, 'rejected')} disabled={busy}>Reject</button></div></div>}</article>)}</div> : <p className="muted-copy">No employee requests match your search.</p>}
         </section>}
 
         {activeSection === 'leave' && (data.leaveTrackingReady === false ? <section className="staff-hr-admin-block"><h4>Annual leave tracking</h4><p>The leave tracking tables or request columns are missing. The rest of HR Space is available. Run <code>staff_leave_tracking_upgrade.sql</code> once in phpMyAdmin, then reload this page.</p></section> : <section id="hr-workspace-leave" className="staff-hr-admin-block staff-hr-leave-block">
           <h4>Annual leave tracking · {data.leaveYear}</h4>
-          <p className="muted-copy">The Labour Act baseline is 15 working days with full pay in a calendar year of continuous service. Sundays and configured public holidays are excluded from date calculations. Check each employee’s actual work pattern; any entitlement adjustment below 15 requires a recorded review note.</p>
+          <p className="muted-copy">Annual leave is allocated by calendar year, without an employment-date waiting period. The default entitlement is 15 paid working days; Sundays and configured public holidays are excluded from date calculations. Any entitlement adjustment below 15 requires a recorded review note.</p>
           <form className="patient-filter-grid" onSubmit={saveLeaveEntitlement}>
             <label className="staff-hr-wide">Employee<select required value={entitlementForm.employee_id} onChange={(event) => { const existing = data.leaveEntitlements.find((item) => String(item.employee_id) === event.target.value); setEntitlementForm({ ...entitlementForm, employee_id: event.target.value, leave_year: String(data.leaveYear), entitlement_days: String(existing?.entitlement_days ?? 15), carried_forward_days: String(existing?.carried_forward_days ?? 0), working_days: existing?.working_days || [1, 2, 3, 4, 5, 6], adjustment_note: existing?.adjustment_note || '' }) }}><option value="">Select staff member</option>{data.employees.map((item) => <option key={item.id} value={item.id}>{item.ghana_card_name} · {item.staff_id} · {item.job_title}</option>)}</select></label>
             <label>Leave year<input type="number" min="2020" max="2100" value={entitlementForm.leave_year} onChange={(event) => setEntitlementForm({ ...entitlementForm, leave_year: event.target.value })} required /></label>
@@ -779,7 +849,7 @@ export default function HRSpaceAdminPanel({ token, apiFetch, visible, onClose })
 
           <h4 className="staff-hr-subheading">Leave dates and remuneration register</h4>
           <p className="muted-copy">Annual leave can be recorded in separate approved periods. If urgent recall interrupts approved leave, record the unused working days here; they are restored to the employee’s balance for rescheduling. For termination, update the calendar-year entitlement to the accrued amount and document the calculation in its adjustment note.</p>
-          {data.requests.filter((item) => item.request_type === 'leave').length ? <div className="staff-hr-record-list">{data.requests.filter((item) => item.request_type === 'leave').map((item) => <article key={item.id}><div><strong>{item.employee_name} · {item.leave_type || 'Leave'} · {item.status}</strong><small>{item.staff_id} · {item.start_date} – {item.end_date} · requested {Number(item.working_days_requested || 0).toFixed(2)} · approved {Number(item.working_days_approved || 0).toFixed(2)} working days · remuneration GH₵{Number(item.leave_remuneration || 0).toFixed(2)}</small><p>{item.reason}</p>{item.review_note && <small>Review note: {item.review_note}</small>}{item.status === 'approved' && item.leave_type === 'annual' && <div className="staff-hr-interruption-form"><label className="staff-hr-inline-field">Total interrupted days to restore<input type="number" min="0" max={Number(item.working_days_approved || 0)} step="0.5" value={interruptionForms[item.id]?.days ?? String(item.interrupted_working_days || 0)} onChange={(event) => setInterruptionForms({ ...interruptionForms, [item.id]: { ...(interruptionForms[item.id] || {}), days: event.target.value } })} /></label><label className="staff-hr-inline-field">Urgent interruption and rescheduling note<input value={interruptionForms[item.id]?.note ?? ''} onChange={(event) => setInterruptionForms({ ...interruptionForms, [item.id]: { ...(interruptionForms[item.id] || {}), note: event.target.value } })} placeholder="Explain the recall and planned rescheduling" /></label><button className="secondary-button" onClick={() => saveLeaveInterruption(item)} disabled={busy}>Record interruption</button></div>}</div></article>)}</div> : <p className="muted-copy">No leave requests have been recorded yet.</p>}
+          {data.requests.filter((item) => item.request_type === 'leave').length ? <div className="staff-hr-record-list">{data.requests.filter((item) => item.request_type === 'leave').map((item) => <article key={item.id}><div><strong>{item.employee_name} · {formatLeaveType(item.leave_type || 'leave')} · {item.status}</strong><small>{item.staff_id} · {item.start_date} – {item.end_date} · requested {Number(item.working_days_requested || 0).toFixed(2)} · approved {Number(item.working_days_approved || 0).toFixed(2)} working days · remuneration GH₵{Number(item.leave_remuneration || 0).toFixed(2)}</small><p>{formatRequestReason(item)}</p>{item.review_note && <small>Review note: {item.review_note}</small>}{item.status === 'approved' && item.leave_type === 'annual' && <div className="staff-hr-interruption-form"><label className="staff-hr-inline-field">Total interrupted days to restore<input type="number" min="0" max={Number(item.working_days_approved || 0)} step="0.5" value={interruptionForms[item.id]?.days ?? String(item.interrupted_working_days || 0)} onChange={(event) => setInterruptionForms({ ...interruptionForms, [item.id]: { ...(interruptionForms[item.id] || {}), days: event.target.value } })} /></label><label className="staff-hr-inline-field">Urgent interruption and rescheduling note<input value={interruptionForms[item.id]?.note ?? ''} onChange={(event) => setInterruptionForms({ ...interruptionForms, [item.id]: { ...(interruptionForms[item.id] || {}), note: event.target.value } })} placeholder="Explain the recall and planned rescheduling" /></label><button className="secondary-button" onClick={() => saveLeaveInterruption(item)} disabled={busy}>Record interruption</button></div>}</div></article>)}</div> : <p className="muted-copy">No leave requests have been recorded yet.</p>}
 
           <h4 className="staff-hr-subheading">Public-holiday calendar</h4>
           <form className="patient-filter-grid" onSubmit={savePublicHoliday}><label>Holiday date<input type="date" value={holidayForm.holiday_date} onChange={(event) => setHolidayForm({ ...holidayForm, holiday_date: event.target.value })} required /></label><label>Holiday name<input maxLength="180" value={holidayForm.name} onChange={(event) => setHolidayForm({ ...holidayForm, name: event.target.value })} required /></label><label className="staff-hr-wide">Notes (optional)<input value={holidayForm.notes} onChange={(event) => setHolidayForm({ ...holidayForm, notes: event.target.value })} /></label><button className="primary-button staff-hr-wide" disabled={busy}>Add public holiday</button></form>

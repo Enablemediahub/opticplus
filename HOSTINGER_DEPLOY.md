@@ -94,6 +94,10 @@ If terminal access is limited, make sure the database is imported first and that
 
 For the Customer Service aftercare tab, apply the `2026_11_20_000001_create_customer_followup_tables` migration before uploading or opening the feature. If using Artisan, run `php artisan migrate --path=database/migrations/2026_11_20_000001_create_customer_followup_tables.php --force`. If Artisan migrations are unavailable, run `opticplus-backend/database/manual_sql/customer_followups.mysql.sql` in phpMyAdmin. The follow-up schedule is created only when a pickup is confirmed after this update; existing pickups are not backfilled.
 
+For staff letter signature tracking, apply the `2026_11_23_000001_add_staff_letter_signature_workflow` migration before opening the updated HR Space. If Artisan migrations are unavailable, run `opticplus-backend/database/manual_sql/hr_letter_signature_workflow.mysql.sql` in phpMyAdmin. This adds the template/letter signature requirement and stores each staff member's submitted signature privately.
+
+The latest HR update also changes annual leave to a calendar-year entitlement (default 15 days when no entitlement row already exists, without using employment date), improves staff/manager request and message notifications, and displays leave labels in uppercase. Existing manager-set entitlements are preserved. These behavior and display changes do not require additional database columns or tables. The letter-signature SQL above is a one-time schema change; check that the columns and table are not already present before running it to avoid duplicate-column errors.
+
 ## Notes
 
 - The frontend now uses a relative production API path, so it will call the same domain automatically.

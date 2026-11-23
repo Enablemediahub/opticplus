@@ -5,9 +5,31 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || `${window.location.origin
 const TOKEN_KEY = 'bealet-staff-token'
 const EMPLOYEE_KEY = 'bealet-staff-employee'
 const CHANGE_KEY = 'bealet-staff-must-change-password'
+const SECTION_KEY = 'bealet-staff-section'
+const STAFF_SECTIONS = ['overview', 'communications', 'letters', 'signature', 'payroll', 'requests', 'kpi', 'security']
 const newRequestForm = () => ({ request_type: 'leave', start_date: '', end_date: '', leave_type: 'annual', other_leave_type: '', handover_person: '', outstanding_duties: '', absence_reason: 'illness', other_absence_reason: '', notified_date: '', reason: '', confirmation: false })
 const money = new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' })
 const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
+const getSavedStaffSection = (employeeId) => {
+  const savedSection = employeeId ? localStorage.getItem(`${SECTION_KEY}:${employeeId}`) : null
+  return STAFF_SECTIONS.includes(savedSection) ? savedSection : 'overview'
+}
+const getInitialStaffSection = () => {
+  try {
+    const employee = JSON.parse(localStorage.getItem(EMPLOYEE_KEY) || 'null')
+    return getSavedStaffSection(employee?.id)
+  } catch {
+    return 'overview'
+  }
+}
+const formatLeaveType = (value) => {
+  const leaveType = String(value || '').trim().toLowerCase().replaceAll('_', ' ')
+  const labels = { annual: 'ANNUAL', sick: 'SICK', maternity: 'MATERNITY', compassionate: 'COMPASSIONATE', unpaid: 'UNPAID', other: 'OTHER' }
+  return labels[leaveType] || leaveType.toUpperCase()
+}
+const formatRequestReason = (record) => record.request_type === 'leave'
+  ? String(record.reason || '').replace(/^(Leave type:\s*)([^\r\n]+)/mi, (_, prefix, value) => `${prefix}${formatLeaveType(value)}`)
+  : record.reason
 function countWorkingDays(startDate, endDate, weekdays = [1, 2, 3, 4, 5, 6], holidays = []) {
   if (!startDate || !endDate) return 0
   const start = new Date(`${startDate}T12:00:00`)
@@ -57,17 +79,27 @@ export default function StaffSpace() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [companyProfile, setCompanyProfile] = useState(null)
-  const [section, setSection] = useState('overview')
+  const [section, setSectionState] = useState(getInitialStaffSection)
+  const setSection = useCallback((nextSection) => {
+    if (!STAFF_SECTIONS.includes(nextSection)) return
+    setSectionState(nextSection)
+    if (employee?.id) localStorage.setItem(`${SECTION_KEY}:${employee.id}`, nextSection)
+  }, [employee?.id])
   const [letters, setLetters] = useState([])
   const [managerLetterSignature, setManagerLetterSignature] = useState('')
   const [communications, setCommunications] = useState([])
   const [unreadCommunicationCount, setUnreadCommunicationCount] = useState(0)
   const [communicationPopupOpen, setCommunicationPopupOpen] = useState(false)
   const [communicationPopupItems, setCommunicationPopupItems] = useState([])
+  const [requestNotificationItems, setRequestNotificationItems] = useState([])
   const [communicationPreview, setCommunicationPreview] = useState(null)
   const [communicationPreviewLoading, setCommunicationPreviewLoading] = useState(false)
   const notifiedCommunicationIds = useRef(new Set())
+  const notifiedRequestDecisions = useRef(new Set())
+  const requestStatuses = useRef(new Map())
   const markingCommunicationIds = useRef(new Set())
+  const refreshingCommunications = useRef(false)
+  const refreshingRequests = useRef(false)
   const [selectedPayrollIds, setSelectedPayrollIds] = useState([])
   const [payroll, setPayroll] = useState([])
   const [currentSalary, setCurrentSalary] = useState(null)
@@ -87,6 +119,10 @@ export default function StaffSpace() {
       ? companyProfile?.madina_dashboard_hero_image_url || companyProfile?.dashboard_hero_image_url
       : companyProfile?.dashboard_hero_image_url
 
+  useEffect(() => {
+    if (employee?.id) setSectionState(getSavedStaffSection(employee.id))
+  }, [employee?.id])
+
   const signOutLocal = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(EMPLOYEE_KEY)
@@ -97,12 +133,16 @@ export default function StaffSpace() {
     setLetters([])
     setManagerLetterSignature('')
     setCommunications([])
+    setRequests([])
     setUnreadCommunicationCount(0)
     setCommunicationPopupOpen(false)
     setCommunicationPopupItems([])
+    setRequestNotificationItems([])
     setCommunicationPreview(null)
     setCommunicationPreviewLoading(false)
     notifiedCommunicationIds.current.clear()
+    notifiedRequestDecisions.current.clear()
+    requestStatuses.current.clear()
     markingCommunicationIds.current.clear()
     setSelectedPayrollIds([])
     setKpiAssessments([])
@@ -153,10 +193,49 @@ export default function StaffSpace() {
     setUnreadCommunicationCount(Number(response.unread_count || 0))
   }, [])
 
+  const receiveRequests = useCallback((items, notifyChanges = false) => {
+    const newDecisions = []
+    items.forEach((item) => {
+      const requestId = String(item.id)
+      const previousStatus = requestStatuses.current.get(requestId)
+      const notificationKey = `${requestId}:${item.status}:${item.reviewed_at || ''}`
+      if (notifyChanges && previousStatus === 'pending' && item.status !== 'pending' && !notifiedRequestDecisions.current.has(notificationKey)) {
+        newDecisions.push(item)
+        notifiedRequestDecisions.current.add(notificationKey)
+      }
+      requestStatuses.current.set(requestId, item.status)
+    })
+    setRequests(items)
+    if (newDecisions.length) {
+      setRequestNotificationItems((previous) => {
+        const newIds = new Set(newDecisions.map((item) => String(item.id)))
+        return [...newDecisions, ...previous.filter((item) => !newIds.has(String(item.id)))]
+      })
+      setCommunicationPopupOpen(true)
+    }
+  }, [])
+
   const refreshCommunications = useCallback(async () => {
-    const response = await request('/staff/communications', { token })
-    receiveCommunications(response)
+    if (refreshingCommunications.current) return
+    refreshingCommunications.current = true
+    try {
+      const response = await request('/staff/communications', { token })
+      receiveCommunications(response)
+    } finally {
+      refreshingCommunications.current = false
+    }
   }, [receiveCommunications, token])
+
+  const refreshRequests = useCallback(async () => {
+    if (refreshingRequests.current) return
+    refreshingRequests.current = true
+    try {
+      const response = await request('/staff/requests', { token })
+      receiveRequests(response.requests || [], true)
+    } finally {
+      refreshingRequests.current = false
+    }
+  }, [receiveRequests, token])
 
   const refreshKpiAssessments = useCallback(async () => {
     const response = await request('/staff/kpi', { token })
@@ -175,22 +254,41 @@ export default function StaffSpace() {
     setPayroll(payrollData.payroll || [])
     setCurrentSalary(payrollData.current_salary)
     setKpiAllowances(payrollData.kpi_allowances || [])
-    setRequests(requestData.requests || [])
+    receiveRequests(requestData.requests || [], requestStatuses.current.size > 0)
     setKpiResults(kpiData.results || [])
     setKpiAssessments(kpiData.assessments || [])
     setLeaveTracking(leaveData)
     setSignatureData(signatureResult.signature || '')
     setUseSavedSignature(Boolean(signatureResult.signature))
     receiveCommunications(communicationData)
-  }, [receiveCommunications, token])
+  }, [receiveCommunications, receiveRequests, token])
 
   useEffect(() => {
     if (!token || mustChange) return undefined
     const intervalId = window.setInterval(() => {
       refreshCommunications().catch((nextError) => setError(nextError.message))
+      refreshRequests().catch((nextError) => setError(nextError.message))
     }, 60_000)
     return () => window.clearInterval(intervalId)
-  }, [mustChange, refreshCommunications, token])
+  }, [mustChange, refreshCommunications, refreshRequests, token])
+
+  useEffect(() => {
+    if (!token || mustChange) return undefined
+    const refreshVisibleUpdates = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCommunications().catch((nextError) => setError(nextError.message))
+        refreshRequests().catch((nextError) => setError(nextError.message))
+      }
+    }
+    window.addEventListener('focus', refreshVisibleUpdates)
+    window.addEventListener('online', refreshVisibleUpdates)
+    document.addEventListener('visibilitychange', refreshVisibleUpdates)
+    return () => {
+      window.removeEventListener('focus', refreshVisibleUpdates)
+      window.removeEventListener('online', refreshVisibleUpdates)
+      document.removeEventListener('visibilitychange', refreshVisibleUpdates)
+    }
+  }, [mustChange, refreshCommunications, refreshRequests, token])
 
   useEffect(() => {
     if (!token || mustChange) return undefined
@@ -199,6 +297,19 @@ export default function StaffSpace() {
     }, 60_000)
     return () => window.clearInterval(intervalId)
   }, [mustChange, refreshKpiAssessments, token])
+
+  useEffect(() => {
+    if (!token || mustChange) return undefined
+    const intervalId = window.setInterval(() => {
+      request('/staff/letters', { token })
+        .then((letterData) => {
+          setLetters(letterData.letters || [])
+          setManagerLetterSignature(letterData.manager_signature || '')
+        })
+        .catch((nextError) => setError(nextError.message))
+    }, 60_000)
+    return () => window.clearInterval(intervalId)
+  }, [mustChange, token])
 
   useEffect(() => {
     if (!communicationPreview?.url) return undefined
@@ -212,7 +323,6 @@ export default function StaffSpace() {
     leaveTracking?.public_holidays || [],
   )
   const requestableAnnualDays = Math.max(0, Number(leaveTracking?.days_available || 0))
-  const annualLeaveEligibleForDates = Boolean(requestForm.start_date && leaveTracking?.eligible_on && requestForm.start_date >= leaveTracking.eligible_on)
   const requestFormTitle = { leave: 'Staff Leave Application', excuse_duty: 'Excuse / Absence Notification', medical_report: 'Medical Report Submission' }[requestForm.request_type]
   const requestPreviewReason = requestForm.request_type === 'leave'
     ? requestForm.reason
@@ -224,7 +334,7 @@ export default function StaffSpace() {
     ['Staff ID', employee?.staff_id || '—'],
     ['Position / branch', `${employee?.job_title || '—'} · ${employee?.branch || '—'}`],
     ['Dates covered', `${requestForm.start_date || 'Start date'} – ${requestForm.end_date || 'Return / end date'}`],
-    ...(requestForm.request_type === 'leave' ? [['Leave type', requestForm.leave_type === 'other' ? requestForm.other_leave_type || 'Other' : requestForm.leave_type], ['Working days', requestForm.leave_type === 'annual' ? String(requestedWorkingDays) : 'To be reviewed']] : []),
+    ...(requestForm.request_type === 'leave' ? [['Leave type', formatLeaveType(requestForm.leave_type === 'other' ? requestForm.other_leave_type || 'other' : requestForm.leave_type)], ['Working days', requestForm.leave_type === 'annual' ? String(requestedWorkingDays) : 'To be reviewed']] : []),
     ...(requestForm.request_type === 'excuse_duty' ? [['Absence reason', requestForm.absence_reason === 'other' ? requestForm.other_absence_reason || 'Other' : requestForm.absence_reason.replaceAll('_', ' ')], ['Management notified', requestForm.notified_date || '—']] : []),
     ['Reason / note', requestPreviewReason || 'Your explanation will appear here as you type.'],
     ...(requestForm.request_type === 'leave' ? [['Handover person', requestForm.handover_person || '—'], ['Outstanding duties', requestForm.outstanding_duties || '—']] : []),
@@ -305,7 +415,7 @@ export default function StaffSpace() {
       const result = await request('/staff/signature', { token, method: 'POST', body })
       setSignatureData(result.signature || '')
       setUseSavedSignature(Boolean(result.signature))
-      setNotice('Your signature is saved privately and ready to reuse on form PDFs.')
+      setNotice('Your signature is saved privately and ready to use on required letters and form PDFs.')
     } catch (nextError) {
       setError(nextError.message)
     } finally {
@@ -350,7 +460,7 @@ export default function StaffSpace() {
     if (requestForm.request_type === 'excuse_duty') body.append('notification_date', requestForm.notified_date)
     const reasonDetails = requestForm.request_type === 'leave'
       ? [
-          `Leave type: ${requestForm.leave_type === 'other' ? requestForm.other_leave_type : requestForm.leave_type.replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+          `Leave type: ${formatLeaveType(requestForm.leave_type === 'other' ? requestForm.other_leave_type : requestForm.leave_type)}`,
           `Working days requested: ${requestedWorkingDays}`,
           `Reason for leave: ${requestForm.reason}`,
           requestForm.handover_person && `Handover person: ${requestForm.handover_person}`,
@@ -483,6 +593,58 @@ export default function StaffSpace() {
     }
   }
 
+  async function signLetter(letter) {
+    if (!signatureData) {
+      setError('Save your reusable signature in My signature before signing this letter.')
+      setSection('signature')
+      return
+    }
+    if (!window.confirm(`Submit your saved signature to HR for “${letter.title}”? This records your acknowledgement.`)) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const response = await request(`/staff/letters/${letter.id}/signature`, { token, method: 'POST' })
+      setLetters((previous) => previous.map((item) => item.id === letter.id
+        ? { ...item, signed_at: response.signed_at, signed_signature: response.signed_signature }
+        : item))
+      setNotice(response.message)
+    } catch (nextError) {
+      setError(nextError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function renderLetterCard(letter) {
+    return <article key={letter.id}>
+      <div>
+        <strong>{letter.title}</strong>
+        <small>Published {letter.published_at ? new Date(letter.published_at).toLocaleDateString() : ''}{letter.attachment_name ? ` · ${letter.attachment_name}` : ''}</small>
+        {letter.requires_signature && <small>{letter.signed_at ? `Signed and submitted ${new Date(letter.signed_at).toLocaleString()}` : 'Signature required'}</small>}
+      </div>
+      <div className="staff-space-record-actions">
+        <button type="button" className="staff-space-secondary" onClick={() => printLetter(letter)}>View / Print letter</button>
+        {letter.attachment_name && <button type="button" className="staff-space-secondary" onClick={() => downloadLetterAttachment(letter.id, letter.attachment_name)}>Download attachment</button>}
+        {letter.requires_signature && !letter.signed_at && <button type="button" className="staff-space-secondary" onClick={() => signLetter(letter)} disabled={busy || !signatureData}>{busy ? 'Submitting…' : 'Sign & submit to HR'}</button>}
+        {letter.requires_signature && !signatureData && !letter.signed_at && <label className="staff-space-signature-upload">Upload signature<input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" onChange={saveStaffSignature} disabled={busy} /></label>}
+      </div>
+    </article>
+  }
+
+  function renderSignatureManager(includeFormPdfToggle = false) {
+    return <div className="staff-space-signature-manager">
+      <div>
+        <h3>Reusable signature</h3>
+        <p>Upload a clear PNG, JPG or WebP image (up to 2 MB). It stays private to your staff account.</p>
+        <label className="staff-space-signature-upload">{signatureData ? 'Replace saved signature' : 'Upload my signature'}<input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" onChange={saveStaffSignature} disabled={busy} /></label>
+        {signatureData && includeFormPdfToggle && <label className="staff-space-signature-toggle"><input type="checkbox" checked={useSavedSignature} onChange={(event) => setUseSavedSignature(event.target.checked)} />Include my saved signature on form PDFs</label>}
+        {signatureData && <button type="button" className="staff-space-signature-remove" onClick={removeStaffSignature} disabled={busy}>Remove saved signature</button>}
+      </div>
+      {signatureData && <img className="staff-space-signature-thumbnail" src={signatureData} alt="Your saved signature preview" />}
+    </div>
+  }
+
   function printLetter(letter) {
     const popup = window.open('', '_blank', 'width=900,height=1100')
     if (!popup) { setError('Allow pop-ups to print or save this letter as PDF.'); return }
@@ -491,7 +653,10 @@ export default function StaffSpace() {
     const signature = managerLetterSignature
       ? `<img class="signature-image" src="${escapeHtml(managerLetterSignature)}" alt="General Manager signature">`
       : ''
-    popup.document.write(`<!doctype html><html><head><title>${safeTitle}</title><style>@page{size:letter;margin:56mm 22mm 30mm}*{box-sizing:border-box}html,body{margin:0;width:216mm;min-height:279mm;font-family:Arial,sans-serif;color:#202020}.letterhead{position:fixed;z-index:0;inset:0;width:216mm;height:279mm;object-fit:fill}.content{position:relative;z-index:1;font-size:11pt;line-height:1.55;white-space:normal}.content h1{font-size:15pt;margin:0 0 10mm;color:#17324f}.signature{margin-top:24mm;font-size:10pt}.signature-image{display:block;max-width:48mm;max-height:22mm;object-fit:contain;object-position:left bottom}.signature strong{display:block;margin-top:3mm}.toolbar{position:fixed;right:20px;top:20px;z-index:2}@media screen{body{padding:56mm 22mm 30mm}.letterhead{position:absolute}}@media print{html,body{width:auto;min-height:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}}</style></head><body><img class="letterhead" src="/bealet-letterhead.png" alt=""><article class="content"><h1>${safeTitle}</h1>${safeBody}<div class="signature">${signature}<div>General Manager</div><strong>For Bealet Optical Centre Limited</strong></div></article><button class="toolbar" onclick="window.print()">Print / Save as PDF</button></body></html>`)
+    const employeeSignature = letter.signed_signature
+      ? `<img class="signature-image" src="${escapeHtml(letter.signed_signature)}" alt="Employee signature"><div>Employee acknowledgement · ${escapeHtml(employee?.name || '')}</div><div>Submitted ${escapeHtml(new Date(letter.signed_at).toLocaleString())}</div>`
+      : ''
+    popup.document.write(`<!doctype html><html><head><title>${safeTitle}</title><style>@page{size:letter;margin:56mm 22mm 30mm}*{box-sizing:border-box}html,body{margin:0;width:216mm;min-height:279mm;font-family:Arial,sans-serif;color:#202020}.letterhead{position:fixed;z-index:0;inset:0;width:216mm;height:279mm;object-fit:fill}.content{position:relative;z-index:1;font-size:11pt;line-height:1.55;white-space:normal}.content h1{font-size:15pt;margin:0 0 10mm;color:#17324f}.signatures{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:12mm;margin-top:12mm;break-inside:avoid;page-break-inside:avoid}.signature-block{min-width:0;font-size:9pt;line-height:1.35}.signature-image{display:block;max-width:48mm;max-height:16mm;object-fit:contain;object-position:left bottom;margin:0 0 2mm}.signature-block strong{display:block;margin-top:2mm}.toolbar{position:fixed;right:20px;top:20px;z-index:2}@media screen{body{padding:56mm 22mm 30mm}.letterhead{position:absolute}}@media print{html,body{width:auto;min-height:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}}</style></head><body><img class="letterhead" src="/bealet-letterhead.png" alt=""><article class="content"><h1>${safeTitle}</h1>${safeBody}<div class="signatures"><div class="signature-block">${signature}<div>General Manager</div><strong>For Bealet Optical Centre Limited</strong></div>${employeeSignature ? `<div class="signature-block">${employeeSignature}</div>` : '<div></div>'}</div></article><button class="toolbar" onclick="window.print()">Print / Save as PDF</button></body></html>`)
     popup.document.close()
   }
 
@@ -499,18 +664,28 @@ export default function StaffSpace() {
     const popup = window.open('', '_blank', 'width=900,height=1100')
     if (!popup) { setError('Allow pop-ups to download or print this filled HR form as a PDF.'); return }
     const formLabels = { leave: 'Staff Leave Application', excuse_duty: 'Excuse / Absence Notification', medical_report: 'Medical Report Submission' }
-    const lines = String(record.reason || '').split('\n').filter(Boolean)
+    const lines = String(formatRequestReason(record) || '').split('\n').filter(Boolean)
     const details = lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')
     const attachmentRow = record.attachment_name ? `<tr><th>Supporting document</th><td>${escapeHtml(record.attachment_name)}</td></tr>` : ''
     const signatureText = isDraft ? 'Draft preview — not yet submitted' : `Electronically submitted by ${escapeHtml(employee?.name || 'Staff member')} on ${escapeHtml(record.submitted_at ? new Date(record.submitted_at).toLocaleString() : 'the date shown in HR request history')}`
     const signatureMarkup = useSavedSignature && signatureData ? `<img class="signature-image" src="${escapeHtml(signatureData)}" alt="Employee signature">` : ''
-    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(formLabels[record.request_type] || 'HR Request')}</title><style>@page{size:letter;margin:48mm 23mm 29mm}*{box-sizing:border-box}html,body{margin:0;width:216mm;min-height:279mm;font-family:Arial,sans-serif;color:#202a35}.letterhead{position:fixed;z-index:0;inset:0;width:216mm;height:279mm;object-fit:fill}.content{position:relative;z-index:1;font-size:10.5pt;line-height:1.5}.content h1{margin:0 0 5mm;color:#17324f;font-size:17pt}.content .sub{margin:0 0 8mm;color:#52677a;font-size:10pt}.content table{width:100%;border-collapse:collapse;margin:0 0 8mm}.content th,.content td{padding:8px 10px;border:1px solid #cbd5e1;text-align:left;vertical-align:top}.content th{width:34%;background:#edf5ff;color:#34526f}.content h2{margin:7mm 0 3mm;color:#17324f;font-size:12pt}.content p{margin:0 0 2mm;white-space:pre-wrap}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:20mm;margin-top:18mm}.signature-line{border-top:1px solid #52677a;padding-top:3mm;font-size:9pt;color:#52677a}.signature-image{display:block;max-width:55mm;max-height:20mm;object-fit:contain;margin:0 0 2mm}.toolbar{position:fixed;right:20px;top:20px;z-index:2;border:0;border-radius:8px;padding:11px 15px;background:#176fc2;color:#fff;font:600 13px Arial;cursor:pointer}@media screen{body{padding:48mm 23mm 29mm}.letterhead{position:absolute}}@media print{html,body{width:auto;min-height:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}}</style></head><body><img class="letterhead" src="/bealet-letterhead.png" alt=""><main class="content"><h1>${escapeHtml(formLabels[record.request_type] || 'HR Request')}</h1><p class="sub">Bealet Optical Centre Limited · Staff HR Space</p><table><tr><th>Employee name</th><td>${escapeHtml(employee?.name || '')}</td></tr><tr><th>Staff ID</th><td>${escapeHtml(employee?.staff_id || '')}</td></tr><tr><th>Position / branch</th><td>${escapeHtml(employee?.job_title || '')} · ${escapeHtml(employee?.branch || '')}</td></tr><tr><th>Dates requested</th><td>${escapeHtml(record.start_date || '')} – ${escapeHtml(record.end_date || '')}</td></tr>${record.working_days_requested != null ? `<tr><th>Working days requested</th><td>${escapeHtml(record.working_days_requested)}</td></tr>` : ''}<tr><th>Submission status</th><td>${escapeHtml(isDraft ? 'Draft preview' : record.status || 'Pending')}</td></tr>${attachmentRow}</table><h2>Request details</h2>${details}<p style="margin-top:10mm;font-size:9pt;color:#52677a">${signatureText}</p><div class="signatures"><div>${signatureMarkup}<div class="signature-line">Employee acknowledgement · ${escapeHtml(employee?.name || '')}</div></div><div class="signature-line">General Manager decision / signature</div></div></main><button class="toolbar" onclick="window.print()">Download / Save as PDF</button></body></html>`)
+    const leaveTypeRow = record.request_type === 'leave' ? `<tr><th>Leave type</th><td>${escapeHtml(formatLeaveType(record.leave_type))}</td></tr>` : ''
+    const gmApproval = !isDraft && record.request_type === 'leave' && record.status === 'approved'
+    const managerSignatureMarkup = gmApproval && managerLetterSignature
+      ? `<img class="signature-image" src="${escapeHtml(managerLetterSignature)}" alt="General Manager signature">`
+      : ''
+    const managerDecision = gmApproval
+      ? managerLetterSignature
+        ? `Approved by the General Manager${record.reviewed_at ? ` on ${new Date(record.reviewed_at).toLocaleString()}` : ''}`
+        : 'Approved by the General Manager · No saved GM signature is available'
+      : 'General Manager decision / signature'
+    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(formLabels[record.request_type] || 'HR Request')}</title><style>@page{size:letter;margin:48mm 23mm 29mm}*{box-sizing:border-box}html,body{margin:0;width:216mm;min-height:279mm;font-family:Arial,sans-serif;color:#202a35}.letterhead{position:fixed;z-index:0;inset:0;width:216mm;height:279mm;object-fit:fill}.content{position:relative;z-index:1;font-size:10.5pt;line-height:1.5}.content h1{margin:0 0 5mm;color:#17324f;font-size:17pt}.content .sub{margin:0 0 8mm;color:#52677a;font-size:10pt}.content table{width:100%;border-collapse:collapse;margin:0 0 8mm}.content th,.content td{padding:8px 10px;border:1px solid #cbd5e1;text-align:left;vertical-align:top}.content th{width:34%;background:#edf5ff;color:#34526f}.content h2{margin:7mm 0 3mm;color:#17324f;font-size:12pt}.content p{margin:0 0 2mm;white-space:pre-wrap}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:20mm;margin-top:18mm}.signature-line{border-top:1px solid #52677a;padding-top:3mm;font-size:9pt;color:#52677a}.signature-image{display:block;max-width:55mm;max-height:20mm;object-fit:contain;margin:0 0 2mm}.toolbar{position:fixed;right:20px;top:20px;z-index:2;border:0;border-radius:8px;padding:11px 15px;background:#176fc2;color:#fff;font:600 13px Arial;cursor:pointer}@media screen{body{padding:48mm 23mm 29mm}.letterhead{position:absolute}}@media print{html,body{width:auto;min-height:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}}</style></head><body><img class="letterhead" src="/bealet-letterhead.png" alt=""><main class="content"><h1>${escapeHtml(formLabels[record.request_type] || 'HR Request')}</h1><p class="sub">Bealet Optical Centre Limited · Staff HR Space</p><table><tr><th>Employee name</th><td>${escapeHtml(employee?.name || '')}</td></tr><tr><th>Staff ID</th><td>${escapeHtml(employee?.staff_id || '')}</td></tr><tr><th>Position / branch</th><td>${escapeHtml(employee?.job_title || '')} · ${escapeHtml(employee?.branch || '')}</td></tr><tr><th>Dates requested</th><td>${escapeHtml(record.start_date || '')} – ${escapeHtml(record.end_date || '')}</td></tr>${leaveTypeRow}${record.working_days_requested != null ? `<tr><th>Working days requested</th><td>${escapeHtml(record.working_days_requested)}</td></tr>` : ''}<tr><th>Submission status</th><td>${escapeHtml(isDraft ? 'Draft preview' : record.status || 'Pending')}</td></tr>${attachmentRow}</table><h2>Request details</h2>${details}<p style="margin-top:10mm;font-size:9pt;color:#52677a">${signatureText}</p><div class="signatures"><div>${signatureMarkup}<div class="signature-line">Employee acknowledgement · ${escapeHtml(employee?.name || '')}</div></div><div>${managerSignatureMarkup}<div class="signature-line">${escapeHtml(managerDecision)}</div></div></div></main><button class="toolbar" onclick="window.print()">Download / Save as PDF</button></body></html>`)
     popup.document.close()
   }
 
   function printDraftRequestPdf() {
     const reason = requestForm.request_type === 'leave'
-      ? [`Leave type: ${requestForm.leave_type === 'other' ? requestForm.other_leave_type : requestForm.leave_type}`, `Working days requested: ${requestedWorkingDays}`, `Reason for leave: ${requestForm.reason}`, requestForm.handover_person && `Handover person: ${requestForm.handover_person}`, requestForm.outstanding_duties && `Outstanding duties: ${requestForm.outstanding_duties}`].filter(Boolean).join('\n')
+      ? [`Leave type: ${formatLeaveType(requestForm.leave_type === 'other' ? requestForm.other_leave_type : requestForm.leave_type)}`, `Working days requested: ${requestedWorkingDays}`, `Reason for leave: ${requestForm.reason}`, requestForm.handover_person && `Handover person: ${requestForm.handover_person}`, requestForm.outstanding_duties && `Outstanding duties: ${requestForm.outstanding_duties}`].filter(Boolean).join('\n')
       : requestForm.request_type === 'excuse_duty'
         ? [`Absence reason: ${requestForm.absence_reason === 'other' ? requestForm.other_absence_reason : requestForm.absence_reason}`, `Explanation: ${requestForm.reason}`, `Date management was notified: ${requestForm.notified_date}`, `Supporting documents attached: ${attachment ? 'Yes' : 'No'}`].join('\n')
         : `Medical report submission\nNote to HR: ${requestForm.reason}\nMedical report: ${attachment?.name || 'Not attached yet'}`
@@ -577,14 +752,16 @@ export default function StaffSpace() {
           <img src="/bealet-logo.png" alt="Bealet Optical Center" className="staff-space-header-logo" />
           <span><strong>BEALET</strong><small>HR SPACE</small></span>
         </a>
-        {token && <div className="staff-space-header-actions"><button className="staff-space-quiet staff-space-notification-trigger" onClick={openCommunicationNotifications}>Updates{unreadCommunicationCount > 0 && <span className="staff-space-notification-badge">{unreadCommunicationCount}</span>}</button><button className="staff-space-quiet" onClick={() => loadPortalData().catch((nextError) => setError(nextError.message))}>Refresh</button><button className="staff-space-quiet" onClick={signOut}>Sign out</button></div>}
+        {token && <div className="staff-space-header-actions"><button className="staff-space-quiet staff-space-notification-trigger" onClick={openCommunicationNotifications}>Updates{unreadCommunicationCount + requestNotificationItems.length > 0 && <span className="staff-space-notification-badge">{unreadCommunicationCount + requestNotificationItems.length}</span>}</button><button className="staff-space-quiet" onClick={() => loadPortalData().catch((nextError) => setError(nextError.message))}>Refresh</button><button className="staff-space-quiet" onClick={signOut}>Sign out</button></div>}
       </header>}
 
       {token && communicationPopupOpen && <div className="staff-space-notification-overlay">
         <section className="staff-space-notification-popup" role="dialog" aria-modal="true" aria-labelledby="staff-space-notification-title">
-          <div className="staff-space-notification-heading"><div><p className="staff-space-eyebrow">GENERAL MANAGER · HR</p><h2 id="staff-space-notification-title">New staff updates</h2><p>{unreadCommunicationCount} unread message{unreadCommunicationCount === 1 ? '' : 's'} or document{unreadCommunicationCount === 1 ? '' : 's'}.</p></div><button type="button" className="staff-space-quiet" onClick={() => setCommunicationPopupOpen(false)} aria-label="Close updates">Close</button></div>
-          {communicationPopupItems.length ? <div className="staff-space-notification-list">{communicationPopupItems.map((item) => <article key={item.id}><div><strong>{item.title}</strong><small>{item.published_at ? new Date(item.published_at).toLocaleString() : ''}</small>{item.message && <p>{item.message}</p>}</div><div className="staff-space-record-actions">{item.attachment_name && <><button type="button" className="staff-space-secondary" onClick={() => viewCommunicationAttachment(item)}>View PDF</button><button type="button" className="staff-space-secondary" onClick={() => downloadCommunicationAttachment(item)}>Download PDF</button></>}{!item.read_at && <button type="button" className="staff-space-secondary" onClick={() => markCommunicationRead(item)}>Mark as read</button>}</div></article>)}</div> : <p className="staff-space-empty">You’re all caught up. Open GM updates anytime to review earlier messages and documents.</p>}
-          <div className="staff-space-notification-actions"><button type="button" className="staff-space-primary" onClick={() => { setCommunicationPopupOpen(false); setSection('communications') }}>Open updates</button><button type="button" className="staff-space-secondary" onClick={() => setCommunicationPopupOpen(false)}>Dismiss</button></div>
+          <div className="staff-space-notification-heading"><div><p className="staff-space-eyebrow">GENERAL MANAGER · HR</p><h2 id="staff-space-notification-title">New HR updates</h2><p>{unreadCommunicationCount} unread message{unreadCommunicationCount === 1 ? '' : 's'} or document{unreadCommunicationCount === 1 ? '' : 's'} · {requestNotificationItems.length} request decision{requestNotificationItems.length === 1 ? '' : 's'}.</p></div><button type="button" className="staff-space-quiet" onClick={() => setCommunicationPopupOpen(false)} aria-label="Close updates">Close</button></div>
+          {communicationPopupItems.length > 0 && <div className="staff-space-notification-list">{communicationPopupItems.map((item) => <article key={item.id}><div><strong>{item.title}</strong><small>{item.published_at ? new Date(item.published_at).toLocaleString() : ''}</small>{item.message && <p>{item.message}</p>}</div><div className="staff-space-record-actions">{item.attachment_name && <><button type="button" className="staff-space-secondary" onClick={() => viewCommunicationAttachment(item)}>View PDF</button><button type="button" className="staff-space-secondary" onClick={() => downloadCommunicationAttachment(item)}>Download PDF</button></>}{!item.read_at && <button type="button" className="staff-space-secondary" onClick={() => markCommunicationRead(item)}>Mark as read</button>}</div></article>)}</div>}
+          {requestNotificationItems.length > 0 && <div className="staff-space-notification-list">{requestNotificationItems.map((item) => <article key={`request-${item.id}`}><div><strong>{item.request_type === 'leave' ? formatLeaveType(item.leave_type) : item.request_type.replace('_', ' ')}</strong><small>{item.start_date || 'Date not set'}{item.end_date ? ` – ${item.end_date}` : ''} · {item.status}{item.reviewed_at ? ` · ${new Date(item.reviewed_at).toLocaleString()}` : ''}</small>{item.review_note && <p>GM note: {item.review_note}</p>}</div><button type="button" className="staff-space-secondary" onClick={() => { setCommunicationPopupOpen(false); setSection('requests'); setRequestNotificationItems([]) }}>View request</button></article>)}</div>}
+          {communicationPopupItems.length === 0 && requestNotificationItems.length === 0 && <p className="staff-space-empty">You’re all caught up. Open GM updates anytime to review earlier messages and documents.</p>}
+          <div className="staff-space-notification-actions"><button type="button" className="staff-space-primary" onClick={() => { setCommunicationPopupOpen(false); setSection('communications') }}>Open messages</button><button type="button" className="staff-space-secondary" onClick={() => { setCommunicationPopupOpen(false); setSection('requests'); setRequestNotificationItems([]) }}>Open requests</button><button type="button" className="staff-space-secondary" onClick={() => setCommunicationPopupOpen(false)}>Dismiss</button></div>
         </section>
       </div>}
 
@@ -641,12 +818,13 @@ export default function StaffSpace() {
           {notice && <p className="staff-space-notice" role="status">{notice}</p>}
           {error && <p className="staff-space-error" role="alert">{error}</p>}
           <nav className="staff-space-tabs" aria-label="HR Space sections">
-            {[['overview', 'Overview'], ['communications', 'GM updates'], ['letters', 'Letters'], ['payroll', 'Payroll'], ['requests', 'HR requests'], ['kpi', 'KPI & allowances'], ['security', 'Password']].map(([key, label]) => <button key={key} className={section === key ? 'is-active' : ''} onClick={() => setSection(key)}>{label}{key === 'communications' && unreadCommunicationCount > 0 && <span className="staff-space-tab-badge">{unreadCommunicationCount}</span>}</button>)}
+            {[['overview', 'Overview'], ['communications', 'GM updates'], ['letters', 'Letters'], ['signature', 'My signature'], ['payroll', 'Payroll'], ['requests', 'HR requests'], ['kpi', 'KPI & allowances'], ['security', 'Password']].map(([key, label]) => <button key={key} className={section === key ? 'is-active' : ''} onClick={() => { setSection(key); if (key === 'requests') setRequestNotificationItems([]) }}>{label}{key === 'communications' && unreadCommunicationCount > 0 && <span className="staff-space-tab-badge">{unreadCommunicationCount}</span>}{key === 'requests' && requestNotificationItems.length > 0 && <span className="staff-space-tab-badge">{requestNotificationItems.length}</span>}</button>)}
           </nav>
           {section === 'overview' && <div className="staff-space-grid">
             <article className="staff-space-panel staff-space-profile-panel"><span className="staff-space-panel-icon">◎</span><h2>My profile</h2><p>Employment details connected to your Opticplus staff record.</p><dl><div><dt>Department</dt><dd>{employee?.department || '—'}</dd></div><div><dt>Location</dt><dd>{employee?.branch || '—'}</dd></div><div><dt>Employment since</dt><dd>{employee?.date_employed || '—'}</dd></div><div><dt>Work email</dt><dd>{employee?.email || '—'}</dd></div></dl></article>
             <article className="staff-space-panel"><span className="staff-space-panel-icon">▤</span><h2>My letters</h2><p>{letters.length} published letter{letters.length === 1 ? '' : 's'} available to view and print.</p><button className="staff-space-link" onClick={() => setSection('letters')}>Open letters →</button></article>
             <article className="staff-space-panel"><span className="staff-space-panel-icon">✉</span><h2>GM updates</h2><p>{unreadCommunicationCount ? `${unreadCommunicationCount} unread update${unreadCommunicationCount === 1 ? '' : 's'}` : 'Read messages and staff documents from the General Manager.'}</p><button className="staff-space-link" onClick={() => setSection('communications')}>Open updates →</button></article>
+            <article className="staff-space-panel"><span className="staff-space-panel-icon">✍</span><h2>My signature</h2><p>{signatureData ? 'Your reusable signature is saved privately.' : 'Upload a signature to use on letters that require your acknowledgement.'}</p><button className="staff-space-link" onClick={() => setSection('signature')}>{signatureData ? 'Manage signature →' : 'Set up signature →'}</button></article>
             <article className="staff-space-panel"><span className="staff-space-panel-icon">GHS</span><h2>Payroll</h2><p>Current salary: {currentSalary == null ? '—' : money.format(currentSalary)} · {payroll.length} payroll record{payroll.length === 1 ? '' : 's'} · {kpiAllowances.length} published KPI allowance{ kpiAllowances.length === 1 ? '' : 's'}.</p><button className="staff-space-link" onClick={() => setSection('payroll')}>Open payroll →</button></article>
             <article className="staff-space-panel"><span className="staff-space-panel-icon">＋</span><h2>HR requests</h2><p>{requests.filter((item) => item.status === 'pending').length} request{requests.filter((item) => item.status === 'pending').length === 1 ? '' : 's'} awaiting review.</p><button className="staff-space-link" onClick={() => setSection('requests')}>Open requests →</button></article>
           </div>}
@@ -660,14 +838,19 @@ export default function StaffSpace() {
               <button className="staff-space-primary" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</button>
             </form>
           </section>}
-          {section === 'communications' && <section className="staff-space-panel"><h2>Messages & staff documents</h2><p>Updates from the General Manager / HR. Messages and attached PDFs remain available here after you’ve read them.</p>{communications.length ? <div className="staff-space-record-list">{communications.map((item) => <article key={item.id} className={item.read_at ? '' : 'staff-space-communication-unread'}><div><strong>{item.title}</strong><small>{item.published_at ? new Date(item.published_at).toLocaleString() : ''} · {item.read_at ? 'Read' : 'Unread'}</small>{item.message && <p>{item.message}</p>}</div><div className="staff-space-record-actions">{item.attachment_name && <><button type="button" className="staff-space-secondary" onClick={() => viewCommunicationAttachment(item)}>View PDF</button><button type="button" className="staff-space-secondary" onClick={() => downloadCommunicationAttachment(item)}>Download PDF</button></>}{!item.read_at && <button type="button" className="staff-space-secondary" onClick={() => markCommunicationRead(item)}>Mark as read</button>}</div></article>)}</div> : <p className="staff-space-empty">There are no messages or staff documents yet.</p>}</section>}
-          {section === 'letters' && <section className="staff-space-panel"><h2>My letters</h2><p>Published HR letters assigned to you. Download / Print PDF opens your browser's print dialog; select “Save as PDF” to save a PDF copy.</p>{letters.length ? <div className="staff-space-record-list">{letters.map((letter) => <article key={letter.id}><div><strong>{letter.title}</strong><small>Published {letter.published_at ? new Date(letter.published_at).toLocaleDateString() : ''}{letter.attachment_name ? ` · ${letter.attachment_name}` : ''}</small></div><div className="staff-space-record-actions"><button className="staff-space-secondary" onClick={() => printLetter(letter)}>Download / Print PDF</button>{letter.attachment_name && <button className="staff-space-secondary" onClick={() => downloadLetterAttachment(letter.id, letter.attachment_name)}>Download attachment</button>}</div></article>)}</div> : <p className="staff-space-empty">No letters have been published for you yet.</p>}</section>}
+          {section === 'signature' && <section className="staff-space-panel">
+            <h2>My reusable signature</h2>
+            <p>Manage the private signature image used when you sign a required HR letter. Form PDFs include it only when you enable that option.</p>
+            {renderSignatureManager(true)}
+          </section>}
+          {section === 'communications' && <section className="staff-space-panel"><h2>Messages & staff documents</h2><p>Updates from the General Manager / HR. Messages and attached PDFs remain available here after you’ve read them. Published letters assigned to you also appear here.</p>{communications.length > 0 && <div className="staff-space-record-list">{communications.map((item) => <article key={item.id} className={item.read_at ? '' : 'staff-space-communication-unread'}><div><strong>{item.title}</strong><small>{item.published_at ? new Date(item.published_at).toLocaleString() : ''} · {item.read_at ? 'Read' : 'Unread'}</small>{item.message && <p>{item.message}</p>}</div><div className="staff-space-record-actions">{item.attachment_name && <><button type="button" className="staff-space-secondary" onClick={() => viewCommunicationAttachment(item)}>View PDF</button><button type="button" className="staff-space-secondary" onClick={() => downloadCommunicationAttachment(item)}>Download PDF</button></>}{!item.read_at && <button type="button" className="staff-space-secondary" onClick={() => markCommunicationRead(item)}>Mark as read</button>}</div></article>)}</div>}{letters.length > 0 && <><h3>Published letters</h3><div className="staff-space-record-list">{letters.map(renderLetterCard)}</div></>}{communications.length === 0 && letters.length === 0 && <p className="staff-space-empty">There are no messages or staff documents yet.</p>}</section>}
+          {section === 'letters' && <section className="staff-space-panel"><h2>My letters</h2><p>Published HR letters assigned to you. Print / Save PDF opens your browser's print dialog.</p>{letters.length ? <div className="staff-space-record-list">{letters.map(renderLetterCard)}</div> : <p className="staff-space-empty">No letters have been published for you yet.</p>}</section>}
           {section === 'payroll' && <section className="staff-space-panel"><h2>My payroll</h2><div className="staff-space-salary">Current salary <strong>{currentSalary == null ? '—' : money.format(currentSalary)}</strong></div>{kpiAllowances.length > 0 && <><h3>Published KPI allowances</h3><div className="staff-space-table-wrap"><table className="staff-space-table"><thead><tr><th>KPI</th><th>Period</th><th>Score</th><th>Allowance approved</th></tr></thead><tbody>{kpiAllowances.map((item) => <tr key={`${item.title}-${item.period}`}><td>{item.title}</td><td>{item.period}</td><td>{Number(item.score)}%</td><td><strong>{money.format(Number(item.calculated_allowance))}</strong></td></tr>)}</tbody></table></div><p className="staff-space-help">Published KPI allowances are shown separately from posted payroll until the GM confirms payroll reconciliation.</p></>}{payroll.length ? <><div className="staff-space-payroll-bulk-actions"><label><input type="checkbox" checked={allPayrollSelected} onChange={(event) => setSelectedPayrollIds(event.target.checked ? payroll.map((row) => row.id) : [])} />Select all {payroll.length} payroll records</label><span>{selectedPayrollRows.length} selected</span><button type="button" className="staff-space-secondary" onClick={printSelectedPayslips} disabled={!selectedPayrollRows.length}>Print / Save selected PDF</button></div><div className="staff-space-table-wrap"><h3>Processed payroll</h3><table className="staff-space-table"><thead><tr><th>Select</th><th>Pay period</th><th>Gross</th><th>Allowance</th><th>Advance deduction</th><th>Net</th><th>Payment date</th><th>Payslip</th></tr></thead><tbody>{payroll.map((row) => <tr key={row.id}><td><input type="checkbox" aria-label={`Select payslip for ${new Date(Number(row.pay_year), Number(row.pay_month) - 1).toLocaleString('en', { month: 'long', year: 'numeric' })}`} checked={selectedPayrollIds.includes(row.id)} onChange={() => togglePayrollSelection(row.id)} /></td><td>{new Date(Number(row.pay_year), Number(row.pay_month) - 1).toLocaleString('en', { month: 'long', year: 'numeric' })}</td><td>{money.format(Number(row.declared_salary ?? row.gross_salary))}</td><td>{money.format(Number(row.allowance_amount || 0))}</td><td>{money.format(Number(row.advance_deduction || 0))}</td><td><strong>{money.format(Number(row.net_salary || 0))}</strong></td><td>{row.payment_date ? new Date(row.payment_date).toLocaleDateString() : '—'}</td><td><button className="staff-space-link" onClick={() => printPayslip(row)}>Print / Save PDF</button></td></tr>)}</tbody></table></div></> : <p className="staff-space-empty">No processed payroll records are available yet.</p>}</section>}
           {section === 'requests' && <div className="staff-space-request-layout">
             <section className="staff-space-panel">
               <h2>Submit an HR request</h2>
               <p>Choose a Bealet form below. Your name, staff ID, position and branch are linked from your staff record. Submissions are sent to the General Manager for review.</p>
-              {leaveTracking && <div className="staff-space-leave-balance"><div><span>Annual leave balance · {leaveTracking.year}</span><strong>{Number(leaveTracking.days_available).toFixed(2)} days</strong></div><small>{Number(leaveTracking.days_used).toFixed(2)} used · {Number(leaveTracking.pending_days).toFixed(2)} pending · Eligibility date {leaveTracking.eligible_on}</small><small>Sick leave is recorded separately and is not deducted from annual leave. Annual days count your configured workdays, excluding Sundays and public holidays entered by the General Manager.</small></div>}
+              {leaveTracking && <div className="staff-space-leave-balance"><div><span>Annual leave balance · {leaveTracking.year}</span><strong>{Number(leaveTracking.days_available).toFixed(2)} days</strong></div><small>{Number(leaveTracking.days_used).toFixed(2)} used · {Number(leaveTracking.pending_days).toFixed(2)} pending</small><small>Annual leave is allocated by calendar year. Sick leave is recorded separately and is not deducted from this balance. Annual days count your configured workdays, excluding Sundays and public holidays entered by the General Manager.</small></div>}
               <form className="staff-space-form" onSubmit={submitHrRequest}>
                 <label>Request form<select value={requestForm.request_type} onChange={(event) => { setAttachment(null); setRequestForm({ ...newRequestForm(), request_type: event.target.value }) }}><option value="leave">Staff leave application</option><option value="excuse_duty">Excuse / absence notification</option><option value="medical_report">Medical report submission</option></select></label>
 
@@ -676,10 +859,10 @@ export default function StaffSpace() {
                   <label>{requestForm.request_type === 'leave' ? 'Expected return date' : 'Last date covered'}<input type="date" min={requestForm.start_date || undefined} value={requestForm.end_date} onChange={(event) => setRequestForm({ ...requestForm, end_date: event.target.value })} required /></label>
                 </div>
 
-                {requestForm.request_type === 'leave' && requestForm.leave_type === 'annual' && <div className="staff-space-leave-estimate"><span>Working days requested</span><strong>{requestedWorkingDays}</strong><small>Calculated using your work schedule and the GM's public-holiday calendar.</small>{requestForm.start_date && !annualLeaveEligibleForDates && <small className="staff-space-leave-warning">Annual leave eligibility begins {leaveTracking?.eligible_on || 'after 12 months of service'}.</small>}{requestedWorkingDays > requestableAnnualDays && <small className="staff-space-leave-warning">This is more than your available balance after pending requests ({requestableAnnualDays.toFixed(2)} days).</small>}</div>}
+                {requestForm.request_type === 'leave' && requestForm.leave_type === 'annual' && <div className="staff-space-leave-estimate"><span>Working days requested</span><strong>{requestedWorkingDays}</strong><small>Calculated using your work schedule and the GM's public-holiday calendar.</small>{requestedWorkingDays > requestableAnnualDays && <small className="staff-space-leave-warning">This is more than your available balance after pending requests ({requestableAnnualDays.toFixed(2)} days).</small>}</div>}
 
                 {requestForm.request_type === 'leave' && <>
-                  <label>Leave type<select value={requestForm.leave_type} onChange={(event) => setRequestForm({ ...requestForm, leave_type: event.target.value })}><option value="annual">Annual leave</option><option value="sick">Sick leave</option><option value="maternity">Maternity leave</option><option value="compassionate">Compassionate leave</option><option value="unpaid">Unpaid leave</option><option value="other">Other</option></select></label>
+                  <label>Leave type<select value={requestForm.leave_type} onChange={(event) => setRequestForm({ ...requestForm, leave_type: event.target.value })}><option value="annual">ANNUAL</option><option value="sick">SICK</option><option value="maternity">MATERNITY</option><option value="compassionate">COMPASSIONATE</option><option value="unpaid">UNPAID</option><option value="other">OTHER</option></select></label>
                   {requestForm.leave_type === 'other' && <label>Specify leave type<input maxLength="150" value={requestForm.other_leave_type} onChange={(event) => setRequestForm({ ...requestForm, other_leave_type: event.target.value })} required /></label>}
                   <label>Number of working days requested<input type="number" min="1" step="1" value={requestForm.working_days} onChange={(event) => setRequestForm({ ...requestForm, working_days: event.target.value })} required /></label>
                   <label>Handover person (if applicable)<input value={requestForm.handover_person} onChange={(event) => setRequestForm({ ...requestForm, handover_person: event.target.value })} /></label>
@@ -702,17 +885,12 @@ export default function StaffSpace() {
                 <label>{requestForm.request_type === 'medical_report' ? 'Medical report (required, PDF or image, up to 10 MB)' : 'Supporting documents (optional, PDF or image, up to 10 MB)'}<input type="file" accept=".pdf,.jpg,.jpeg,.png" required={requestForm.request_type === 'medical_report'} onChange={(event) => setAttachment(event.target.files?.[0] || null)} /></label>
                 {attachment && <small className="staff-space-file-selected">Selected file: {attachment.name}</small>}
                 <label className="staff-space-consent"><input type="checkbox" checked={requestForm.confirmation} onChange={(event) => setRequestForm({ ...requestForm, confirmation: event.target.checked })} required /><span>I confirm the information in this form is accurate. My authenticated staff account records my identity. Any saved signature is included in the PDF only when I enable that option.</span></label>
-                <div className="staff-space-form-actions"><button className="staff-space-primary" disabled={busy || (requestForm.request_type === 'leave' && requestForm.leave_type === 'annual' && (!annualLeaveEligibleForDates || requestedWorkingDays < 1 || requestedWorkingDays > requestableAnnualDays))}>{busy ? 'Submitting…' : requestForm.request_type === 'leave' ? 'Submit leave application' : requestForm.request_type === 'excuse_duty' ? 'Submit absence notification' : 'Submit medical report'}</button><button type="button" className="staff-space-secondary" onClick={printDraftRequestPdf}>Download / Print filled form PDF</button></div>
+                <div className="staff-space-form-actions"><button className="staff-space-primary" disabled={busy || (requestForm.request_type === 'leave' && requestForm.leave_type === 'annual' && (requestedWorkingDays < 1 || requestedWorkingDays > requestableAnnualDays))}>{busy ? 'Submitting…' : requestForm.request_type === 'leave' ? 'Submit leave application' : requestForm.request_type === 'excuse_duty' ? 'Submit absence notification' : 'Submit medical report'}</button><button type="button" className="staff-space-secondary" onClick={printDraftRequestPdf}>Download / Print filled form PDF</button></div>
               </form>
             </section>
             <section className="staff-space-panel staff-space-live-preview-panel">
               <div className="staff-space-preview-title"><div><h2>Live form preview</h2><p>Updates as you fill in the form. Download or print this copy for your records.</p></div><span>BEALET LETTERHEAD</span></div>
-              <div className="staff-space-signature-manager">
-                <div><h3>Reusable signature</h3><p>Upload a clear PNG, JPG or WebP image (up to 2 MB). It stays private to your staff account.</p><label className="staff-space-signature-upload">{signatureData ? 'Replace saved signature' : 'Upload my signature'}<input type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" onChange={saveStaffSignature} disabled={busy} /></label>
-                  {signatureData && <><label className="staff-space-signature-toggle"><input type="checkbox" checked={useSavedSignature} onChange={(event) => setUseSavedSignature(event.target.checked)} />Include my saved signature on form PDFs</label><button type="button" className="staff-space-signature-remove" onClick={removeStaffSignature} disabled={busy}>Remove saved signature</button></>}
-                </div>
-                {signatureData && <img className="staff-space-signature-thumbnail" src={signatureData} alt="Your saved signature preview" />}
-              </div>
+              {renderSignatureManager(true)}
               <article className="staff-space-live-document" aria-live="polite">
                 <header><h3>{requestFormTitle}</h3><p>Bealet Optical Centre Limited · Staff HR Space</p></header>
                 <table><tbody>{requestPreviewRows.map(([label, value]) => <tr key={label}><th>{label}</th><td>{value}</td></tr>)}</tbody></table>
@@ -720,7 +898,7 @@ export default function StaffSpace() {
               </article>
               <button type="button" className="staff-space-primary staff-space-preview-download" onClick={printDraftRequestPdf}>Download / Print this PDF</button>
             </section>
-            <section className="staff-space-panel staff-space-request-history"><h2>My request history</h2>{requests.length ? <div className="staff-space-record-list">{requests.map((item) => <article key={item.id}><div><strong>{item.request_type.replace('_', ' ')}</strong><small>{item.start_date || 'Date not set'}{item.end_date ? ` – ${item.end_date}` : ''} · <span className={`staff-space-status status-${item.status}`}>{item.status}</span>{item.working_days_approved != null ? ` · ${Number(item.working_days_approved).toFixed(2)} days approved` : ''}</small><p>{item.reason}</p>{item.review_note && <small>GM note: {item.review_note}</small>}<div className="staff-space-record-actions"><button className="staff-space-secondary" onClick={() => printRequestPdf(item)}>Download / Print PDF</button>{item.attachment_name && <button className="staff-space-secondary" onClick={() => downloadAttachment(item.id, item.attachment_name)}>Download attachment</button>}</div></div></article>)}</div> : <p className="staff-space-empty">No requests submitted yet.</p>}</section>
+            <section className="staff-space-panel staff-space-request-history"><h2>My request history</h2>{requests.length ? <div className="staff-space-record-list">{requests.map((item) => <article key={item.id}><div><strong>{item.request_type === 'leave' ? 'LEAVE' : item.request_type.replace('_', ' ')}</strong>{item.request_type === 'leave' && <small>Leave type: {formatLeaveType(item.leave_type)}</small>}<small>{item.start_date || 'Date not set'}{item.end_date ? ` – ${item.end_date}` : ''} · <span className={`staff-space-status status-${item.status}`}>{item.status}</span>{item.working_days_approved != null ? ` · ${Number(item.working_days_approved).toFixed(2)} days approved` : ''}</small><p>{formatRequestReason(item)}</p>{item.review_note && <small>GM note: {item.review_note}</small>}<div className="staff-space-record-actions"><button className="staff-space-secondary" onClick={() => printRequestPdf(item)}>Download / Print PDF</button>{item.attachment_name && <button className="staff-space-secondary" onClick={() => downloadAttachment(item.id, item.attachment_name)}>Download attachment</button>}</div></div></article>)}</div> : <p className="staff-space-empty">No requests submitted yet.</p>}</section>
           </div>}
           {section === 'kpi' && <section className="staff-space-panel"><h2>KPI & allowances</h2><p>Published monthly role scorecards, rating evidence and the applicable performance allowance. These calculations are shown separately and do not automatically post to payroll.</p>{kpiAssessments.length ? <div className="staff-space-kpi-assessments">{kpiAssessments.map((assessment) => <article key={assessment.id}>
             <header><div><strong>{assessment.role_title_snapshot} · {assessment.period}</strong><small>{assessment.branch_snapshot || 'All branches'} · Published {assessment.published_at ? new Date(assessment.published_at).toLocaleDateString() : ''} · Targets confirmed {assessment.targets_confirmed_at ? new Date(assessment.targets_confirmed_at).toLocaleDateString() : 'date unavailable'}</small></div><div className="staff-space-kpi-score"><strong>{Number(assessment.total_score)}/100</strong><small>{Number(assessment.allowance_percent)}% allowance</small></div></header>
@@ -736,7 +914,7 @@ export default function StaffSpace() {
           {!kpiAssessments.length && !kpiResults.length && <p className="staff-space-empty">No KPI results have been published for you.</p>}</section>}
         </section>
       )}
-      <footer className="staff-space-footer">Bealet Optical Center <span>·</span> Powered by Opticplus</footer>
+      <footer className="staff-space-footer">Developed and Designed by DALE QUIST [Enable Technologies]</footer>
     </main>
   )
 }

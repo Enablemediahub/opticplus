@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const EMPTY_COUNTS = { memos: 0, expenses: 0, sms_reviews: 0, total: 0 }
+const EMPTY_COUNTS = { memos: 0, expenses: 0, sms_reviews: 0, hr_requests: 0, staff_messages: 0, total: 0 }
 
 export default function useManagerNotifications({ apiFetch, token, session, branchId }) {
   const [summary, setSummary] = useState(null)
@@ -11,7 +11,7 @@ export default function useManagerNotifications({ apiFetch, token, session, bran
   const previousCounts = useRef(null)
   const isManager = (session?.normalized_role ?? session?.role) === 'manager'
   const counts = summary?.counts ?? EMPTY_COUNTS
-  const notificationKey = `${branchId}:${counts.memos}:${counts.expenses}:${counts.sms_reviews}`
+  const notificationKey = `${branchId}:${counts.memos}:${counts.expenses}:${counts.sms_reviews}:${counts.hr_requests}:${counts.staff_messages}`
   const isBannerOpen = counts.total > 0 && dismissedKey !== notificationKey
   const pushEnabled = Boolean(summary?.push?.enabled)
   const isSubscribed = Boolean(summary?.push?.subscribed)
@@ -39,6 +39,8 @@ export default function useManagerNotifications({ apiFetch, token, session, bran
           memos: Number(next.counts?.memos ?? 0),
           expenses: Number(next.counts?.expenses ?? 0),
           sms_reviews: Number(next.counts?.sms_reviews ?? 0),
+          hr_requests: Number(next.counts?.hr_requests ?? 0),
+          staff_messages: Number(next.counts?.staff_messages ?? 0),
         }
         if (previousCounts.current && Object.keys(nextCounts).some(
           (key) => nextCounts[key] > previousCounts.current[key],
@@ -185,7 +187,8 @@ export default function useManagerNotifications({ apiFetch, token, session, bran
     Memos: Number(counts.memos) || 0,
     Expenses: Number(counts.expenses) || 0,
     'Bank Deposits': Number(counts.sms_reviews) || 0,
-  }), [counts.expenses, counts.memos, counts.sms_reviews])
+    'Manage HR Space': (Number(counts.hr_requests) || 0) + (Number(counts.staff_messages) || 0),
+  }), [counts.expenses, counts.hr_requests, counts.memos, counts.sms_reviews, counts.staff_messages])
 
   return {
     counts,

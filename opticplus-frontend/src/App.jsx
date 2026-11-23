@@ -380,6 +380,7 @@ const paymentDetailViews = ['Billing', ...financeViews]
 const insuranceViews = ['Insurance', 'Insurance Claims']
 const inventoryViews = ['Inventory', 'Lens Tracker', 'Product Tracker', 'BSMI Tracking', 'Assets Register', 'Memos']
 const technicianViews = ['Dashboard', 'Lens Tracker', 'Lens Orders', 'Prescription Reference', 'Selling Pricelist', 'Notes']
+const HR_SPACE_ROUTE_PATTERN = /^#\/hr-space(?:\/(?:staff\/\d+|letters|requests|leave|people|performance))?$/
 const optometristPatientViews = [
   'Patient Management',
   'Prescriptions',
@@ -393,14 +394,17 @@ const optometristClinicalViews = ['Glasses Prescriptions', 'Medical Report']
 const optometristSettingsViews = ['Settings', 'Profile']
 
 function hashToView(hash) {
-  if (/^#\/hr-space(?:\/(?:staff\/\d+|letters|requests|leave|people|performance))?$/.test(hash)) return 'Manage HR Space'
+  if (HR_SPACE_ROUTE_PATTERN.test(hash)) return 'Manage HR Space'
   const match = Object.entries(viewHashMap).find(([, value]) => value === hash)
   return match?.[0] ?? 'Dashboard'
 }
 
 function getInitialView() {
   if (typeof window === 'undefined') return 'Dashboard'
-  return hashToView(window.location.hash || '#/dashboard')
+  const hash = window.location.hash
+  const savedHrRoute = localStorage.getItem('opticplus-hr-space-route')
+  if (!hash && savedHrRoute && HR_SPACE_ROUTE_PATTERN.test(savedHrRoute)) return 'Manage HR Space'
+  return hashToView(hash || '#/dashboard')
 }
 
 function shouldResetSavedSession() {
@@ -1519,7 +1523,12 @@ function App() {
   }
 
   useEffect(() => {
-    const syncFromHash = () => setActiveView(hashToView(window.location.hash || '#/dashboard'))
+    const syncFromHash = () => {
+      const hash = window.location.hash || '#/dashboard'
+      if (HR_SPACE_ROUTE_PATTERN.test(hash)) localStorage.setItem('opticplus-hr-space-route', hash)
+      else localStorage.removeItem('opticplus-hr-space-route')
+      setActiveView(hashToView(hash))
+    }
     window.addEventListener('hashchange', syncFromHash)
 
     return () => {
@@ -1558,8 +1567,12 @@ function App() {
 
   useEffect(() => {
     const currentHash = window.location.hash
-    const isHrWorkspaceRoute = activeView === 'Manage HR Space' && /^#\/hr-space(?:\/(?:staff\/\d+|letters|requests|leave|people|performance))?$/.test(currentHash)
-    const nextHash = isHrWorkspaceRoute ? currentHash : (viewHashMap[activeView] ?? '#/dashboard')
+    const savedHrRoute = localStorage.getItem('opticplus-hr-space-route')
+    const isHrWorkspaceRoute = activeView === 'Manage HR Space' && HR_SPACE_ROUTE_PATTERN.test(currentHash)
+    const restoreHrRoute = activeView === 'Manage HR Space' && !currentHash && savedHrRoute && HR_SPACE_ROUTE_PATTERN.test(savedHrRoute)
+    const nextHash = isHrWorkspaceRoute ? currentHash : restoreHrRoute ? savedHrRoute : (viewHashMap[activeView] ?? '#/dashboard')
+    if (isHrWorkspaceRoute) localStorage.setItem('opticplus-hr-space-route', currentHash)
+    else if (activeView !== 'Manage HR Space') localStorage.removeItem('opticplus-hr-space-route')
     if (window.location.hash !== nextHash) {
       window.location.hash = nextHash
     }
@@ -5507,6 +5520,16 @@ function App() {
                   {managerNotifications.counts.sms_reviews > 0 ? (
                     <button type="button" onClick={() => setActiveView('Bank Deposits')}>
                       <strong>{managerNotifications.counts.sms_reviews}</strong><span>SMS Review Queue</span><b>Review</b>
+                    </button>
+                  ) : null}
+                  {managerNotifications.counts.hr_requests > 0 ? (
+                    <button type="button" onClick={() => { window.location.hash = '#/hr-space/requests'; setActiveView('Manage HR Space') }}>
+                      <strong>{managerNotifications.counts.hr_requests}</strong><span>Staff HR requests</span><b>Review</b>
+                    </button>
+                  ) : null}
+                  {managerNotifications.counts.staff_messages > 0 ? (
+                    <button type="button" onClick={() => { window.location.hash = '#/hr-space/performance'; setActiveView('Manage HR Space') }}>
+                      <strong>{managerNotifications.counts.staff_messages}</strong><span>Staff KPI messages</span><b>Review</b>
                     </button>
                   ) : null}
                 </div>

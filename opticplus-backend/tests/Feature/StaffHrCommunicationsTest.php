@@ -88,7 +88,8 @@ class StaffHrCommunicationsTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringStartsWith('inline', $response->headers->get('Content-Disposition'));
         $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
-        $this->assertSame('private, no-store, max-age=0', $response->headers->get('Cache-Control'));
+        $cacheControl = array_map('trim', explode(',', $response->headers->get('Cache-Control')));
+        $this->assertEqualsCanonicalizing(['private', 'no-store', 'max-age=0'], $cacheControl);
 
         $unauthorized = $controller->viewMyCommunicationAttachment($this->staffRequest(12), $otherEmployeeId);
         $this->assertSame(404, $unauthorized->getStatusCode());
